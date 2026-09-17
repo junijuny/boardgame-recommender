@@ -2,31 +2,35 @@
 
 ## 개발 환경
 ```
-python 3.12.10
-pip 26.2.4
+python 3.12.14
+pip 26.2.1
 ```
 
----
-
-## pyenv 설치 Windows
-    > Invoke-WebRequest -UseBasicParsing -Uri "https://raw.githubusercontent.com/pyenv-win/pyenv-win/master/pyenv-win/install-pyenv-win.ps1" -OutFile "./install-pyenv-win.ps1"; &"./install-pyenv-win.ps1"
-
-### 환경 변수
-> Path = C:\Users\{username}\.pyenv\pyenv-win\bin
-> Path = C:\Users\{username}\.pyenv\pyenv-win\shims
-
-
-### local version
-> pyenv local 3.12.10
+## 사용 라이브러리
+```
+pandas
+numpy
+matplotlib
+scikit-learn
+```
+## miniconda 설치
+[다운로드](https://www.anaconda.com/docs/getting-started/installation)
 
 ---
 
-## pyenv 설치 MacOS
-> brew install pyenv
-### local version
-> pyenv local 3.12.10
+## 가상환경 생성
+```
+1. 가상환경 생성
+conda create -n [가상환경 이름] python=[버전]
+예: conda create -n bg-rec python=3.12
 
----
+2. 가상환경 활성화
+conda activate [가상환경 이름]
+예: conda activate bg-rec
+
+3. 라이브러리 설치
+conda install -c conda-forge pandas numpy matplotlib scikit-learn
+```
 
 ## Markdown
 [마크다운 작성법](https://gist.github.com/ihoneymon/652be052a0727ad59601)
