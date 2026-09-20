@@ -1,1 +1,70 @@
+# ==========================================
+# Python & 가상환경 (Virtual Environments)
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# 가상환경 디렉토리
 .venv/
+venv/
+ENV/
+env/
+
+# ==========================================
+# Jupyter Notebook 캐시 & 체크포인트
+# ==========================================
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# ==========================================
+# 머신러닝 모델 & 임시 데이터 파일
+# ==========================================
+# 모델 덤프 파일 (Scikit-Learn 피클, joblib 등)
+*.pkl
+*.pickle
+*.joblib
+
+# ==========================================
+# Node.js & React 프론트엔드 (Vite)
+# ==========================================
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+dist-ssr/
+
+# 로그 파일
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ==========================================
+# 환경 변수 및 시크릿 키 (.env)
+# ==========================================
+.env
+.env.local
+.env.*.local
+*.env
+
+# ==========================================
+# IDE 및 텍스트 에디터 설정
+# ==========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ==========================================
+# OS 생성 임시 파일 (Windows / macOS)
+# ==========================================
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+[Dd]esktop.ini
+.DS_Store
+.AppleDouble
+.LSOverride
