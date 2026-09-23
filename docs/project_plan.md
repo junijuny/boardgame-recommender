@@ -85,7 +85,7 @@
 
 * **사용 도구**: `scikit-learn` (`TfidfVectorizer`, `cosine_similarity`)
 
-* **초보자 눈높이 개념**:
+* **개념**:
 
   * **TF-IDF**: 설명글에서 "dice", "card", "war", "trade"처럼 게임 특징을 나타내는 단어에 높은 점수를 매겨 숫자로 바꾸는 기법.
 
