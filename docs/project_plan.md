@@ -28,7 +28,7 @@
 
 ## 📅 주차별 상세 일정
 
-### 📌 1주차: 아나콘다 환경 구축 & 파이썬/판다스 기초 탐색 (EDA)
+### ✅ 1주차: 아나콘다 환경 구축 & 파이썬/판다스 기초 탐색 (EDA) [완료]
 
 > **주요 목표**: 4명 모두 동일한 아나콘다 환경을 구축하고, 엑셀 열어보듯 데이터셋 파악하기
 
@@ -49,11 +49,14 @@
 
   2. 행(Row)과 열(Column) 개수 확인 (`df.shape`, `df.info()`).
 
-  3. 핵심 컬럼 선별:
+  3. 핵심 컬럼 선별 (최종 13개 컬럼 확정):
 
-     * 이름(`Name`), 발매년도(`YearPublished`), 게임 난이도(`GameWeight`), 플레이 인원(`MinPlayers`, `MaxPlayers`, `BestPlayers`), 플레이 시간(`ComMinPlaytime`), 평점(`BayesAvgRating`), 설명(`Description`), 표지 이미지(`ImagePath`).
+     * **기본 식별 및 정보**: `BGGId`, `Name`, `YearPublished`, `ImagePath`
+     * **게임 특성 및 난이도**: `GameWeight`, `Description`
+     * **플레이 인원 및 시간**: `MinPlayers`, `MaxPlayers`, `BestPlayers`, `ComMinPlaytime`, `ComMaxPlaytime`
+     * **평점 및 인기도 지표**: `BayesAvgRating`, `NumUserRatings`
 
-  4. 인원수 컬럼(`BestPlayers`)이 텍스트 형태(`"['3', '4']"`)로 들어있는 형태 관찰하기.
+  4. 인원수 컬럼(`BestPlayers`)의 값 분포 및 투표 부재(`0`값) 데이터 형태 관찰하기.
 
 ### 📌 2주차: 필수 데이터 정제 (이상치 및 결측치 정리)
 
@@ -73,11 +76,11 @@
 
      * 최소 인원이 0명이거나 10명 초과인 데이터 제외.
 
-  3. **인원수 컬럼 다듬기**:
+  3. **인원수 컬럼 결측치(0) 처리**:
 
-     * 텍스트로 된 `"['3', '4']"`를 파이썬 리스트 `[3, 4]`로 쉽게 바꾸는 함수 작성 (`eval()` 또는 문자열 치환).
+     * `BestPlayers`가 `0`(유저 투표 부재)인 데이터를 제조사 공식 인원 기준(`(MinPlayers + MaxPlayers) // 2` 등)으로 대체하거나, 추천 시 `MinPlayers ~ MaxPlayers` 범위를 활용하도록 보정.
 
-  4. 정제 완료된 데이터를 `clean_games.csv`로 저장 (다음 주차부터 이 파일만 불러와 사용).
+  4. 선별된 13개 핵심 컬럼 중심으로 정제 완료된 데이터를 `clean_games.csv`로 저장 (다음 주차부터 이 파일만 불러와 사용).
 
 ### 📌 3주차: 키워드 기반 유사도(TF-IDF) 계산하기
 

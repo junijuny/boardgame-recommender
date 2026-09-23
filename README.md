@@ -57,7 +57,7 @@ flowchart LR
 
 1. **1차 하드 필터링 (조건 제약 만족)**
    - 참여 인원(`MinPlayers` ~ `MaxPlayers` 및 `BestPlayers`)에 해당하는 게임 필터링
-   - 가용 시간(`ComMinPlaytime`) 조건 이하의 게임 필터링
+   - 가용 시간(`ComMinPlaytime` ~ `ComMaxPlaytime`) 조건 이하의 게임 필터링
 2. **2차 유사도 랭킹 (콘텐츠 기반 추천)**
    - 보드게임 설명문(`Description`)을 바탕으로 `TfidfVectorizer`를 이용해 핵심 키워드 벡터화
    - 기준 게임과 후보 게임 간의 `cosine_similarity`(코사인 유사도)를 계산하여 유사도 순으로 랭킹 산출
@@ -116,14 +116,16 @@ graph TD
 
 | 컬럼명 | 설명 | 비고 |
 | :--- | :--- | :--- |
-| `Name` | 보드게임 이름 | 기준 게임 검색 및 출력 |
-| `YearPublished` | 출시 연도 | 게임 정보 메타데이터 |
-| `GameWeight` | 게임 난이도 (체감 복잡도 1~5) | 추천 카드 정보 표시 |
-| `MinPlayers` / `MaxPlayers` | 최소/최대 플레이 가능 인원 | 1차 필터링 기준 |
-| `BestPlayers` | 가장 추천되는 최적 인원수 | 1차 필터링 기준 (`['3', '4']` 전처리 필요) |
-| `ComMinPlaytime` | 예상 최소 플레이 시간 (분) | 1차 시간 필터링 기준 |
-| `BayesAvgRating` | 베이지안 평균 평점 | 3차 보정 필터 기준 (5.5 이상) |
-| `Description` | 게임 설명글 (영어 원문) | TF-IDF 키워드 유사도 분석 원천 |
+| `BGGId` | BoardGameGeek 고유 식별자 | 게임 고유 식별 및 상세 링크 연동 |
+| `Name` | 보드게임 이름 | 기준 게임 검색 및 결과 출력 |
+| `YearPublished` | 출시 연도 | 게임 메타데이터 정보 표시 |
+| `GameWeight` | 게임 난이도 (체감 복잡도 1~5) | 게임 난이도 정보 표시 및 필터링 |
+| `MinPlayers` / `MaxPlayers` | 최소/최대 플레이 가능 인원 | 1차 하드 필터링 기준 |
+| `BestPlayers` | 가장 추천되는 최적 인원수 | 1차 필터링 기준 (미투표 0값 결측치 처리 필요) |
+| `ComMinPlaytime` / `ComMaxPlaytime` | 예상 최소/최대 플레이 시간 (분) | 1차 플레이 타임 필터링 기준 |
+| `BayesAvgRating` | 베이지안 평균 평점 | 3차 보정 필터 기준 (5.5 이상 정렬) |
+| `Description` | 게임 설명글 (영어 원문) | TF-IDF 키워드 및 코사인 유사도 분석 원천 |
+| `NumUserRatings` | 평가 참여 유저 수 | 추천 신뢰도 확보 및 비주류 이상치 필터링 |
 | `ImagePath` | 게임 표지 이미지 URL | 프론트엔드 카드 뷰 렌더링 |
 
 ---
@@ -148,13 +150,14 @@ boardgame-recommender/
 
 ## 📅 7주차 개발 로드맵
 
-- [ ] **1주차: 환경 구축 & 데이터셋 탐색 (EDA)**
+- [x] **1주차: 환경 구축 & 데이터셋 탐색 (EDA)**
   - Anaconda 환경 구축 및 팀원 간 개발 환경 일치
   - `games.csv` 데이터 불러오기 및 기본 행/열/타입 분석 (`df.info()`, `df.describe()`)
+  - 핵심 13개 컬럼(`BGGId`, `Name`, `YearPublished`, `GameWeight`, `MinPlayers`, `MaxPlayers`, `BestPlayers`, `ComMinPlaytime`, `ComMaxPlaytime`, `BayesAvgRating`, `Description`, `NumUserRatings`, `ImagePath`) 선별 완료
 - [ ] **2주차: 데이터 정제 (이상치/결측치 처리)**
   - `Description`, `Name` 결측치 제거
   - 비정상 플레이 타임 및 플레이 인원 이상치 필터링
-  - `BestPlayers` 컬럼 파싱 및 `clean_games.csv` 생성
+  - `BestPlayers` 결측치(0값) 보정 및 `clean_games.csv` 생성
 - [ ] **3주차: TF-IDF & 코사인 유사도 분석**
   - 설명글 텍스트 전처리 및 `TfidfVectorizer` 적용 (핵심 피처 추출)
   - 코사인 유사도(`cosine_similarity`) 매트릭스 계산 및 유사 게임 도출 실습
