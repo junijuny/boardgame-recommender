@@ -154,11 +154,11 @@ boardgame-recommender/
   - Anaconda 환경 구축 및 팀원 간 개발 환경 일치
   - `games.csv` 데이터 불러오기 및 기본 행/열/타입 분석 (`df.info()`, `df.describe()`)
   - 핵심 13개 컬럼(`BGGId`, `Name`, `YearPublished`, `GameWeight`, `MinPlayers`, `MaxPlayers`, `BestPlayers`, `ComMinPlaytime`, `ComMaxPlaytime`, `BayesAvgRating`, `Description`, `NumUserRatings`, `ImagePath`) 선별 완료
-- [ ] **2주차: 데이터 정제 (이상치/결측치 처리)**
+- [x] **2주차: 데이터 정제 (이상치/결측치 처리)**
   - `Description`, `Name` 결측치 제거
   - 비정상 플레이 타임 및 플레이 인원 이상치 필터링
   - `BestPlayers` 결측치(0값) 보정 및 `clean_games.csv` 생성
-- [ ] **3주차: TF-IDF & 코사인 유사도 분석**
+- [x] **3주차: TF-IDF & 코사인 유사도 분석**
   - 설명글 텍스트 전처리 및 `TfidfVectorizer` 적용 (핵심 피처 추출)
   - 코사인 유사도(`cosine_similarity`) 매트릭스 계산 및 유사 게임 도출 실습
 - [ ] **4주차: 추천 파이프라인 함수 구현**
