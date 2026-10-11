@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 import pandas as pd
 from pathlib import Path
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -23,6 +24,13 @@ tfidf = TfidfVectorizer(
 
 # 모든 게임의 Description을 TF-IDF 벡터로 변환
 tfidf_matrix = tfidf.fit_transform(df["Description"])
+
+
+# POST /recommend에서 받을 JSON 형식
+class RecommendRequest(BaseModel):
+    game_name: str
+    players: int
+    max_time: int
 
 
 @app.get("/")
@@ -78,13 +86,11 @@ def filter_games(players: int, max_time: int):
             detail="Max time must be greater than 0"
         )
 
-    # 인원수 + 플레이 시간 + 평점 + 평가 수 필터링
     results = df[
         (df["MinPlayers"] <= players) &
         (df["MaxPlayers"] >= players) &
         (df["ComMaxPlaytime"] <= max_time) &
-        (df["BayesAvgRating"] >= 5.5) &
-        (df["NumUserRatings"] >= 100)
+        (df["BayesAvgRating"] >= 5.5)
     ]
 
     results = results.sort_values(
@@ -107,10 +113,12 @@ def filter_games(players: int, max_time: int):
     ].head(10).to_dict(orient="records")
 
 
-@app.get("/recommend")
-def recommend_games(game_name: str, players: int, max_time: int):
+@app.post("/recommend")
+def recommend_games(request: RecommendRequest):
 
-    game_name = game_name.strip()
+    game_name = request.game_name.strip()
+    players = request.players
+    max_time = request.max_time
 
     # 입력값 검사
     if not game_name:
@@ -144,13 +152,12 @@ def recommend_games(game_name: str, players: int, max_time: int):
 
     game_index = game_matches.index[0]
 
-    # 2. 인원수 + 플레이 시간 + 평점 + 평가 수로 후보 게임 필터링
+    # 2. 조건에 맞는 후보 게임 필터링
     candidates = df[
         (df["MinPlayers"] <= players) &
         (df["MaxPlayers"] >= players) &
         (df["ComMaxPlaytime"] <= max_time) &
-        (df["BayesAvgRating"] >= 5.5) &
-        (df["NumUserRatings"] >= 100)
+        (df["BayesAvgRating"] >= 5.5)
     ].copy()
 
     # 기준 게임 자체 제외
