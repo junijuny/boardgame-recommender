@@ -9,7 +9,7 @@
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white)
 ![Scikit-Learn](https://img.shields.io/badge/scikit--learn-F7931E?style=flat-square&logo=scikit-learn&logoColor=white)
 ![Pandas](https://img.shields.io/badge/Pandas-150458?style=flat-square&logo=pandas&logoColor=white)
-![Anaconda](https://img.shields.io/badge/Anaconda-44A833?style=flat-square&logo=anaconda&logoColor=white)
+![uv](https://img.shields.io/badge/uv-DE5FE9?style=flat-square&logo=uv&logoColor=white)
 ![Antigravity](https://img.shields.io/badge/Built%20with-Antigravity-4285F4?style=flat-square&logo=google)
 
 <br/>
@@ -102,7 +102,7 @@ graph TD
 
 | 분류 | 기술 / 도구 | 용도 |
 | :--- | :--- | :--- |
-| **Environment** | `Anaconda`, `Python 3.12` | 가상환경 격리 및 패키지 관리 |
+| **Environment** | `uv`, `Python 3.12` | 가상환경 격리 및 패키지 관리 |
 | **Data & ML** | `Pandas`, `NumPy`, `Scikit-learn` | 데이터 전처리, 결측치/이상치 정제, TF-IDF 벡터화, 코사인 유사도 분석 |
 | **Backend** | `FastAPI`, `Uvicorn` | 비동기 고성능 RESTful API 서버 구현 및 Swagger UI 문서화 |
 | **Frontend** | `React`, `Vite`, `Tailwind CSS`, `Axios` | 직관적인 사용자 입력 인터페이스 및 결과 카드 컴포넌트 구현 |
@@ -151,7 +151,7 @@ boardgame-recommender/
 ## 📅 7주차 개발 로드맵
 
 - [x] **1주차: 환경 구축 & 데이터셋 탐색 (EDA)**
-  - Anaconda 환경 구축 및 팀원 간 개발 환경 일치
+  - uv 기반 가상환경 구축(Python 3.12) 및 팀원 간 개발 환경 일치
   - `games.csv` 데이터 불러오기 및 기본 행/열/타입 분석 (`df.info()`, `df.describe()`)
   - 핵심 13개 컬럼(`BGGId`, `Name`, `YearPublished`, `GameWeight`, `MinPlayers`, `MaxPlayers`, `BestPlayers`, `ComMinPlaytime`, `ComMaxPlaytime`, `BayesAvgRating`, `Description`, `NumUserRatings`, `ImagePath`) 선별 완료
 - [x] **2주차: 데이터 정제 (이상치/결측치 처리)**
@@ -178,33 +178,31 @@ boardgame-recommender/
 
 ## 🚀 시작 가이드 (Quick Start)
 
-### 1. 가상환경 생성 및 활성화
+### 1. 가상환경 생성 및 의존성 설치
 ```bash
-# 가상환경 생성 (Python 3.12)
-conda create -n bg_rec python=3.12 -y
+# 가상환경 생성 (.venv)
+uv venv
 
-# 가상환경 활성화
-conda activate bg_rec
+# 프로젝트 의존성 일괄 설치 및 동기화
+uv sync
 ```
 
-### 2. 필수 라이브러리 설치
-```bash
-# 데이터 분석 및 머신러닝 라이브러리 설치
-conda install pandas numpy matplotlib scikit-learn jupyterlab -c conda-forge -y
+> **신규 패키지 추가 시**:
+> ```bash
+> # 데이터 분석 및 백엔드 패키지 설치
+> uv add pandas numpy matplotlib scikit-learn fastapi "uvicorn[standard]"
+> uv add --dev jupyterlab ipykernel
+> ```
 
-# 백엔드 API 라이브러리 설치 (5주차)
-conda install fastapi uvicorn -c conda-forge -y
-```
-
-### 3. 백엔드 실행 (5주차~)
+### 2. 백엔드 실행 (5주차~)
 ```bash
 cd backend
-uvicorn main:app --reload
+uv run uvicorn main:app --reload
 # 접속 주소: http://localhost:8000
 # API 문서 (Swagger): http://localhost:8000/docs
 ```
 
-### 4. 프론트엔드 실행 (6주차~)
+### 3. 프론트엔드 실행 (6주차~)
 ```bash
 cd frontend
 npm install

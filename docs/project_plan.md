@@ -5,7 +5,7 @@
 * **참여 인원**: 4명
 * **개발 환경**:
   * **언어**: Python 3.12, JavaScript
-  * **가상환경 및 패키지 관리**: Anaconda (Conda)
+  * **가상환경 및 패키지 관리**: uv (Python 3.12)
   * **분석/백엔드 도구**: VS Code, Jupyter Notebook, Pandas, Scikit-learn, FastAPI, Uvicorn
   * **프론트엔드 도구**: Node.js (v18+), React (Vite), Tailwind CSS
 
@@ -32,7 +32,7 @@
 
 | 영역 | 도구 / 라이브러리 |
 | ----- | ----- |
-| **환경 관리** | `Anaconda (Python 3.12)` |
+| **환경 관리** | `uv (Python 3.12)` |
 | **데이터 처리** | `pandas`, `numpy` |
 | **키워드 분석/유사도** | `scikit-learn` (`TfidfVectorizer`, `cosine_similarity`) |
 | **백엔드 API** | `fastapi`, `uvicorn` |
@@ -42,17 +42,18 @@
 
 ## 📅 주차별 상세 일정
 
-### ✅ 1주차: 아나콘다 환경 구축 & 파이썬/판다스 기초 탐색 (EDA) [완료]
+### ✅ 1주차: uv 가상환경 구축 & 파이썬/판다스 기초 탐색 (EDA) [완료]
 
-> **주요 목표**: 4명 모두 동일한 아나콘다 환경을 구축하고, 엑셀 열어보듯 데이터셋 파악하기
+> **주요 목표**: 4명 모두 동일한 uv 가상환경을 구축하고, 엑셀 열어보듯 데이터셋 파악하기
 
-* **사용 도구**: `Anaconda`, `Python 3.12`, `Jupyter Notebook`, `pandas`
+* **사용 도구**: `uv`, `Python 3.12`, `Jupyter Notebook`, `pandas`
 * **주요 산출물**: `src/read_game_csv.ipynb`
 * **설치 가이드**:
   ```bash
-  conda create -n bg_rec python=3.12
-  conda activate bg_rec
-  conda install pandas numpy scikit-learn jupyterlab -c conda-forge
+  uv init --python 3.12
+  uv venv
+  uv add pandas numpy scikit-learn matplotlib
+  uv add --dev jupyterlab ipykernel
   ```
 
 * **세부 작업 현황**:
@@ -131,10 +132,10 @@
 * **사용 도구**: `fastapi`, `uvicorn`
 * **설치**:
   ```bash
-  conda install fastapi uvicorn -c conda-forge
+  uv add fastapi "uvicorn[standard]"
   ```
 * **세부 작업**:
-  - [ ] 1. 가장 단순한 `main.py` 작성 및 서버 실행 (`uvicorn main:app --reload`).
+  - [ ] 1. 가장 단순한 `main.py` 작성 및 서버 실행 (`uv run uvicorn main:app --reload`).
   - [ ] 2. 두 개의 핵심 URL(엔드포인트) 작성:
     * `GET /games/search`: 게임 이름 자동완성 및 목록 검색용.
     * `POST /recommend`: 사용자가 인원, 시간, 기준 게임을 보내면 4주차 함수를 실행해 추천 결과(JSON)를 반환.
@@ -168,7 +169,7 @@
   - [ ] 3. **팀 발표/포트폴리오용 README 작성**:
     * 시스템 동작 구조 (React $\rightarrow$ FastAPI $\rightarrow$ TF-IDF/Pandas).
     * 4명의 역할 분담 내역 명시.
-    * 아나콘다 실행 명령어 및 구동 스크린샷 첨부.
+    * uv 실행 명령어 및 구동 스크린샷 첨부.
 
 ---
 
