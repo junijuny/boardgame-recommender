@@ -22,8 +22,8 @@
 
 ## 📌 목차
 1. [사전 필수 프로그램 설치](#1-사전-필수-프로그램-설치)
-2. [uv 프로젝트 및 가상환경 구축 (Python 3.12)](#2-uv-프로젝트-및-가상환경-구축-python-312)
-3. [데이터 분석 및 머신러닝 패키지 설치 (1~4주차)](#3-데이터-분석-및-머신러닝-패키지-설치-14주차)
+2. [uv 가상환경 및 의존성 동기화 (팀원 온보딩)](#2-uv-가상환경-및-의존성-동기화-팀원-온보딩)
+3. [패키지 추가 및 코드 품질 관리 (필요 시)](#3-패키지-추가-및-코드-품질-관리-필요-시)
 4. [VS Code & Jupyter 개발 환경 연동](#4-vs-code--jupyter-개발-환경-연동)
 5. [백엔드 환경 설정 (FastAPI, 5주차)](#5-백엔드-환경-설정-fastapi-5주차)
 6. [프론트엔드 환경 설정 (React + Vite, 6주차)](#6-프론트엔드-환경-설정-react--vite-6주차)
@@ -48,39 +48,50 @@
 
 ---
 
-## 2. uv 프로젝트 및 가상환경 구축 (Python 3.12)
+## 2. uv 가상환경 및 의존성 동기화 (팀원 온보딩)
 
-터미널(Windows: PowerShell, macOS: Terminal)을 열고 프로젝트 루트 디렉터리(`boardgame-recommender`)에서 아래 명령어를 순서대로 실행합니다.
+새로 저장소를 클론한 팀원은 복잡한 설정 없이 **단 한 줄의 명령어로 동일한 Python 3.12 가상환경 및 패키지를 세팅**할 수 있습니다.
 
-### 2.1 uv 프로젝트 초기화 (Python 3.12 고정)
 ```bash
-uv init --python 3.12
-```
-
-### 2.2 가상환경 생성 (.venv)
-```bash
-uv venv
+# 프로젝트 루트 디렉터리(boardgame-recommender)에서 실행
+uv sync
 ```
 
 > [!TIP]
-> - `uv`는 시스템에 Python 3.12가 없어도 자동으로 필요한 버전을 다운로드하여 격리된 `.venv`를 생성합니다.
-> - 가상환경을 번거롭게 수동 활성화(activate)하지 않아도 `uv run <명령어>`를 통해 독립된 환경에서 바로 실행할 수 있습니다.
+> - `uv sync`를 실행하면 시스템에 Python 3.12가 설치되어 있지 않아도 `uv`가 필요한 버전을 자동으로 다운로드하고 `.venv`를 생성하여 `uv.lock`에 정의된 패키지를 정확한 버전으로 설치합니다.
+> - 프로젝트에 이미 `pyproject.toml`과 `uv.lock`이 구성되어 있으므로 **`uv init`은 다시 실행하지 않습니다.**
+> - 가상환경을 수동 활성화(activate)하지 않아도 `uv run <명령어>`를 통해 가상환경 내에서 안전하게 스크립트를 실행할 수 있습니다.
 
 ---
 
-## 3. 데이터 분석 및 머신러닝 패키지 설치 (1~4주차)
+## 3. 패키지 추가 및 코드 품질 관리 (필요 시)
 
-`clean_games.csv` 전처리, EDA, 그리고 TF-IDF 코사인 유사도 분석에 필요한 핵심 패키지를 설치합니다.
+### 3.1 신규 패키지 추가
+새로운 라이브러리가 필요할 때만 아래 명령어를 사용합니다 (설치 시 `pyproject.toml`과 `uv.lock`이 자동 갱신됩니다):
 
 ```bash
-# 핵심 분석 패키지 추가
-uv add pandas numpy matplotlib scikit-learn
+# 일반 런타임 패키지 추가
+uv add <패키지명>
 
-# Jupyter 노트북 개발용 패키지 추가 (--dev)
-uv add --dev jupyterlab ipykernel
+# 개발/분석용 패키지 추가 (--dev)
+uv add --dev <패키지명>
 ```
 
-### 3.1 설치 정상 확인
+### 3.2 코드 품질 및 린트/포맷 검사 (Ruff)
+코드 스타일 통일을 위해 초고속 린터/포매터인 `ruff`가 개발 그룹에 포함되어 있습니다:
+
+```bash
+# 코드 린트 검사
+uv run ruff check .
+
+# 코드 자동 수정 (린트 오류 자동 수정)
+uv run ruff check --fix .
+
+# 코드 포맷팅 (Black 스타일 코드 정렬)
+uv run ruff format .
+```
+
+### 3.3 설치 정상 확인
 아래 단일 명령어로 필수 패키지 임포트와 파이썬 버전을 테스트합니다:
 
 ```bash
@@ -89,7 +100,7 @@ uv run python -c "import pandas as pd, numpy as np, sklearn, matplotlib; print(f
 
 출력 예시:
 ```text
-Python: 3.12 | Pandas: 2.2.x | Scikit-Learn: 1.4.x - 환경 설정 완료!
+Python: 3.12 | Pandas: 3.0.x | Scikit-Learn: 1.9.x - 환경 설정 완료!
 ```
 
 ---
@@ -113,16 +124,16 @@ VS Code 왼쪽 확장 탭(`Ctrl + Shift + X`)에서 아래 익스텐션을 설�
 
 ## 5. 백엔드 환경 설정 (FastAPI, 5주차)
 
-추천 알고리즘 함수(`recommend_games`)를 웹 API로 서빙하기 위한 프레임워크를 설치합니다.
-
-```bash
-# FastAPI 및 ASGI 서버 Uvicorn 설치
-uv add fastapi "uvicorn[standard]"
-```
+추천 알고리즘 함수(`recommend_games`)를 웹 API로 서빙하기 위한 프레임워크(`FastAPI`, `Uvicorn`)는 이미 `pyproject.toml`에 포함되어 있어 `uv sync` 시 함께 설치됩니다.
 
 ### 5.1 백엔드 구동 테스트 (미리보기)
+프로젝트 루트 또는 `backend` 디렉토리에서 Uvicorn 서버를 실행합니다:
+
 ```bash
-# 추후 backend 디렉토리 이동 후 실행
+# 옵션 1: 프로젝트 루트에서 바로 실행 (권장)
+uv run uvicorn backend.main:app --reload --port 8000
+
+# 옵션 2: backend 디렉토리로 이동 후 실행
 cd backend
 uv run uvicorn main:app --reload --port 8000
 ```

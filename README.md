@@ -178,24 +178,26 @@ boardgame-recommender/
 
 ## 🚀 시작 가이드 (Quick Start)
 
-### 1. 가상환경 생성 및 의존성 설치
+### 1. 가상환경 생성 및 의존성 원클릭 동기화
 ```bash
-# 가상환경 생성 (.venv)
-uv venv
-
-# 프로젝트 의존성 일괄 설치 및 동기화
+# 가상환경(.venv) 생성 및 uv.lock 기준 의존성 일괄 설치
 uv sync
 ```
 
 > **신규 패키지 추가 시**:
 > ```bash
-> # 데이터 분석 및 백엔드 패키지 설치
-> uv add pandas numpy matplotlib scikit-learn fastapi "uvicorn[standard]"
-> uv add --dev jupyterlab ipykernel
+> # 일반 패키지 추가
+> uv add <패키지명>
+> # 개발용 패키지 추가
+> uv add --dev <패키지명>
 > ```
 
 ### 2. 백엔드 실행 (5주차~)
 ```bash
+# 루트 디렉토리에서 바로 실행
+uv run uvicorn backend.main:app --reload
+
+# 또는 backend 디렉토리 이동 후 실행
 cd backend
 uv run uvicorn main:app --reload
 # 접속 주소: http://localhost:8000
