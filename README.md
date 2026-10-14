@@ -135,14 +135,22 @@ graph TD
 ```text
 boardgame-recommender/
 ├── data/                      # 데이터셋 디렉토리
-│   └── games.csv              # 원본 BGG 데이터셋
+│   ├── games.csv              # 원본 BGG 데이터셋
+│   └── clean_games.csv        # 정제 완료 데이터셋 (13개 핵심 컬럼)
 ├── docs/                      # 프로젝트 문서 및 가이드
 │   ├── project_plan.md        # 프로젝트 상세 계획서
 │   └── setup.md               # 개발 환경 세팅 가이드
-├── src/                       # 데이터 분석 및 추천 알고리즘 소스코드
-├── backend/                   # FastAPI 백엔드 API 서버 (생성 예정)
-├── frontend/                  # React 프론트엔드 웹 애플리케이션 (생성 예정)
+├── notebooks/                 # 데이터 분석(EDA) 및 실습 스크립트/노트북
+│   ├── clean_data.py          # 2주차 이상치/결측치 정제 스크립트
+│   ├── analyze_ratings.py     # 평점 통계 분석 스크립트
+│   ├── read_game_csv.ipynb    # 1~2주차 데이터 탐색 노트북
+│   └── cosine_similarity.ipynb# 3주차 TF-IDF 유사도 실습 노트북
+├── backend/                   # FastAPI 백엔드 API 서버 & 추천 엔진
+│   ├── main.py                # REST API 엔드포인트
+│   └── recommend_engine.py    # 4주차 추천 엔진 모듈
+├── frontend/                  # React 프론트엔드 웹 애플리케이션 (6주차 예정)
 ├── .gitignore
+├── pyproject.toml
 └── README.md
 ```
 
@@ -161,9 +169,9 @@ boardgame-recommender/
 - [x] **3주차: TF-IDF & 코사인 유사도 분석**
   - 설명글 텍스트 전처리 및 `TfidfVectorizer` 적용 (핵심 피처 추출)
   - 코사인 유사도(`cosine_similarity`) 매트릭스 계산 및 유사 게임 도출 실습
-- [ ] **4주차: 추천 파이프라인 함수 구현**
+- [x] **4주차: 추천 파이프라인 함수 구현**
   - 1차 조건 하드 필터링 + 2차 텍스트 유사도 정렬 + 3차 평점 보정 통합
-  - `recommend_games(game_name, players, max_time)` 완성
+  - `recommend_games(target_game_name, players, max_time)` 완성 (`backend/recommend_engine.py`)
 - [ ] **5주차: FastAPI 백엔드 서버 구축**
   - `/games/search` (게임 검색), `/recommend` (추천 결과 반환) API 엔드포인트 작성
   - Swagger UI(`http://localhost:8000/docs`)를 통한 API 기능 검증
