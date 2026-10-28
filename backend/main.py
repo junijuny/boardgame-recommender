@@ -1,22 +1,47 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 try:
     from backend.recommend_engine import (
         df,
-        search_games as engine_search_games,
+    )
+    from backend.recommend_engine import (
         filter_games as engine_filter_games,
+    )
+    from backend.recommend_engine import (
         recommend_games as engine_recommend_games,
+    )
+    from backend.recommend_engine import (
+        search_games as engine_search_games,
     )
 except ImportError:
     from recommend_engine import (
         df,
-        search_games as engine_search_games,
+    )
+    from recommend_engine import (
         filter_games as engine_filter_games,
+    )
+    from recommend_engine import (
         recommend_games as engine_recommend_games,
+    )
+    from recommend_engine import (
+        search_games as engine_search_games,
     )
 
 app = FastAPI(title="BoardGame Recommender API")
+
+# Vite 개발 화면(5173)에서 백엔드(8000)를 호출할 수 있도록 허용
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
+)
 
 
 # POST /recommend에서 받을 JSON 요청 바디
