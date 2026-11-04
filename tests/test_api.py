@@ -233,6 +233,33 @@ class APITests(unittest.TestCase):
         games = {game["Name"]: game for game in response.json()}
         self.assertEqual(games["3-D Chess"]["ImagePath"], "")   
 
+    def test_game_detail_returns_full_info(self):
+        response = self.client.get("/games/13")  # 13 = Catan
+        self.assertEqual(response.status_code, 200)
+        game = response.json()
+        self.assertEqual(game["Name"], "Catan")
+        # 검색 결과엔 없고 상세 조회에만 있는 항목
+        self.assertIn("Description", game)
+        self.assertIn("BestPlayers", game)
+
+    def test_game_detail_unknown_id_is_not_found(self):
+        response = self.client.get("/games/999999999") # 데이터에 없는 ID
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["detail"], "Game not found")
+
+    def test_game_detail_rejects_non_numeric_id(self):
+        response = self.client.get("/games/abc")
+        self.assertEqual(response.status_code, 422)
+
+    def test_search_still_works_after_detail_route(self):
+        # /games/{bgg_id}가 /games/search를 가로채지 않는지 확인
+        response = self.client.get("/games/search", params={"query": "Catan"})
+        self.assertEqual(response.status_code, 200)
+
+    def test_game_detail_without_image_returns_empty_image_path(self):
+        response = self.client.get("/games/18422")  # Citadel: 이미지 주소 없음
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["ImagePath"], "")
 
 if __name__ == "__main__":
     unittest.main()
