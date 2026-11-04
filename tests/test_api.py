@@ -226,6 +226,13 @@ class APITests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("access-control-allow-origin", response.headers)
 
+    def test_search_includes_game_without_image(self):
+        # 3-D Chess는 데이터에 이미지 주소가 없는 게임
+        response = self.client.get("/games/search", params={"query": "3-D Chess"})
+        self.assertEqual(response.status_code, 200)
+        games = {game["Name"]: game for game in response.json()}
+        self.assertEqual(games["3-D Chess"]["ImagePath"], "")   
+
 
 if __name__ == "__main__":
     unittest.main()

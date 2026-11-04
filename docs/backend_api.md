@@ -60,7 +60,7 @@ curl -X POST 'http://localhost:8000/recommend' \
 | 필드 | 의미 |
 | --- | --- |
 | `BGGId`, `Name` | 게임 ID와 이름 |
-| `YearPublished`, `ImagePath` | 출시 연도와 이미지 주소 |
+| `YearPublished`, `ImagePath` | 출시 연도와 이미지 주소. 이미지가 없으면 빈 문자열 |
 | `GameWeight` | 난이도 |
 | `MinPlayers`, `MaxPlayers` | 최소·최대 인원 |
 | `ComMinPlaytime`, `ComMaxPlaytime` | 최소·최대 플레이 시간(분) |
