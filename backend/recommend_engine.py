@@ -19,6 +19,8 @@ CACHE_PATH = BASE_DIR / "data" / "tfidf_cache.joblib"
 # 2. 데이터셋 로드 및 전처리
 df = pd.read_csv(DATA_PATH)
 df["Description"] = df["Description"].fillna("")
+# 이미지 주소가 없는 게임(15개)이 NaN이면 JSON 변환 실패로 500 오류가 나므로 빈 문자열로 채움
+df["ImagePath"] = df["ImagePath"].fillna("")
 
 
 # 3. TF-IDF 모델 및 행렬 로드 (디스크 캐시 우선 활용 -> 0.05초 초고속 로딩)
