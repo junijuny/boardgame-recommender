@@ -111,3 +111,19 @@ def recommend_games(request: RecommendRequest):
         if "Game not found" in error_msg:
             raise HTTPException(status_code=404, detail="Game not found")
         raise HTTPException(status_code=400, detail=error_msg)
+
+
+# 게임 상세 정보에 담을 항목 (검색 결과보다 설명글, 최적 인원 등이 추가됨)
+DETAIL_COLUMNS = [
+    "BGGId", "Name", "YearPublished", "ImagePath", "Description",
+    "GameWeight", "MinPlayers", "MaxPlayers", "BestPlayers",
+    "ComMinPlaytime", "ComMaxPlaytime", "BayesAvgRating", "NumUserRatings",
+]
+
+
+@app.get("/games/{bgg_id}")
+def get_game_detail(bgg_id: int):
+    matches = df[df["BGGId"] == bgg_id]
+    if matches.empty:
+        raise HTTPException(status_code=404, detail="Game not found")
+    return matches[DETAIL_COLUMNS].to_dict(orient="records")[0]

@@ -24,6 +24,7 @@ uv run --locked uvicorn backend.main:app --reload --port 8000
 | `GET /games/search` | 쿼리 `query` | 최대 10개 게임 목록 |
 | `GET /games/filter` | 쿼리 `players`, `max_time` | 조건을 만족하는 최대 10개 게임, 평점 내림차순 |
 | `POST /recommend` | JSON `game_name`, `players`, `max_time` | 조건을 만족하는 최대 5개 추천 게임 |
+| `GET /games/{bgg_id}` | 경로의 게임 ID(`BGGId`) | 게임 한 개의 상세 정보(설명, 난이도, 인원, 시간, 평점) |
 
 게임 이름은 데이터에 저장된 영어 이름을 사용함. 검색 결과의 `Name`을 추천 요청의 `game_name`으로 전달하면 되며, 대소문자와 앞뒤 공백은 무시함.
 
@@ -79,6 +80,7 @@ curl -X POST 'http://localhost:8000/recommend' \
 | 추천 조건에 맞는 후보가 없음 | 404 | `No games match the selected conditions` |
 | 필수 필드 누락 또는 잘못된 자료형 | 422 | FastAPI 검증 오류 목록 |
 | 추천 주소를 GET으로 호출 | 405 | `Method Not Allowed` |
+| 존재하지 않는 게임 ID로 상세 조회 | 404 | `Game not found` |
 
 검색·필터의 결과 없음은 `200 + []`, 추천의 결과 없음은 `404`인 기존 API 동작을 유지함. `detail`은 400·404에서는 문자열, 422에서는 배열이므로 프론트에서 구분함.
 
