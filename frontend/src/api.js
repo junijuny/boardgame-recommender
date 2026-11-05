@@ -9,7 +9,7 @@
 import axios from "axios";
 
 // 백엔드 서버 주소
-// 배포 시에는 빌드 환경변수 VITE_API_URL 로 지정 (예: https://xxx.hf.space)
+// 배포 시에는 빌드 환경변수 VITE_API_URL 로 지정 (예: https://xxx.onrender.com)
 // 지정하지 않으면 같은 컴퓨터에서 실행 중인 개발 서버를 사용
 const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:8000").replace(/\/+$/, "");
 

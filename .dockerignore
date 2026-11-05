@@ -6,7 +6,6 @@ frontend
 notebooks
 docs
 tests
-deploy
 
 # 대용량 원본 평점 데이터 (cf_factors.npz 생성에만 필요)
 data/user_ratings.csv

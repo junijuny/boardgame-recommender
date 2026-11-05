@@ -71,7 +71,7 @@ ehthumbs_vista.db
 # ==========================================
 # 추천 모델 산출물 & 대용량 원본 데이터
 # ==========================================
-# backend/build_embeddings.py, backend/build_cf.py 로 각자 생성
-data/*.npz
+# data/embeddings.npz, data/cf_factors.npz 는 배포(Render)에 필요해서 git에 포함
+# 다시 만들면(backend/build_embeddings.py, backend/build_cf.py) 함께 커밋
 # Kaggle BGG 데이터셋의 사용자 평점 (수백 MB) — 각자 내려받아 data/ 에 넣음
 data/user_ratings.csv

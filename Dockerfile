@@ -1,4 +1,4 @@
-# 백엔드(FastAPI) 배포용 이미지 — Hugging Face Spaces(Docker) 기준
+# 백엔드(FastAPI) 배포용 이미지 — Render(Docker) 기준
 # 배포 방법: docs/deploy.md
 FROM python:3.12-slim
 
@@ -21,10 +21,11 @@ COPY data ./data
 # 설명글 TF-IDF 캐시를 이미지 빌드 때 미리 만들어 서버 시작 시간을 줄임
 RUN cd backend && python -c "import features; features.load_or_compute_tfidf(features.load_games())"
 
-# Hugging Face Spaces 는 UID 1000 사용자로 실행하는 것을 권장
+# root 가 아닌 일반 사용자로 실행
 RUN useradd -m -u 1000 user && chown -R user /app
 USER user
 
 WORKDIR /app/backend
-EXPOSE 7860
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-7860}"]
+# Render 는 PORT 환경변수(기본 10000)로 포트를 알려줌
+EXPOSE 10000
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}"]
