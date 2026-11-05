@@ -4,7 +4,7 @@
 // 비슷한 보드게임 5개를 보여준다. 결과를 누르면 상세 팝업이 열린다.
 //
 // 받는 정보(props)
-//   initialGame        : 처음부터 선택해 둘 게임 이름 (없으면 빈 글자)
+//   initialGame        : 처음부터 선택해 둘 게임 { BGGId, Name } (없으면 null)
 //   onBack             : "처음으로" 버튼을 눌렀을 때 실행할 함수
 //   onRecommendSimilar : 상세 팝업에서 "비슷한 게임 추천받기"를 눌렀을 때 실행할 함수
 // ---------------------------------------------------------------------
@@ -44,7 +44,7 @@ export default function RecommendScreen({ initialGame, onBack, onRecommendSimila
   // useState 사용법: const [현재값, 값을바꾸는함수] = useState(처음값);
   // 값을 바꾸는 함수를 부르면 리액트가 화면을 자동으로 다시 그려준다.
 
-  // 검색 결과에서 선택한 실제 게임 이름
+  // 검색 결과에서 선택한 게임 { BGGId, Name, ... } (선택 안 했으면 null)
   const [game, setGame] = useState(initialGame);
   // 사용자가 고른 인원 (처음엔 4명)
   const [players, setPlayers] = useState(4);
@@ -79,7 +79,7 @@ export default function RecommendScreen({ initialGame, onBack, onRecommendSimila
     // try: 일단 시도해보고, 중간에 문제가 생기면 catch로 넘어감
     try {
       // 검색 결과의 Name을 백엔드 요청의 game_name으로 전달
-      setResults(await recommend({ game_name: game, players, max_time: maxTime }));
+      setResults(await recommend({ game_name: game.Name, players, max_time: maxTime }));
     } catch (err) {
       // 연결 실패와 백엔드가 반환한 오류를 구분
       console.error(err); // 개발자 도구(F12) Console 탭에 자세한 에러 출력
@@ -134,10 +134,11 @@ export default function RecommendScreen({ initialGame, onBack, onRecommendSimila
           <GameSearch
             value={game}
             disabled={loading}
-            onChange={(name) => {
-              setGame(name);
+            onChange={(picked) => {
+              setGame(picked);
               clearRecommendation();
             }}
+            onShowDetail={setSelectedId}
           />
 
           {/* 2-2. 인원 고르기 (버튼 묶음) */}
@@ -188,7 +189,7 @@ export default function RecommendScreen({ initialGame, onBack, onRecommendSimila
         {/* aria-live: 결과가 바뀌면 화면 읽기 프로그램이 알려주도록 하는 설정 (접근성) */}
         <div className="mt-10" aria-live="polite">
           <Results
-            gameLabel={game}
+            gameLabel={game?.Name ?? ""}
             results={results}
             loading={loading}
             error={error}

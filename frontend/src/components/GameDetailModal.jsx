@@ -5,7 +5,7 @@
 // 받는 정보(props)
 //   bggId              : 보여줄 게임 ID (null이면 팝업을 그리지 않음)
 //   onClose            : 팝업을 닫을 때 실행할 함수
-//   onRecommendSimilar : "비슷한 게임 추천받기"를 눌렀을 때 실행할 함수 (게임 이름을 넘겨줌)
+//   onRecommendSimilar : "비슷한 게임 추천받기"를 눌렀을 때 실행할 함수 (게임 { BGGId, Name, ... }을 넘겨줌)
 //
 // <dialog>: 브라우저가 기본으로 제공하는 팝업 태그.
 //   showModal()로 열면 뒤 화면을 못 누르게 막고, ESC 키로 닫기(cancel 이벤트)도 지원한다.
@@ -139,7 +139,7 @@ function DetailDialog({ bggId, onClose, onRecommendSimilar }) {
           <div className="border-t border-line px-6 py-4">
             <button
               type="button"
-              onClick={() => onRecommendSimilar(game.Name)}
+              onClick={() => onRecommendSimilar(game)}
               className={`${primaryButton} w-full py-3`}
             >
               <Search className="h-5 w-5" aria-hidden="true" />

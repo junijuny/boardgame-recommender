@@ -34,15 +34,15 @@ import StartScreen from "./screens/StartScreen.jsx";
 export default function App() {
   // 지금 보여줄 화면: "start" = 시작, "recommend" = 추천, "genres" = 장르
   const [screen, setScreen] = useState("start");
-  // 추천 화면에 처음부터 선택해 둘 게임 이름
-  const [initialGame, setInitialGame] = useState("");
+  // 추천 화면에 처음부터 선택해 둘 게임 { BGGId, Name, ... } (없으면 null)
+  const [initialGame, setInitialGame] = useState(null);
   // 추천 화면을 새로 열 때마다 올리는 번호
   // (key가 바뀌면 리액트가 추천 화면을 처음 상태로 새로 만든다)
   const [recommendKey, setRecommendKey] = useState(0);
 
-  // 추천 화면 열기. name이 있으면 그 게임이 선택된 상태로 시작
-  function openRecommend(name = "") {
-    setInitialGame(name);
+  // 추천 화면 열기. game이 있으면 그 게임이 선택된 상태로 시작
+  function openRecommend(game = null) {
+    setInitialGame(game);
     setRecommendKey((n) => n + 1);
     setScreen("recommend");
     window.scrollTo(0, 0);
