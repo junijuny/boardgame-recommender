@@ -1,3 +1,4 @@
+import os
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -49,13 +50,19 @@ app = FastAPI(title="BoardGame Recommender API")
 # 장르별 대표 게임은 데이터가 바뀌지 않으므로 서버 시작 시 한 번만 계산
 GENRE_LIST = build_genres(df, mechanics)
 
-# Vite 개발 화면(5173)에서 백엔드(8000)를 호출할 수 있도록 허용
+# 백엔드를 호출할 수 있는 프론트엔드 주소 목록
+# 기본값은 Vite 개발 화면(5173). 배포 시 환경변수 ALLOWED_ORIGINS 에 쉼표로 구분해 지정
+# 예: ALLOWED_ORIGINS=https://boardgame-recommender.vercel.app,http://localhost:5173
+DEFAULT_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
+ALLOWED_ORIGINS = [
+    origin.strip().rstrip("/")
+    for origin in os.environ.get("ALLOWED_ORIGINS", DEFAULT_ORIGINS).split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=False,
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],

@@ -1,0 +1,14 @@
+# 백엔드 이미지에 필요 없는 파일 제외
+.git
+.venv
+**/__pycache__
+frontend
+notebooks
+docs
+tests
+deploy
+
+# 대용량 원본 평점 데이터 (cf_factors.npz 생성에만 필요)
+data/user_ratings.csv
+# TF-IDF 캐시는 이미지 빌드 중에 새로 만듦
+data/tfidf_cache.joblib

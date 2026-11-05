@@ -16,7 +16,7 @@
 
 **사용자의 조건과 취향에 딱 맞는 최적의 보드게임을 찾아주는 머신러닝 기반 추천 웹 서비스**
 
-[📖 프로젝트 상세 계획서](docs/project_plan.md) • [⚙️ 개발 환경 세팅 가이드](docs/setup.md)
+[📖 프로젝트 상세 계획서](docs/project_plan.md) • [⚙️ 개발 환경 세팅 가이드](docs/setup.md) • [🚀 배포 가이드](docs/deploy.md)
 
 </div>
 
