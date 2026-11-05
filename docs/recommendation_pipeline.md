@@ -52,9 +52,12 @@ curl 'http://localhost:8000/games/semantic-search?query=친구들과%20가볍게
 ```
 
 - `embeddings.npz`만 있고 `semantic` 패키지가 없으면 추천에는 임베딩을 쓰지만 자연어 검색은 `503`
-- `embeddings.npz`는 git에 올리지 않으므로 팀원이 각자 생성함
+- `embeddings.npz`는 배포에 필요해서 git에 포함되어 있음. 다시 만들었다면 함께 커밋함
+- 배포 서버(Render)에는 `semantic` 패키지를 설치하지 않으므로 추천에는 임베딩을 쓰지만 자연어 검색은 꺼져 있음
 
 ## 3. 3단계: 협업 필터링 (선택)
+
+학습된 `data/cf_factors.npz`가 git에 포함되어 있으므로 추천에는 별도 준비가 필요 없음. 아래는 다시 학습할 때의 절차.
 
 1. Kaggle BGG 데이터셋에서 `user_ratings.csv`를 받아 `data/`에 넣음 (용량이 커서 git에 올리지 않음)
 2. 학습

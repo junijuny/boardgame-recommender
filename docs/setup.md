@@ -4,9 +4,9 @@
 
 ![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)
 ![uv](https://img.shields.io/badge/uv-0.13+-DE5FE9?style=flat-square&logo=uv&logoColor=white)
-![Node.js](https://img.shields.io/badge/Node.js-v18+-339933?style=flat-square&logo=node.js&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-v20.19+-339933?style=flat-square&logo=node.js&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)
-![React](https://img.shields.io/badge/React-18+-61DAFB?style=flat-square&logo=react&logoColor=black)
+![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)
 ![Antigravity](https://img.shields.io/badge/Built%20with-Antigravity-4285F4?style=flat-square&logo=google)
 
 <br/>
@@ -14,7 +14,7 @@
 **보드게임 추천 시스템 팀 프로젝트를 원활하게 진행하기 위한 공통 개발 환경 구축 가이드입니다.**  
 팀원 4명 모두 동일한 환경을 구성하여 버전 차이로 인한 버그를 미연에 방지합니다.
 
-[🏠 메인 README로 이동](../README.md) • [📖 상세 프로젝트 계획서 보기](project_plan.md)
+[🏠 메인 README로 이동](../README.md) • [📖 상세 프로젝트 계획서 보기](project_plan.md) • [🚀 배포 가이드](deploy.md)
 
 </div>
 
@@ -25,8 +25,8 @@
 2. [uv 가상환경 및 의존성 동기화 (팀원 온보딩)](#2-uv-가상환경-및-의존성-동기화-팀원-온보딩)
 3. [패키지 추가 및 코드 품질 관리 (필요 시)](#3-패키지-추가-및-코드-품질-관리-필요-시)
 4. [VS Code & Jupyter 개발 환경 연동](#4-vs-code--jupyter-개발-환경-연동)
-5. [백엔드 환경 설정 (FastAPI, 5주차)](#5-백엔드-환경-설정-fastapi-5주차)
-6. [프론트엔드 환경 설정 (React + Vite, 6주차)](#6-프론트엔드-환경-설정-react--vite-6주차)
+5. [백엔드 환경 설정 (FastAPI)](#5-백엔드-환경-설정-fastapi)
+6. [프론트엔드 환경 설정 (React + Vite)](#6-프론트엔드-환경-설정-react--vite)
 7. [자주 묻는 질문 및 트러블슈팅 (FAQ)](#7-자주-묻는-질문-및-트러블슈팅-faq)
 8. [유용한 참고 링크](#8-유용한-참고-링크)
 
@@ -41,7 +41,7 @@
 | **uv** | 최신 버전 | 초고속 파이썬 패키지 및 가상환경 관리자 ([공식 문서/설치](https://docs.astral.sh/uv/)) |
 | **VS Code** | 최신 버전 | 메인 코드 에디터 ([다운로드](https://code.visualstudio.com/)) |
 | **Git** | 2.x 이상 | 형상 관리 및 GitHub 협업 도구 ([다운로드](https://git-scm.com/)) |
-| **Node.js** | v18 이상 (LTS) | 6주차 프론트엔드 빌드 및 실행 도구 ([다운로드](https://nodejs.org/)) |
+| **Node.js** | v20.19 이상 (LTS 권장) | 프론트엔드 빌드 및 실행 도구. Vite 8 요구 사항 ([다운로드](https://nodejs.org/)) |
 
 > [!NOTE]
 > Rust 기반 초고속 패키지 관리자인 **`uv`**를 사용합니다. Python 3.12 바이너리 다운로드부터 가상환경 격리까지 모두 자동으로 처리됩니다.
@@ -122,11 +122,12 @@ VS Code 왼쪽 확장 탭(`Ctrl + Shift + X`)에서 아래 익스텐션을 설�
 
 ---
 
-## 5. 백엔드 환경 설정 (FastAPI, 5주차)
+## 5. 백엔드 환경 설정 (FastAPI)
 
-추천 알고리즘 함수(`recommend_games`)를 웹 API로 서빙하기 위한 프레임워크(`FastAPI`, `Uvicorn`)는 이미 `pyproject.toml`에 포함되어 있어 `uv sync` 시 함께 설치됩니다.
+추천 엔진을 웹 API로 서빙하기 위한 `FastAPI`, `Uvicorn`은 `pyproject.toml`에 포함되어 있어 `uv sync` 시 함께 설치됩니다.
+추천에 필요한 데이터(`data/clean_games.csv`, `mechanics.csv`, `themes.csv`, `embeddings.npz`, `cf_factors.npz`)도 저장소에 포함되어 있어 별도 준비 없이 바로 실행됩니다.
 
-### 5.1 백엔드 구동 테스트 (미리보기)
+### 5.1 백엔드 실행
 프로젝트 루트 또는 `backend` 디렉토리에서 Uvicorn 서버를 실행합니다:
 
 ```bash
@@ -139,26 +140,54 @@ uv run uvicorn main:app --reload --port 8000
 ```
 - **서버 주소**: `http://localhost:8000`
 - **인터랙티브 API 문서 (Swagger UI)**: `http://localhost:8000/docs`
+- 첫 실행 시 설명글 TF-IDF 캐시(`data/tfidf_cache.joblib`)를 만드느라 시간이 조금 걸립니다.
+- `http://localhost:8000/` 응답의 `signals`에서 현재 사용 중인 추천 신호를 확인할 수 있습니다.
+
+### 5.2 자동 테스트
+서버를 따로 켜지 않아도 실행됩니다.
+```bash
+uv run python -m unittest discover -s tests -v
+```
+
+### 5.3 선택 기능 (자연어 검색, 모델 재생성)
+- 자연어 검색(`/games/semantic-search`)은 `sentence-transformers`(용량 큼)가 필요하므로 선택 설치입니다:
+  ```bash
+  uv sync --extra semantic
+  uv run --extra semantic uvicorn backend.main:app --reload --port 8000
+  ```
+- 임베딩·협업 필터링 재생성과 성능 평가 방법은 [recommendation_pipeline.md](recommendation_pipeline.md)를 참고하세요.
+- API 명세와 오류 응답은 [backend_api.md](backend_api.md)를 참고하세요.
 
 ---
 
-## 6. 프론트엔드 환경 설정 (React + Vite, 6주차)
+## 6. 프론트엔드 환경 설정 (React + Vite)
 
 추천 웹 화면 구성을 위한 Node.js 기반 프론트엔드 세팅입니다.
 
 ### 6.1 Node.js 설치 확인
 ```bash
-node -v   # v18.x.x 이상 확인
-npm -v    # v9.x.x 이상 확인
+node -v   # v20.19 이상 확인
+npm -v
 ```
 
-### 6.2 프론트엔드 프로젝트 구동 (6주차 예정)
+### 6.2 프론트엔드 실행
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev     # 개발 서버
+npm run lint    # oxlint 검사
+npm run build   # 배포용 빌드 (frontend/dist)
 ```
 - **로컬 웹 접속 주소**: `http://localhost:5173`
+- 백엔드(`http://localhost:8000`)를 먼저 켜 두어야 검색·추천이 동작합니다.
+
+### 6.3 백엔드 주소 지정 (선택)
+기본값은 `http://localhost:8000`입니다. 다른 백엔드를 쓰려면 `frontend/.env.example`을 참고해 `frontend/.env.local`에 지정합니다:
+```bash
+VITE_API_URL=https://<렌더서비스이름>.onrender.com
+```
+> [!NOTE]
+> 프론트 포트가 5173이 아니게 되면(예: 5174) 백엔드 CORS에서 막힙니다. 5173을 쓰거나, 백엔드 실행 시 환경변수 `ALLOWED_ORIGINS`에 실제 주소를 추가하세요.
 
 ---
 

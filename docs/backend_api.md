@@ -21,7 +21,7 @@ uv run --locked uvicorn backend.main:app --reload --port 8000
 
 | 메서드·경로 | 입력 | 성공 응답 |
 | --- | --- | --- |
-| `GET /` | 없음 | 서버 이름과 `total_games` |
+| `GET /` | 없음 | 서버 이름, `total_games`, 사용 중인 추천 신호 `signals`, 자연어 검색 가능 여부 `semantic_search` |
 | `GET /games/search` | 쿼리 `query` | 최대 10개 게임 목록 |
 | `GET /games/filter` | 쿼리 `players`, `max_time` | 조건을 만족하는 최대 10개 게임, 평점 내림차순 |
 | `POST /recommend` | JSON `game_name`, `players`, `max_time` | 조건을 만족하는 최대 5개 추천 게임 |
@@ -119,7 +119,13 @@ curl 'http://localhost:8000/genres'
 - `http://localhost:5173`
 - `http://127.0.0.1:5173`
 
-화면 주소의 프로토콜, 호스트, 포트를 함께 비교함. 프론트 포트가 5174로 바뀌면 5173으로 맞추거나 `backend/main.py`의 `allow_origins` 목록에 실제 주소를 추가해야 함. 배포 주소도 별도 추가가 필요.
+화면 주소의 프로토콜, 호스트, 포트를 함께 비교함. 프론트 포트가 5174로 바뀌면 5173으로 맞추거나 환경변수 `ALLOWED_ORIGINS`에 실제 주소를 지정해야 함.
+
+`ALLOWED_ORIGINS`를 지정하면 위 기본 목록을 대신하므로, 필요한 주소를 모두 쉼표로 구분해 넣음. 배포 서버(Render)에는 Vercel 주소를 지정함 ([deploy.md](deploy.md) 참고).
+
+```bash
+ALLOWED_ORIGINS=https://boardgame-recommender.vercel.app,http://localhost:5173
+```
 
 CORS는 브라우저가 응답을 읽을 수 있도록 허용하는 설정이며, 로그인이나 서버 접근 권한을 대신하지 않음. 현재 API는 쿠키 인증을 사용하지 않으므로 `allow_credentials=False`.
 

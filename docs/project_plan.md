@@ -7,14 +7,15 @@
   * **언어**: Python 3.12, JavaScript
   * **가상환경 및 패키지 관리**: uv (Python 3.12)
   * **분석/백엔드 도구**: VS Code, Jupyter Notebook, Pandas, Scikit-learn, FastAPI, Uvicorn
-  * **프론트엔드 도구**: Node.js (v18+), React (Vite), Tailwind CSS
+  * **프론트엔드 도구**: Node.js (v20.19+), React 19 (Vite 8), Tailwind CSS 4
+  * **배포**: Render (백엔드, Docker), Vercel (프론트엔드)
 
 ---
 
 ## 📊 프로젝트 진행 현황 (Progress Overview)
 
-* **현재 상태**: **4주차 완료 (5주차 진행 예정)**
-* **전체 진행률**: **57.1%** (4주차 / 7주차 완료)
+* **현재 상태**: **7주차 완료 + 추천 품질 개선 완료, 배포 완료**
+* **전체 진행률**: **100%** (7주차 / 7주차 완료)
 
 | 주차 | 주요 내용 | 상태 | 주요 산출물 |
 | :--- | :--- | :---: | :--- |
@@ -22,9 +23,10 @@
 | **2주차** | 결측치/이상치 정제 & `clean_games.csv` 생성 | ✅ 완료 | `data/clean_games.csv`, `notebooks/read_game_csv.ipynb` |
 | **3주차** | TF-IDF 키워드 벡터화 & 코사인 유사도 실습 | ✅ 완료 | `notebooks/cosine_similarity.ipynb` |
 | **4주차** | 조건 필터링 + 유사도 통합 추천 파이프라인 구현 | ✅ 완료 | `backend/recommend_engine.py` |
-| **5주차** | FastAPI 백엔드 REST API 서버 구축 | 🚀 진행 예정 | `backend/main.py` |
-| **6주차** | React 프론트엔드 UI 화면 개발 | ⏳ 대기 | `frontend/` (예정) |
-| **7주차** | 프론트-백엔드 연동, 예외 처리 및 최종 시연 | ⏳ 대기 | 최종 포트폴리오 및 시연 |
+| **5주차** | FastAPI 백엔드 REST API 서버 구축 | ✅ 완료 | `backend/main.py`, `tests/test_api.py` |
+| **6주차** | React 프론트엔드 UI 화면 개발 | ✅ 완료 | `frontend/src/` |
+| **7주차** | 프론트-백엔드 연동, 예외 처리 및 배포 | ✅ 완료 | `Dockerfile`, `docs/deploy.md` |
+| **추가** | 하이브리드 추천 파이프라인 & 오프라인 평가 | ✅ 완료 | `backend/features.py`, `backend/evaluate.py` 등 |
 
 ---
 
@@ -33,10 +35,13 @@
 | 영역 | 도구 / 라이브러리 |
 | ----- | ----- |
 | **환경 관리** | `uv (Python 3.12)` |
-| **데이터 처리** | `pandas`, `numpy` |
-| **키워드 분석/유사도** | `scikit-learn` (`TfidfVectorizer`, `cosine_similarity`) |
+| **데이터 처리** | `pandas`, `numpy`, `scipy` |
+| **키워드 분석/유사도** | `scikit-learn` (`TfidfVectorizer`, `TruncatedSVD`), 희소 행렬 코사인 유사도 |
+| **문장 임베딩 (선택)** | `sentence-transformers` (`intfloat/multilingual-e5-small`) |
 | **백엔드 API** | `fastapi`, `uvicorn` |
-| **프론트엔드 UI** | `React` (Vite), `Tailwind CSS`, `axios` |
+| **프론트엔드 UI** | `React` (Vite), `Tailwind CSS`, `axios`, `lucide-react` |
+| **테스트/린트** | `unittest` + `httpx`, `ruff`, `oxlint` |
+| **배포** | `Docker`, Render, Vercel |
 
 ---
 
@@ -47,7 +52,7 @@
 > **주요 목표**: 4명 모두 동일한 uv 가상환경을 구축하고, 엑셀 열어보듯 데이터셋 파악하기
 
 * **사용 도구**: `uv`, `Python 3.12`, `Jupyter Notebook`, `pandas`
-* **주요 산출물**: `src/read_game_csv.ipynb`
+* **주요 산출물**: `notebooks/read_game_csv.ipynb`
 * **설치 가이드**:
   ```bash
   uv init --python 3.12
@@ -73,7 +78,7 @@
 > **주요 목표**: 추천에 방해되는 결측치(비어있는 값)와 말도 안 되는 숫자 제거하기
 
 * **사용 도구**: `pandas`
-* **주요 산출물**: `src/read_game_csv.ipynb`, `data/clean_games.csv`
+* **주요 산출물**: `notebooks/read_game_csv.ipynb`, `notebooks/clean_data.py`, `data/clean_games.csv`
 * **세부 작업 현황**:
   - [x] 1. **결측치(NaN 및 공백) 제거**:
     * 설명글(`Description`)이나 게임 이름(`Name`)이 비어 있는 데이터(`isna()`, 공백 문자열) 제거 및 인덱스 리셋 (`reset_index`).
@@ -91,7 +96,7 @@
 > **주요 목표**: Scikit-learn 기본 도구로 "설명이 비슷한 게임" 찾아보기
 
 * **사용 도구**: `scikit-learn` (`TfidfVectorizer`, `cosine_similarity`), `pandas`, `numpy`
-* **주요 산출물**: `src/cosine_similarity.ipynb`
+* **주요 산출물**: `notebooks/cosine_similarity.ipynb`
 * **개념**:
   * **TF-IDF**: 설명글에서 "dice", "card", "war", "trade"처럼 게임 특징을 나타내는 단어에 높은 점수를 매겨 숫자로 바꾸는 기법.
 * **세부 작업 현황**:
@@ -111,10 +116,10 @@
 > **주요 목표**: "인원수 필터"와 "유사도 정렬"을 묶은 하나의 파이썬 함수 만들기
 
 * **사용 도구**: `pandas`, `scikit-learn`
-* **주요 산출물**: `src/recommend_engine.py`
+* **주요 산출물**: `backend/recommend_engine.py`
 * **세부 작업 현황**:
   - [x] 1. **1차 하드 필터링 (내가 원하는 조건만 거르기)**:
-    * 예: "4명이서 할 거다" $\rightarrow$ `BestPlayers` 또는 `Min/MaxPlayers` 범위에 4가 포함된 게임만 남김.
+    * 예: "4명이서 할 거다" $\rightarrow$ `MinPlayers ~ MaxPlayers` 범위에 4가 포함된 게임만 남김.
     * 예: "플레이 시간 60분 이하" $\rightarrow$ 조건 만족 행만 추출.
   - [x] 2. **2차 유사도 랭킹 (남은 후보군 중 가장 비슷한 순 정렬)**:
     * 기준 게임(예: '스플렌더')과 1차 필터링을 통과한 후보 게임들 간의 코사인 유사도 계산.
@@ -126,58 +131,76 @@
 
 ---
 
-### ⏳ 5주차: FastAPI 백엔드 서버 띄우기 [예정]
+### ✅ 5주차: FastAPI 백엔드 서버 띄우기 [완료]
 
 > **주요 목표**: 4주차에 만든 파이썬 함수를 웹 주소(API)로 호출할 수 있게 만들기
 
-* **사용 도구**: `fastapi`, `uvicorn`
-* **설치**:
-  ```bash
-  uv add fastapi "uvicorn[standard]"
-  ```
-* **세부 작업**:
-  - [ ] 1. 가장 단순한 `main.py` 작성 및 서버 실행 (`uv run uvicorn main:app --reload`).
-  - [ ] 2. 두 개의 핵심 URL(엔드포인트) 작성:
-    * `GET /games/search`: 게임 이름 자동완성 및 목록 검색용.
-    * `POST /recommend`: 사용자가 인원, 시간, 기준 게임을 보내면 4주차 함수를 실행해 추천 결과(JSON)를 반환.
-  - [ ] 3. 웹 브라우저에서 `http://localhost:8000/docs` (Swagger UI)를 열고, 직접 버튼을 눌러가며 정상 작동하는지 눈으로 테스트.
+* **사용 도구**: `fastapi`, `uvicorn`, `httpx`(테스트)
+* **주요 산출물**: `backend/main.py`, `backend/genres.py`, `tests/test_api.py`, `docs/backend_api.md`
+* **세부 작업 현황**:
+  - [x] 1. `main.py` 작성 및 서버 실행 (`uv run uvicorn backend.main:app --reload`).
+  - [x] 2. 엔드포인트 작성:
+    * `GET /games/search`: 게임 이름 자동완성 검색 (최대 10개).
+    * `GET /games/filter`: 인원·시간 조건만으로 평점 상위 게임 조회.
+    * `POST /recommend`: 기준 게임·인원·시간을 받아 추천 Top 5 반환.
+    * `GET /games/{bgg_id}`: 게임 한 개의 상세 정보 (상세 팝업용).
+    * `GET /genres`: 장르 8개와 장르별 대표 게임 6개.
+  - [x] 3. 입력 검증과 오류 응답 정리 (빈 입력 `400`, 없는 게임·후보 없음 `404`, 자료형 오류 `422`).
+  - [x] 4. Swagger UI(`http://localhost:8000/docs`) 수동 확인 + `unittest`/`TestClient` 자동 테스트 작성.
 
 ---
 
-### ⏳ 6주차: React 프론트엔드 UI 만들기 [예정]
+### ✅ 6주차: React 프론트엔드 UI 만들기 [완료]
 
 > **주요 목표**: 웹 브라우저에서 조작할 수 있는 직관적인 웹 화면 구성
 
-* **사용 도구**: `Node.js`, `React (Vite)`, `Tailwind CSS`, `axios`
-* **세부 작업**:
-  - [ ] 1. Vite로 기본 리액트 앱 생성 (`npm create vite@latest frontend -- --template react`).
-  - [ ] 2. Tailwind CSS 기본 스타일 적용 (버튼, 카드, 레이아웃).
-  - [ ] 3. **3대 핵심 화면 구성요소**:
-    * **입력 폼**: 기준 보드게임 선택(드롭다운), 인원수 입력창(2~6명), 플레이 시간 선택.
-    * **추천받기 버튼**: 클릭 시 Axios를 통해 백엔드(`http://localhost:8000/recommend`)로 요청 전송.
-    * **결과 카드 뷰**: 전달받은 JSON 데이터를 바탕으로 보드게임 표지(`ImagePath`), 이름, 난이도(`GameWeight`), 플레이 시간 렌더링.
+* **사용 도구**: `Node.js`, `React (Vite)`, `Tailwind CSS`, `axios`, `lucide-react`
+* **주요 산출물**: `frontend/src/`
+* **세부 작업 현황**:
+  - [x] 1. Vite 기반 React 앱 생성, Tailwind CSS 4 적용 (색상은 `index.css`의 `@theme`에서 관리).
+  - [x] 2. **화면 구성**:
+    * **시작 화면** (`StartScreen`): 이용 방법 안내, 추천받기 / 장르별 둘러보기 선택.
+    * **추천 화면** (`RecommendScreen`): 게임 이름 자동완성 검색(`GameSearch`), 인원(2~6명)·플레이 시간(30·60·90·120분 이하) 선택(`OptionGroup`), 결과 카드에 표지·난이도·시간·공통 메커니즘 표시.
+    * **장르 화면** (`GenreScreen`): 8개 장르별 대표 게임 목록.
+    * **게임 상세 팝업** (`GameDetailModal`): 어느 화면에서든 게임을 누르면 상세 정보를 보여 주고 그 게임 기준으로 바로 추천.
+  - [x] 3. 백엔드 요청은 `api.js`에 모아 화면 코드에서 axios를 직접 쓰지 않도록 정리.
 
 ---
 
-### ⏳ 7주차: 화면-서버 연동, 점검 및 시연 준비 [예정]
+### ✅ 7주차: 화면-서버 연동, 예외 처리 및 배포 [완료]
 
-> **주요 목표**: 버그 수정, 4인 시연 및 포트폴리오용 깃허브(README) 정리
+> **주요 목표**: 연동 오류 해결, 예외 상황 처리, 누구나 접속할 수 있도록 배포
 
-* **사용 도구**: `Git`, `GitHub`
-* **세부 작업**:
-  - [ ] 1. **연동 디버깅**: React에서 요청을 보냈을 때 백엔드 CORS 에러(도메인 차단) 처리하기.
-  - [ ] 2. **예외 처리**: 검색 결과가 없을 때 "조건에 맞는 게임이 없습니다" 메시지 띄우기.
-  - [ ] 3. **팀 발표/포트폴리오용 README 작성**:
-    * 시스템 동작 구조 (React $\rightarrow$ FastAPI $\rightarrow$ TF-IDF/Pandas).
-    * 4명의 역할 분담 내역 명시.
-    * uv 실행 명령어 및 구동 스크린샷 첨부.
+* **사용 도구**: `Git`, `GitHub`, `Docker`, Render, Vercel
+* **주요 산출물**: `Dockerfile`, `frontend/.env.example`, `docs/deploy.md`
+* **세부 작업 현황**:
+  - [x] 1. **CORS 설정**: 개발 화면 주소(`localhost:5173`)는 기본 허용, 배포 주소는 환경변수 `ALLOWED_ORIGINS`로 지정.
+  - [x] 2. **예외 처리**: 조건에 맞는 게임 없음, 게임을 찾을 수 없음, 입력 오류, 서버 연결 실패를 구분해 안내 메시지 표시.
+  - [x] 3. **배포**: 백엔드는 Render(Docker, 무료), 프론트엔드는 Vercel. 백엔드 주소는 빌드 환경변수 `VITE_API_URL`로 지정.
+  - [x] 4. README 및 문서 정리.
 
 ---
 
-## 💡 프로젝트 추진 가이드 & 팁
+### ✅ 추가: 추천 품질 개선 [완료]
 
-1. **딥러닝(BERT/LLM)에 욕심내지 않기**:
-   * 초기 단계에서 딥러닝 임베딩 시도 시 환경 설정 및 GPU 에러 해결로 인한 시간 낭비 방지 $\rightarrow$ `TfidfVectorizer`와 `Pandas 조건문` 활용.
+> **주요 목표**: 설명글 단어만 비교하던 방식의 한계(예: Catan 추천 5개가 모두 Catan 변형판)를 해결하고, 개선 여부를 숫자로 확인하기
+
+* **주요 산출물**: `backend/features.py`, `backend/build_embeddings.py`, `backend/build_cf.py`, `backend/evaluate.py`, `docs/recommendation_pipeline.md`
+* **세부 작업 현황**:
+  - [x] 1. **하이브리드 유사도**: 메커니즘·테마(IDF 가중), 카테고리·난이도, 설명글(문장 임베딩 또는 TF-IDF), 협업 필터링(Truncated SVD)을 가중 결합.
+  - [x] 2. **점수 보정**: 평점을 최종 점수의 25%로 반영, 같은 시리즈 변형판 감점, 다양성 재정렬(MMR).
+  - [x] 3. **추천 이유 표시**: 기준 게임과 공통인 메커니즘·테마를 응답에 포함.
+  - [x] 4. **오프라인 평가**: 학습에서 제외한 사용자 1,000명 기준 HitRate@10이 TF-IDF 0.134 → 하이브리드 0.450.
+  - [x] 5. **자연어 검색 API** (`GET /games/semantic-search`, 선택 기능): 한국어 문장으로 게임 검색.
+
+---
+
+## 💡 프로젝트 추진 가이드 & 회고
+
+1. **단순한 방법부터 시작하고, 평가로 개선 여부 확인하기**:
+   * 초기에는 딥러닝 환경 설정에 시간을 쓰지 않도록 `TfidfVectorizer`와 `Pandas 조건문`으로 동작하는 추천을 먼저 완성함.
+   * 이후 오프라인 평가(`backend/evaluate.py`)를 만든 뒤에 임베딩·협업 필터링을 추가하여, 바뀐 점을 수치로 비교함.
+   * 무거운 기능(`sentence-transformers`)은 선택 설치로 분리하여, 기본 설치와 배포 서버는 가볍게 유지함.
 
 2. **함수 단위로 역할 쪼개기**:
-   * 파이썬 함수(`recommend_games(...)`)를 FastAPI 내부에서 그대로 호출하는 구조를 취해 협업 시 코드 충돌 최소화.
+   * 추천 엔진 함수(`recommend_games(...)`)를 FastAPI 내부에서 그대로 호출하는 구조를 취해 협업 시 코드 충돌 최소화.
