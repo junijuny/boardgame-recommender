@@ -7,7 +7,11 @@ import unittest
 
 from fastapi.testclient import TestClient
 
+from backend.genres import genre_mask
 from backend.main import app
+from backend.recommend_engine import df, mechanics
+
+GENRE_KEYS = ["strategy", "family", "party", "thematic", "war", "childrens", "cgs", "deduction"]
 
 
 class APITests(unittest.TestCase):
@@ -114,8 +118,53 @@ class APITests(unittest.TestCase):
             self.assertGreaterEqual(game["BayesAvgRating"], 5.5)
             self.assertGreaterEqual(game["Similarity"], 0)
             self.assertLessEqual(game["Similarity"], 1 + 1e-9)
-        ranking = [(game["Similarity"], game["BayesAvgRating"]) for game in games]
-        self.assertEqual(ranking, sorted(ranking, reverse=True))
+            self.assertIsInstance(game["SharedMechanics"], list)
+            self.assertIsInstance(game["SharedThemes"], list)
+        # 다양성 재정렬(MMR)의 첫 번째 선택은 항상 최종 점수가 가장 높은 게임
+        scores = [game["Score"] for game in games]
+        self.assertEqual(scores[0], max(scores))
+
+    def test_recommendation_explains_shared_mechanics(self):
+        games = self.recommend().json()
+        self.assertTrue(any(game["SharedMechanics"] for game in games))
+
+    def test_recommendation_is_not_flooded_by_variants(self):
+        # 예전 TF-IDF 방식은 Catan 추천 5개가 모두 Catan 변형판이었음
+        names = [game["Name"].lower() for game in self.recommend().json()]
+        self.assertLessEqual(sum("catan" in name for name in names), 1)
+
+    def test_root_reports_active_signals(self):
+        body = self.client.get("/").json()
+        self.assertIn("mechanics", body["signals"])
+        self.assertIsInstance(body["semantic_search"], bool)
+
+    def test_semantic_search(self):
+        if not self.client.get("/").json()["semantic_search"]:
+            response = self.client.get(
+                "/games/semantic-search", params={"query": "협력 게임"}
+            )
+            self.assertEqual(response.status_code, 503)
+            self.skipTest("임베딩 미생성 또는 sentence-transformers 미설치")
+
+        response = self.client.get(
+            "/games/semantic-search",
+            params={"query": "친구들과 함께 질병을 막는 협력 게임", "players": 4, "max_time": 60},
+        )
+        self.assertEqual(response.status_code, 200)
+        games = response.json()
+        self.assertTrue(0 < len(games) <= 10)
+        for game in games:
+            self.assertLessEqual(game["MinPlayers"], 4)
+            self.assertGreaterEqual(game["MaxPlayers"], 4)
+            self.assertLessEqual(game["ComMaxPlaytime"], 60)
+        scores = [game["Score"] for game in games]
+        self.assertEqual(scores, sorted(scores, reverse=True))
+
+    def test_semantic_search_rejects_invalid_input(self):
+        for params in [{"query": "  "}, {"query": "co-op", "players": 0}, {"query": "co-op", "max_time": -1}]:
+            with self.subTest(params=params):
+                response = self.client.get("/games/semantic-search", params=params)
+                self.assertEqual(response.status_code, 400)
 
     def test_recommendation_accepts_case_and_whitespace(self):
         response = self.recommend(game_name=" cAtAn ")
@@ -260,6 +309,41 @@ class APITests(unittest.TestCase):
         response = self.client.get("/games/18422")  # Citadel: 이미지 주소 없음
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["ImagePath"], "")
+
+    def test_genres_lists_eight_genres_in_order(self):
+        response = self.client.get("/genres")
+        self.assertEqual(response.status_code, 200)
+        genres = response.json()
+        self.assertEqual([g["key"] for g in genres], GENRE_KEYS)
+        self.assertEqual(genres[0]["label"], "전략")
+        for genre in genres:
+            self.assertTrue(genre["label"] and genre["description"])
+
+    def test_genre_games_are_popular_sorted_and_limited(self):
+        ratings_by_id = df.set_index("BGGId")["NumUserRatings"]
+        for genre in self.client.get("/genres").json():
+            with self.subTest(genre=genre["key"]):
+                games = genre["games"]
+                self.assertTrue(0 < len(games) <= 6)
+                ratings = [g["BayesAvgRating"] for g in games]
+                self.assertEqual(ratings, sorted(ratings, reverse=True))
+                for game in games:
+                    self.assertGreaterEqual(ratings_by_id[game["BGGId"]], 1000)
+
+    def test_strategy_genre_includes_abstract_games(self):
+        mask = genre_mask(df, mechanics, "strategy")
+        abstract_only = ((df["Cat:Abstract"] == 1) & (df["Cat:Strategy"] == 0)).to_numpy()
+        self.assertTrue(abstract_only.any())
+        self.assertTrue(mask[abstract_only].all())
+
+    def test_deduction_genre_uses_deduction_mechanic(self):
+        col = list(mechanics.names).index("Deduction")
+        expected = mechanics.binary[:, col].toarray().ravel() > 0
+        self.assertTrue((genre_mask(df, mechanics, "deduction") == expected).all())
+
+    def test_unknown_genre_key_is_rejected(self):
+        with self.assertRaises(ValueError):
+            genre_mask(df, mechanics, "no-such-genre")
 
 if __name__ == "__main__":
     unittest.main()

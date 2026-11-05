@@ -1,10 +1,15 @@
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 try:
+    from backend.genres import build_genres
     from backend.recommend_engine import (
+        active_signals,
         df,
+        mechanics,
+        semantic_search_available,
     )
     from backend.recommend_engine import (
         filter_games as engine_filter_games,
@@ -14,10 +19,17 @@ try:
     )
     from backend.recommend_engine import (
         search_games as engine_search_games,
+    )
+    from backend.recommend_engine import (
+        semantic_search as engine_semantic_search,
     )
 except ImportError:
+    from genres import build_genres
     from recommend_engine import (
+        active_signals,
         df,
+        mechanics,
+        semantic_search_available,
     )
     from recommend_engine import (
         filter_games as engine_filter_games,
@@ -27,9 +39,15 @@ except ImportError:
     )
     from recommend_engine import (
         search_games as engine_search_games,
+    )
+    from recommend_engine import (
+        semantic_search as engine_semantic_search,
     )
 
 app = FastAPI(title="BoardGame Recommender API")
+
+# 장르별 대표 게임은 데이터가 바뀌지 않으므로 서버 시작 시 한 번만 계산
+GENRE_LIST = build_genres(df, mechanics)
 
 # Vite 개발 화면(5173)에서 백엔드(8000)를 호출할 수 있도록 허용
 app.add_middleware(
@@ -55,7 +73,9 @@ class RecommendRequest(BaseModel):
 def root():
     return {
         "message": "BoardGame Recommender API",
-        "total_games": len(df)
+        "total_games": len(df),
+        "signals": active_signals(),
+        "semantic_search": semantic_search_available(),
     }
 
 
@@ -90,6 +110,11 @@ def filter_games(players: int, max_time: int):
     return results
 
 
+@app.get("/genres")
+def list_genres():
+    return GENRE_LIST
+
+
 @app.post("/recommend")
 def recommend_games(request: RecommendRequest):
     try:
@@ -111,6 +136,28 @@ def recommend_games(request: RecommendRequest):
         if "Game not found" in error_msg:
             raise HTTPException(status_code=404, detail="Game not found")
         raise HTTPException(status_code=400, detail=error_msg)
+
+
+# /games/{bgg_id} 보다 먼저 선언해야 "semantic-search"가 게임 ID로 해석되지 않음
+@app.get("/games/semantic-search")
+def semantic_search(
+    query: str,
+    players: int | None = None,
+    max_time: int | None = None,
+):
+    query = query.strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="Search query cannot be empty")
+    if players is not None and players <= 0:
+        raise HTTPException(status_code=400, detail="Players must be greater than 0")
+    if max_time is not None and max_time <= 0:
+        raise HTTPException(status_code=400, detail="Max time must be greater than 0")
+    if not semantic_search_available():
+        raise HTTPException(status_code=503, detail="Semantic search is not available")
+
+    return engine_semantic_search(
+        query=query, players=players, max_time=max_time, limit=10
+    )
 
 
 # 게임 상세 정보에 담을 항목 (검색 결과보다 설명글, 최적 인원 등이 추가됨)

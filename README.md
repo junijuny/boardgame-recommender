@@ -50,8 +50,8 @@
 ```mermaid
 flowchart LR
     A["입력: 기준 게임, 인원수, 최대 시간"] --> B["1차 하드 필터링<br/>(인원수 & 플레이 시간 만족 게임 선별)"]
-    B --> C["2차 TF-IDF & 코사인 유사도 랭킹<br/>(설명글 핵심 키워드 유사도 계산)"]
-    C --> D["3차 평점 보정<br/>(최소 평점 이상 필터링)"]
+    B --> C["2차 하이브리드 유사도 랭킹<br/>(메커니즘·테마·카테고리·임베딩·협업 필터링)"]
+    C --> D["3차 평점 보정 + 변형판 감점<br/>+ 다양성 재정렬(MMR)"]
     D --> E["최종 추천 결과 반환<br/>(Top 5 보드게임 카드 뷰)"]
 ```
 
@@ -63,6 +63,10 @@ flowchart LR
    - 기준 게임과 후보 게임 간의 `cosine_similarity`(코사인 유사도)를 계산하여 유사도 순으로 랭킹 산출
 3. **3차 보정 (퀄리티 보장)**
    - 신뢰성 높은 평가 지표인 `BayesAvgRating`(베이지안 평균 평점) 5.5 이상 선별 후 Top 5 추천
+
+**화면 기능**
+- **게임 상세 보기**: 추천 결과나 장르 화면의 게임을 누르면 인원·시간·난이도·평점·설명을 팝업으로 보여주고, 그 게임 기준으로 바로 추천받을 수 있음 (`GET /games/{bgg_id}`)
+- **장르별 둘러보기**: 전략·가족·파티·테마·워게임·어린이·카드게임·추리 8개 장르의 대표 게임(리뷰 1,000개 이상, 평점 상위 6개)을 보여줌 (`GET /genres`)
 
 ---
 
@@ -79,6 +83,7 @@ graph TD
         API["FastAPI REST API Server"]
         Search["GET /games/search (자동완성)"]
         Recommend["POST /recommend (추천 요청)"]
+        Genres["GET /genres (장르별 대표 게임)"]
     end
 
     subgraph Engine ["추천 엔진 (ML & Data Processing)"]
@@ -91,6 +96,7 @@ graph TD
     Axios -->|"HTTP Requests"| API
     API --> Search
     API --> Recommend
+    API --> Genres
     Recommend --> EngineCore
     EngineCore --> DataClean
     EngineCore --> TFIDF
@@ -124,7 +130,7 @@ graph TD
 | `BestPlayers` | 가장 추천되는 최적 인원수 | 1차 필터링 기준 (미투표 0값 결측치 처리 필요) |
 | `ComMinPlaytime` / `ComMaxPlaytime` | 예상 최소/최대 플레이 시간 (분) | 1차 플레이 타임 필터링 기준 |
 | `BayesAvgRating` | 베이지안 평균 평점 | 3차 보정 필터 기준 (5.5 이상 정렬) |
-| `Description` | 게임 설명글 (영어 원문) | TF-IDF 키워드 및 코사인 유사도 분석 원천 |
+| `Description` | 게임 설명글 (영어, 데이터셋에서 소문자화·불용어 제거 등 전처리된 상태) | TF-IDF 키워드 및 코사인 유사도 분석 원천 |
 | `NumUserRatings` | 평가 참여 유저 수 | 추천 신뢰도 확보 및 비주류 이상치 필터링 |
 | `ImagePath` | 게임 표지 이미지 URL | 프론트엔드 카드 뷰 렌더링 |
 
@@ -147,8 +153,13 @@ boardgame-recommender/
 │   └── cosine_similarity.ipynb# 3주차 TF-IDF 유사도 실습 노트북
 ├── backend/                   # FastAPI 백엔드 API 서버 & 추천 엔진
 │   ├── main.py                # REST API 엔드포인트
+│   ├── genres.py              # 장르별 대표 게임 계산 (GET /genres)
 │   └── recommend_engine.py    # 4주차 추천 엔진 모듈
-├── frontend/                  # React 프론트엔드 웹 애플리케이션 (6주차 예정)
+├── frontend/src/              # React 프론트엔드
+│   ├── App.jsx                # 화면 전환 (시작 / 추천 / 장르)
+│   ├── screens/               # StartScreen, RecommendScreen, GenreScreen
+│   ├── components/            # GameSearch, GameDetailModal, GameThumb, OptionGroup
+│   └── api.js, format.js, styles.js
 ├── .gitignore
 ├── pyproject.toml
 └── README.md

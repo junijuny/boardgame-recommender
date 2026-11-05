@@ -15,6 +15,7 @@ uv run --locked uvicorn backend.main:app --reload --port 8000
 - 서버 종료: 실행한 터미널에서 `Ctrl+C`
 - `.python-version`에 지정된 Python 3.12와 `uv.lock`의 패키지 버전을 사용함
 - 첫 실행 시 TF-IDF 캐시가 생성되므로 이후 실행보다 시간이 걸릴 수 있음
+- 추천 알고리즘과 선택 기능(임베딩, 협업 필터링, 평가) 준비 방법은 [recommendation_pipeline.md](recommendation_pipeline.md) 참고
 
 ## 2. 요청과 응답
 
@@ -24,7 +25,9 @@ uv run --locked uvicorn backend.main:app --reload --port 8000
 | `GET /games/search` | 쿼리 `query` | 최대 10개 게임 목록 |
 | `GET /games/filter` | 쿼리 `players`, `max_time` | 조건을 만족하는 최대 10개 게임, 평점 내림차순 |
 | `POST /recommend` | JSON `game_name`, `players`, `max_time` | 조건을 만족하는 최대 5개 추천 게임 |
+| `GET /games/semantic-search` | 쿼리 `query`, 선택 `players`, `max_time` | 자연어(한국어 가능) 설명에 맞는 최대 10개 게임. 임베딩 미준비 시 `503` |
 | `GET /games/{bgg_id}` | 경로의 게임 ID(`BGGId`) | 게임 한 개의 상세 정보(설명, 난이도, 인원, 시간, 평점) |
+| `GET /genres` | 없음 | 장르 8개와 장르별 대표 게임 최대 6개 |
 
 게임 이름은 데이터에 저장된 영어 이름을 사용함. 검색 결과의 `Name`을 추천 요청의 `game_name`으로 전달하면 되며, 대소문자와 앞뒤 공백은 무시함.
 
@@ -54,7 +57,7 @@ curl -X POST 'http://localhost:8000/recommend' \
 ```
 
 `players`와 `max_time`은 1 이상의 정수이고, 시간 단위는 분.
-조건 필터를 통과한 게임을 설명문 유사도 내림차순, 동점이면 평점 내림차순으로 반환함. (기준 게임 자체는 제외)
+조건 필터를 통과한 게임을 하이브리드 유사도(메커니즘·테마·카테고리·텍스트·협업 필터링)와 평점을 합친 `Score`로 정렬한 뒤, 서로 너무 비슷한 게임이 몰리지 않게 다양성 재정렬하여 반환함. 기준 게임 자체는 제외하고, 같은 시리즈 변형판은 감점함. 자세한 내용은 [recommendation_pipeline.md](recommendation_pipeline.md).
 
 추천 결과의 각 항목에는 다음 필드가 있으며, 대문자로 시작하는 키 이름을 그대로 사용함
 
@@ -66,7 +69,31 @@ curl -X POST 'http://localhost:8000/recommend' \
 | `MinPlayers`, `MaxPlayers` | 최소·최대 인원 |
 | `ComMinPlaytime`, `ComMaxPlaytime` | 최소·최대 플레이 시간(분) |
 | `BayesAvgRating`, `NumUserRatings` | 평점과 평가 수 |
-| `Similarity` | 설명문 유사도. 추천 응답에만 포함 |
+| `Similarity` | 기준 게임과의 하이브리드 유사도(0~1). 추천·자연어 검색 응답에만 포함 |
+| `Score` | 유사도와 평점을 합친 최종 점수. 추천·자연어 검색 응답에만 포함 |
+| `SharedMechanics`, `SharedThemes` | 기준 게임과 공통인 메커니즘·테마 (드문 것부터 최대 3개). 추천 응답에만 포함 |
+
+### 장르별 대표 게임
+
+```bash
+curl 'http://localhost:8000/genres'
+```
+
+```json
+[
+  {
+    "key": "strategy",
+    "label": "전략",
+    "description": "깊이 있는 계획과 수 싸움",
+    "games": [{"BGGId": 174430, "Name": "Gloomhaven", "YearPublished": 2017, "ImagePath": "...",
+               "GameWeight": 3.87, "ComMinPlaytime": 60, "ComMaxPlaytime": 120, "BayesAvgRating": 8.51}]
+  }
+]
+```
+
+장르 순서는 `strategy`(전략), `family`(가족), `party`(파티), `thematic`(테마), `war`(워게임), `childrens`(어린이), `cgs`(카드게임), `deduction`(추리).
+전략은 BGG 카테고리 `Cat:Strategy` 또는 `Cat:Abstract`, 추리는 메커니즘 `Deduction`, 나머지는 같은 이름의 `Cat:*` 카테고리로 판정함.
+리뷰 1,000개 이상인 게임 중 `BayesAvgRating` 내림차순으로 최대 6개를 담음. 한 게임이 여러 장르에 나올 수 있음. 목록은 서버 시작 시 한 번 계산함.
 
 ## 3. 오류 처리
 
@@ -81,6 +108,7 @@ curl -X POST 'http://localhost:8000/recommend' \
 | 필수 필드 누락 또는 잘못된 자료형 | 422 | FastAPI 검증 오류 목록 |
 | 추천 주소를 GET으로 호출 | 405 | `Method Not Allowed` |
 | 존재하지 않는 게임 ID로 상세 조회 | 404 | `Game not found` |
+| 임베딩 파일이 없거나 `semantic` 패키지 미설치 상태에서 자연어 검색 | 503 | `Semantic search is not available` |
 
 검색·필터의 결과 없음은 `200 + []`, 추천의 결과 없음은 `404`인 기존 API 동작을 유지함. `detail`은 400·404에서는 문자열, 422에서는 배열이므로 프론트에서 구분함.
 
@@ -125,13 +153,14 @@ uv run --locked python -m unittest discover -s tests -v
 uv run --locked ruff check backend/main.py tests/test_api.py
 ```
 
-22개 테스트 메서드가 다음을 검증함. 여러 입력을 확인하는 하위 테스트도 포함.
+테스트 메서드가 다음을 검증함. 여러 입력을 확인하는 하위 테스트도 포함.
 
 - 실제 데이터 로딩, 검색, 조건 필터, 추천 순위와 기준 게임 제외
 - 빈 입력, 누락된 필드, 잘못된 자료형, 존재하지 않는 게임, 후보 없음
 - 추천 요청의 POST 사용
 - 두 개발 화면 출처의 사전 확인 요청과 정상·오류 응답의 CORS 헤더
 - 허용 목록에 없는 출처에는 CORS 허용 헤더를 제공하지 않음
+- 장르 8개의 순서, 장르별 인기·정렬·개수 조건, 전략의 추상 게임 포함, 추리의 Deduction 판정
 
 테스트는 저장소의 실제 데이터에 `Catan`이 존재하는 것을 전제로 함. 데이터셋을 교체하면 해당 기준 게임도 점검해야 함.
 
