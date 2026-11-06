@@ -13,8 +13,9 @@ import axios from "axios";
 // 지정하지 않으면 같은 컴퓨터에서 실행 중인 개발 서버를 사용
 const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:8000").replace(/\/+$/, "");
 
-// 응답을 기다리는 최대 시간 (15초)
-const TIMEOUT = 15000;
+// 응답을 기다리는 최대 시간 (60초)
+// 배포 서버는 15분간 요청이 없으면 잠들고 깨어나는 데 15초 이상 걸릴 수 있음
+const TIMEOUT = 60000;
 
 // 게임 이름 검색 (최대 10개)
 // signal: 검색어가 바뀌면 이전 요청을 취소할 때 쓰는 값 (AbortController)
