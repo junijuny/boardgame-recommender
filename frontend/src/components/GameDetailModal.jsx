@@ -156,6 +156,8 @@ function DetailDialog({ bggId, onClose, onRecommendSimilar }) {
 // 상세 정보 본문: 이미지, 이름, 주요 정보, 설명
 function DetailBody({ game }) {
   const description = decodeEntities(game.Description).trim();
+  // 원문이 없는 일부 게임은 소문자·불용어 제거된 키워드만 들어 있으므로 구분해서 안내
+  const isKeywordOnly = Boolean(description) && !/[A-Z.!?,]/.test(description);
 
   // 인원 글자. 최적 인원 정보가 있으면 뒤에 붙임. 예) "2~4명 (최적 3명)"
   const players = game.BestPlayers > 0
@@ -186,22 +188,25 @@ function DetailBody({ game }) {
         </div>
       </div>
 
-      {/* 데이터셋의 설명은 원문이 아니라 소문자·불용어 제거 등 전처리된 핵심 단어 모음이라서
-          그 사실을 알려 주고, 원문은 BoardGameGeek 페이지로 연결한다. */}
+      {/* 게임 설명 (원문 문장)과 BoardGameGeek 페이지 링크 */}
       <div className="mt-6 flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold text-ink/60">설명 키워드 (영문)</h3>
+        <h3 className="text-sm font-semibold text-ink/60">
+          {isKeywordOnly ? "설명 키워드 (영문)" : "게임 설명 (영문)"}
+        </h3>
         <a
           href={`https://boardgamegeek.com/boardgame/${game.BGGId}`}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-sm font-semibold text-primary underline-offset-2 hover:underline"
         >
-          BoardGameGeek에서 원문 보기
+          BoardGameGeek에서 보기
           <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
           <span className="sr-only">(새 창)</span>
         </a>
       </div>
-      <p className="mt-1 text-xs text-ink/50">데이터셋에는 원문 대신 핵심 단어만 정리된 설명이 들어 있어요.</p>
+      {isKeywordOnly && (
+        <p className="mt-1 text-xs text-ink/50">이 게임은 원문 대신 핵심 단어만 정리된 설명이 들어 있어요.</p>
+      )}
       {/* whitespace-pre-line: 설명 속 줄바꿈을 그대로 보여줌 */}
       <p className="mt-3 whitespace-pre-line leading-relaxed text-ink/80">
         {description || "설명이 없습니다."}

@@ -49,6 +49,6 @@ export function formatPlayers(game) {
 // 결과는 textContent(순수 글자)만 꺼내서 쓴다.
 export function decodeEntities(text) {
   if (!text) return "";
-  const doc = new DOMParser().parseFromString(text, "text/html");
+  const doc = new DOMParser().parseFromString(text.replace(/</g, "&lt;"), "text/html");
   return doc.documentElement.textContent ?? "";
 }

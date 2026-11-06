@@ -287,8 +287,9 @@ class APITests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         game = response.json()
         self.assertEqual(game["Name"], "Catan")
-        # 검색 결과엔 없고 상세 조회에만 있는 항목
+        # 검색 결과엔 없고 상세 조회에만 있는 항목 (영문 원문 문장 포함 확인)
         self.assertIn("Description", game)
+        self.assertIn("In CATAN", game["Description"])
         self.assertIn("BestPlayers", game)
 
     def test_game_detail_unknown_id_is_not_found(self):
