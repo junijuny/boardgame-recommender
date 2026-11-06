@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 try:
-    from backend.genres import build_genres
+    from backend.genres import build_genres, genre_games
     from backend.recommend_engine import (
         active_signals,
         df,
@@ -25,7 +25,7 @@ try:
         semantic_search as engine_semantic_search,
     )
 except ImportError:
-    from genres import build_genres
+    from genres import build_genres, genre_games
     from recommend_engine import (
         active_signals,
         df,
@@ -120,6 +120,23 @@ def filter_games(players: int, max_time: int):
 @app.get("/genres")
 def list_genres():
     return GENRE_LIST
+
+
+@app.get("/genres/{key}/games")
+def list_genre_games(
+    key: str,
+    players: int | None = None,
+    max_time: int | None = None,
+):
+    if players is not None and players <= 0:
+        raise HTTPException(status_code=400, detail="Players must be greater than 0")
+    if max_time is not None and max_time <= 0:
+        raise HTTPException(status_code=400, detail="Max time must be greater than 0")
+
+    try:
+        return genre_games(df, mechanics, key, players=players, max_time=max_time)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Genre not found")
 
 
 @app.post("/recommend")
