@@ -28,6 +28,7 @@ uv run --locked uvicorn backend.main:app --reload --port 8000
 | `GET /games/semantic-search` | 쿼리 `query`, 선택 `players`, `max_time` | 자연어(한국어 가능) 설명에 맞는 최대 10개 게임. 임베딩 미준비 시 `503` |
 | `GET /games/{bgg_id}` | 경로의 게임 ID(`BGGId`) | 게임 한 개의 상세 정보(설명, 난이도, 인원, 시간, 평점) |
 | `GET /genres` | 없음 | 장르 8개와 장르별 대표 게임 최대 6개 |
+| `GET /genres/{key}/games` | 경로의 장르 `key`, 선택 쿼리 `players`, `max_time` | 조건에 맞는 장르 게임 최대 6개. 리뷰 1000개 이상 게임 우선, 그 안에서 평점순. 없으면 빈 목록 |
 
 게임 이름은 데이터에 저장된 영어 이름을 사용함. 검색 결과의 `Name`을 추천 요청의 `game_name`으로 전달하면 되며, 대소문자와 앞뒤 공백은 무시함.
 
@@ -109,6 +110,7 @@ curl 'http://localhost:8000/genres'
 | 추천 주소를 GET으로 호출 | 405 | `Method Not Allowed` |
 | 존재하지 않는 게임 ID로 상세 조회 | 404 | `Game not found` |
 | 임베딩 파일이 없거나 `semantic` 패키지 미설치 상태에서 자연어 검색 | 503 | `Semantic search is not available` |
+| 존재하지 않는 장르 키로 장르 게임 조회 | 404 | `Genre not found` |
 
 검색·필터의 결과 없음은 `200 + []`, 추천의 결과 없음은 `404`인 기존 API 동작을 유지함. `detail`은 400·404에서는 문자열, 422에서는 배열이므로 프론트에서 구분함.
 

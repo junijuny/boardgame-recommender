@@ -73,3 +73,30 @@ def build_genres(
         top = picked.sort_values("BayesAvgRating", ascending=False).head(limit)
         result.append({**genre, "games": top[GENRE_GAME_COLUMNS].to_dict(orient="records")})
     return result
+
+
+
+def genre_games(
+    df: pd.DataFrame,
+    mechanics: BinaryFeatures,
+    key: str,
+    players: int | None = None,
+    max_time: int | None = None,
+    limit: int = 6,
+    min_ratings: int = 1000,
+    min_rating: float = 5.5,
+) -> list[dict[str, Any]]:
+    """장르 + 인원/시간 조건에 맞는 게임 (players, max_time은 선택)
+
+    리뷰 수 min_ratings 이상인 인기 게임을 먼저, 그 안에서 평점 높은 순으로 고름
+    조건이 까다로워 인기 게임이 limit개보다 적으면 나머지 게임으로 채움"""
+    mask = genre_mask(df, mechanics, key) & (df["BayesAvgRating"] >= min_rating).to_numpy()
+    if players is not None:
+        mask = mask & ((df["MinPlayers"] <= players) & (df["MaxPlayers"] >= players)).to_numpy()
+    if max_time is not None:
+        mask = mask & (df["ComMaxPlaytime"] <= max_time).to_numpy()
+
+    picked = df[mask].copy()
+    picked["IsPopular"] = picked["NumUserRatings"] >= min_ratings
+    top = picked.sort_values(["IsPopular", "BayesAvgRating"], ascending=[False, False]).head(limit)
+    return top[GENRE_GAME_COLUMNS].to_dict(orient="records")

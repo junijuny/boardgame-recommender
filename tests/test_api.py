@@ -345,5 +345,67 @@ class APITests(unittest.TestCase):
         with self.assertRaises(ValueError):
             genre_mask(df, mechanics, "no-such-genre")
 
+    def test_genre_games_respect_conditions(self):
+        response = self.client.get(
+            "/genres/party/games", params={"players": 6, "max_time": 30}
+        )
+        self.assertEqual(response.status_code, 200)
+        games = response.json()
+        self.assertTrue(0 < len(games) <= 6)
+        info = df.set_index("BGGId")
+        party_ids = set(df.loc[genre_mask(df, mechanics, "party"), "BGGId"])
+        for game in games:
+            row = info.loc[game["BGGId"]]
+            self.assertIn(game["BGGId"], party_ids)
+            self.assertLessEqual(row["MinPlayers"], 6)
+            self.assertGreaterEqual(row["MaxPlayers"], 6)
+            self.assertLessEqual(row["ComMaxPlaytime"], 30)
+
+    def test_genre_games_prefer_popular_then_rating(self):
+        games = self.client.get(
+            "/genres/family/games", params={"players": 2, "max_time": 30}
+        ).json()
+        self.assertEqual(len(games), 6)
+        info = df.set_index("BGGId")
+        for game in games:
+            self.assertGreaterEqual(info.loc[game["BGGId"], "NumUserRatings"], 1000)
+        ratings = [g["BayesAvgRating"] for g in games]
+        self.assertEqual(ratings, sorted(ratings, reverse=True))
+
+    def test_genre_games_fill_with_less_popular_when_needed(self):
+        # 워게임 4명 30분 이하는 리뷰 1000개 이상 게임이 4개뿐이라 나머지로 채움
+        games = self.client.get(
+            "/genres/war/games", params={"players": 4, "max_time": 30}
+        ).json()
+        self.assertEqual(len(games), 6)
+        info = df.set_index("BGGId")
+        popular = [info.loc[g["BGGId"], "NumUserRatings"] >= 1000 for g in games]
+        self.assertIn(False, popular)
+        # 인기 게임이 항상 앞에 옴
+        self.assertEqual(popular, sorted(popular, reverse=True))
+
+    def test_genre_games_work_without_conditions(self):
+        response = self.client.get("/genres/strategy/games")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()), 6)
+
+    def test_genre_games_unknown_genre_is_not_found(self):
+        response = self.client.get("/genres/no-such-genre/games")
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["detail"], "Genre not found")
+
+    def test_genre_games_reject_invalid_values(self):
+        for params in [{"players": 0}, {"max_time": 0}]:
+            with self.subTest(params=params):
+                response = self.client.get("/genres/family/games", params=params)
+                self.assertEqual(response.status_code, 400)
+
+    def test_genre_games_without_candidates_return_empty_list(self):
+        response = self.client.get(
+            "/genres/family/games", params={"players": 999999}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])    
+
 if __name__ == "__main__":
     unittest.main()
