@@ -300,7 +300,7 @@ def recommend_games(
 
     mask = _condition_mask(players, max_time, min_rating) & (df.index != target_idx)
 
-# 이전에 추천했던 게임은 다음 추천 후보에서 제외
+    # 이전에 추천했던 게임은 다음 추천 후보에서 제외
     if exclude_ids:
         mask = mask & ~df["BGGId"].isin(exclude_ids)
 
