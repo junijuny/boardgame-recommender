@@ -21,7 +21,8 @@ import {
   Dices,         // 주사위 (결과 제목)
   Gauge,         // 게이지 (결과의 난이도)
   Hourglass,     // 모래시계 (플레이 시간 고르기)
-  LoaderCircle,  // 빙글빙글 도는 원 (로딩)
+  LoaderCircle, // 빙글빙글 도는 원 (로딩)
+  RefreshCw,  
   Search,        // 돋보기 (추천받기)
   SearchX,       // 엑스 표시 돋보기 (결과 없음)
   Users,         // 사람들 (인원)
@@ -61,34 +62,64 @@ export default function RecommendScreen({ initialGame, onBack, onRecommendSimila
   const [searched, setSearched] = useState(false);
   // 상세 팝업으로 보고 있는 게임 ID (닫혀 있으면 null)
   const [selectedId, setSelectedId] = useState(null);
+  // 현재 조건에서 이미 보여준 추천 게임 ID
+  const [seenIds, setSeenIds] = useState([]);
+  // 더 이상 새로운 추천 게임이 없는지 여부
+  const [exhausted, setExhausted] = useState(false);
 
   function clearRecommendation() {
     setResults([]);
+    setSeenIds([]);
+    setExhausted(false);
     setError("");
     setSearched(false);
   }
 
-  // "추천받기" 버튼을 누르면 실행되는 함수
-  // async: 서버 응답처럼 시간이 걸리는 일을 기다릴 수 있게 해주는 표시
-  async function handleRecommend() {
+  // refresh=true이면 지금까지 보여준 게임을 제외하고 다음 5개 추천
+  async function handleRecommend(refresh = false) {
     if (!game || loading) return;
-    // 1. 로딩 시작, 이전 에러 메시지 지우기
+
     setLoading(true);
     setError("");
+    const excluded = refresh ? seenIds : [];
 
-    // try: 일단 시도해보고, 중간에 문제가 생기면 catch로 넘어감
     try {
-      // 검색 결과의 Name을 백엔드 요청의 game_name으로 전달
-      setResults(await recommend({ game_name: game.Name, players, max_time: maxTime }));
+      const data = await recommend({
+        game_name: game.Name,
+        players,
+        max_time: maxTime,
+        exclude_ids: excluded,
+      });
+
+      // 백엔드가 제외 목록을 적용했는지 프론트에서도 한 번 더 확인
+      const nextResults = data.filter((item) => !excluded.includes(item.BGGId));
+      if (nextResults.length === 0) {
+        if (refresh) {
+          setExhausted(true);
+        } else {
+          setResults([]);
+          setSeenIds([]);
+          setExhausted(true);
+        }
+      } else {
+        setResults(nextResults);
+        setSeenIds([...new Set([...excluded, ...nextResults.map((g) => g.BGGId)])]);
+        setExhausted(false);
+      }
     } catch (err) {
-      // 연결 실패와 백엔드가 반환한 오류를 구분
-      console.error(err); // 개발자 도구(F12) Console 탭에 자세한 에러 출력
-      setResults([]);
+      console.error(err);
       const status = err.response?.status;
       const detail = err.response?.data?.detail;
+
       if (status === 404 && detail === "No games match the selected conditions") {
-        // Results의 기존 '조건에 맞는 게임이 없어요' 안내를 표시
-        setError("");
+        if (refresh) {
+          // 다음 추천이 없더라도 마지막으로 본 결과는 남겨 둔다.
+          setExhausted(true);
+        } else {
+          setResults([]);
+          setSeenIds([]);
+          setExhausted(true);
+        }
       } else if (status === 404 && detail === "Game not found") {
         setError("선택한 게임을 찾을 수 없습니다. 다른 게임을 선택해 주세요.");
       } else if (status === 400 || status === 422) {
@@ -99,7 +130,6 @@ export default function RecommendScreen({ initialGame, onBack, onRecommendSimila
         setError("추천을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
       }
     } finally {
-      // finally: 성공하든 실패하든 마지막에 무조건 실행
       setLoading(false);
       setSearched(true);
     }
@@ -167,7 +197,7 @@ export default function RecommendScreen({ initialGame, onBack, onRecommendSimila
           {/* disabled: 로딩 중이거나 게임을 안 골랐으면 못 누르게 막음 (중복 요청 방지) */}
           <button
             type="button"
-            onClick={handleRecommend}
+            onClick={() => handleRecommend(false)}
             disabled={loading || !game}
             className={`${primaryButton} w-full py-3 text-lg`}
           >
@@ -191,11 +221,33 @@ export default function RecommendScreen({ initialGame, onBack, onRecommendSimila
           <Results
             gameLabel={game?.Name ?? ""}
             results={results}
-            loading={loading}
+            loading={loading && results.length === 0}
             error={error}
             searched={searched}
             onSelect={setSelectedId}
           />
+          {searched && results.length > 0 && (
+            <div className="mt-5 flex flex-col items-center gap-3">
+              {exhausted ? (
+                <p className="text-sm text-ink/60">
+                  조건에 맞는 다른 추천 게임이 더 이상 없어요.
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleRecommend(true)}
+                  disabled={loading}
+                  className={`${primaryButton} px-6 py-3`}
+                >
+                  <RefreshCw
+                    className={`h-4 w-4 ${loading ? "motion-safe:animate-spin" : ""}`}
+                    aria-hidden="true"
+                  />
+                  {loading ? "다른 게임 찾는 중..." : "다른 게임 5개 추천받기"}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </main>
 
