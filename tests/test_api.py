@@ -408,5 +408,52 @@ class APITests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [])    
 
+    def search(self, query):
+        response = self.client.get("/games/search", params={"query": query})
+        self.assertEqual(response.status_code, 200)
+        return response.json()
+
+    def test_search_exact_name_comes_first(self):
+        # "catan"이 들어간 게임은 많지만 이름이 정확히 같은 Catan이 맨 위
+        self.assertEqual(self.search("catan")[0]["Name"], "Catan")
+
+    def test_search_prefix_matches_come_before_contains(self):
+        names = [game["Name"].lower() for game in self.search("pandemic")]
+        self.assertEqual(names[0], "pandemic")
+        starts = [name.startswith("pandemic") for name in names]
+        self.assertEqual(starts, sorted(starts, reverse=True))
+
+    def test_search_finds_game_by_korean_name(self):
+        games = self.search("카탄")
+        self.assertEqual(games[0]["BGGId"], 13)
+        self.assertEqual(games[0]["Name"], "Catan")
+
+    def test_korean_search_ignores_spaces(self):
+        self.assertEqual(self.search("티켓투라이드")[0]["Name"], "Ticket to Ride")
+
+    def test_korean_alias_finds_same_game(self):
+        # 별칭(아발론, 레지스탕스 아발론) 어느 쪽으로 찾아도 같은 게임
+        self.assertEqual(self.search("아발론")[0]["Name"], "The Resistance: Avalon")
+        self.assertEqual(self.search("레지스탕스 아발론")[0]["Name"], "The Resistance: Avalon")
+
+    def test_korean_partial_search(self):
+        # "팬데믹"으로 찾으면 팬데믹이 맨 위, 팬데믹 레거시도 같이 나옴
+        ids = [game["BGGId"] for game in self.search("팬데믹")]
+        self.assertEqual(ids[0], 30549)
+        self.assertIn(161936, ids)
+
+    def test_unknown_korean_name_returns_empty_list(self):
+        self.assertEqual(self.search("없는게임이름"), [])
+
+    def test_korean_names_table_points_to_real_games(self):
+        # 표의 게임 ID가 실제 데이터에 있고, 영어 이름도 맞게 적혀 있는지
+        from backend.korean_names import load_korean_names
+
+        table = load_korean_names()
+        self.assertTrue(len(table) > 0)
+        names = df.set_index("BGGId")["Name"]
+        for bgg_id, name in zip(table["BGGId"], table["Name"]):
+            self.assertEqual(names[bgg_id], name)
+            
 if __name__ == "__main__":
     unittest.main()

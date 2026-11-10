@@ -22,7 +22,7 @@ uv run --locked uvicorn backend.main:app --reload --port 8000
 | 메서드·경로 | 입력 | 성공 응답 |
 | --- | --- | --- |
 | `GET /` | 없음 | 서버 이름, `total_games`, 사용 중인 추천 신호 `signals`, 자연어 검색 가능 여부 `semantic_search` |
-| `GET /games/search` | 쿼리 `query` | 최대 10개 게임 목록 |
+| `GET /games/search` | 쿼리 `query` (영어 또는 한글 이름) | 최대 10개 게임 목록. 이름이 정확히 같은 게임 → 검색어로 시작하는 게임 → 포함하는 게임 순, 같은 순위는 리뷰 수 순  |
 | `GET /games/filter` | 쿼리 `players`, `max_time` | 조건을 만족하는 최대 10개 게임, 평점 내림차순 |
 | `POST /recommend` | JSON `game_name`, `players`, `max_time` | 조건을 만족하는 최대 5개 추천 게임 |
 | `GET /games/semantic-search` | 쿼리 `query`, 선택 `players`, `max_time` | 자연어(한국어 가능) 설명에 맞는 최대 10개 게임. 임베딩 미준비 시 `503` |
@@ -31,6 +31,7 @@ uv run --locked uvicorn backend.main:app --reload --port 8000
 | `GET /genres/{key}/games` | 경로의 장르 `key`, 선택 쿼리 `players`, `max_time` | 조건에 맞는 장르 게임 최대 6개. 리뷰 1000개 이상 게임 우선, 그 안에서 평점순. 없으면 빈 목록 |
 
 게임 이름은 데이터에 저장된 영어 이름을 사용함. 검색 결과의 `Name`을 추천 요청의 `game_name`으로 전달하면 되며, 대소문자와 앞뒤 공백은 무시함.
+인기 게임은 `data/korean_names.csv`의 한글 이름으로도 검색됨 (띄어쓰기 무시, 예: `티켓투라이드`). 게임을 추가하려면 CSV에 `BGGId,Name,KoreanName` 한 줄을 넣으면 됨.
 
 ### 게임 검색
 

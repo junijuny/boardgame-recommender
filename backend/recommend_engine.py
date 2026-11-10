@@ -20,9 +20,10 @@ import numpy as np
 import pandas as pd
 
 try:
-    from backend import features, semantic
+    from backend import features, korean_names, semantic
 except ImportError:
     import features
+    import korean_names
     import semantic
 
 # ---------------------------------------------------------------------------
@@ -35,6 +36,7 @@ category_matrix = features.build_category_matrix(df)
 tfidf, tfidf_matrix = features.load_or_compute_tfidf(df)
 embeddings = features.load_embeddings(df["BGGId"])  # 없으면 None
 cf = features.load_cf(df["BGGId"])                  # 없으면 None
+korean_names_table = korean_names.load_korean_names() # 한글 이름 표 (없으면 빈 표)
 
 _has_mechanics = np.diff(mechanics.binary.indptr) > 0
 _has_themes = np.diff(themes.binary.indptr) > 0
@@ -240,12 +242,32 @@ def get_game_by_name(game_name: str) -> pd.Series | None:
 
 
 def search_games(query: str, limit: int = 10) -> list[dict[str, Any]]:
-    """게임 이름 부분 검색 (자동완성 및 검색용)"""
+    """
+    게임 이름 부분 검색 (자동완성 및 검색용)
+    영어 이름과 한글 이름(data/korean_names.csv)을 함께 찾고,
+    1) 이름이 검색어와 정확히 같은 게임 2) 이름이 검색어로 시작하는 게임
+    3) 이름 중간에 검색어가 들어간 게임 순으로, 같은 순위 안에서는 리뷰 수가 많은 순으로 정렬
+    """
     query = query.strip()
     if not query:
         return []
 
-    results = df[df["Name"].str.contains(query, case=False, na=False, regex=False)]
+    q = query.lower()
+    # 영어 이름 순위: 0 정확히 같음, 1 검색어로 시작, 2 중간에 포함, 3 해당 없음
+    exact = (_names_lower == q).to_numpy(dtype=bool, na_value=False)
+    prefix = _names_lower.str.startswith(q).to_numpy(dtype=bool, na_value=False)
+    contains = _names_lower.str.contains(q, regex=False).to_numpy(dtype=bool, na_value=False)
+    english_rank = np.select([exact, prefix, contains], [0, 1, 2], default=3)
+
+    # 한글 이름 순위 (표에 없는 게임은 3)
+    korean_ranks = korean_names.match_ranks(korean_names_table, query)
+    korean_rank = df["BGGId"].map(korean_ranks).fillna(3).to_numpy(dtype=int)
+
+    rank = np.minimum(english_rank, korean_rank)
+    matched = rank < 3
+    results = df[matched].assign(_rank=rank[matched]).sort_values(
+        ["_rank", "NumUserRatings"], ascending=[True, False]
+    )
     return results[["BGGId", "Name", "YearPublished", "ImagePath"]].head(limit).to_dict(
         orient="records"
     )
