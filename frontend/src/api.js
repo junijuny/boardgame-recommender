@@ -49,3 +49,17 @@ export async function getGenres() {
   const res = await axios.get(`${API_URL}/genres`, { timeout: TIMEOUT });
   return res.data;
 }
+
+// 장르별 플레이 인원·시간 조건에 맞는 게임 조회
+export async function getGenreGames(genreKey, players, maxTime, signal) {
+  const res = await axios.get(`${API_URL}/genres/${genreKey}/games`, {
+    params: {
+      players,
+      max_time: maxTime,
+    },
+    signal,
+    timeout: TIMEOUT,
+  });
+
+  return res.data;
+}
