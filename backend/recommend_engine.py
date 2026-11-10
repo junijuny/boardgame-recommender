@@ -276,6 +276,7 @@ def recommend_games(
     max_time: int,
     top_n: int = 5,
     min_rating: float = 5.5,
+    exclude_ids: list[int] | None = None,
 ) -> list[dict[str, Any]]:
     """
     조건 필터링 + 하이브리드 유사도 + 평점 보정 + 다양성 재정렬 추천
@@ -298,6 +299,11 @@ def recommend_games(
     target_idx = int(target_game.name)
 
     mask = _condition_mask(players, max_time, min_rating) & (df.index != target_idx)
+
+# 이전에 추천했던 게임은 다음 추천 후보에서 제외
+    if exclude_ids:
+        mask = mask & ~df["BGGId"].isin(exclude_ids)
+
     cand_idx = np.flatnonzero(mask.to_numpy())
     if len(cand_idx) == 0:
         return []
