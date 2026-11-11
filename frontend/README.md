@@ -49,4 +49,4 @@ App.jsx
 | `src/styles.js` | 공통 버튼 스타일 |
 | `src/index.css` | Tailwind 불러오기, `@theme`의 색 이름(`page`, `card`, `line`, `primary` 등) |
 
-사용하는 API는 `GET /games/search`, `POST /recommend`, `GET /games/{bgg_id}`, `GET /genres`입니다. 요청·응답 형식은 [backend_api.md](../docs/backend_api.md)를 참고하세요.
+사용하는 API는 `GET /games/search`, `POST /recommend`, `GET /games/{bgg_id}`, `GET /genres`, `GET /genres/{key}/games`입니다. 요청·응답 형식은 [backend_api.md](../docs/backend_api.md)를 참고하세요.

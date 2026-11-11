@@ -22,7 +22,7 @@
 
 - 추천 결과의 각 줄(`GameRow`)을 버튼으로 바꾸고, 누르면 `GameDetailModal`을 연다.
 - 모달을 열면 `GET /games/{bgg_id}`(기존 API)를 호출한다.
-- 표시 항목: 이미지(없으면 주사위 아이콘), 이름, 출시 연도, 인원(`MinPlayers`~`MaxPlayers`, `BestPlayers`가 있으면 최적 인원),
+- 표시 항목: 이미지(없으면 주사위 아이콘), 이름, 출시 연도, 인원(`MinPlayers`\~`MaxPlayers`, `BestPlayers`가 있으면 최적 인원),
   플레이 시간, 난이도(`GameWeight` / 5), 평점(`BayesAvgRating`, 리뷰 수), 설명 전문.
 - 설명에 들어 있는 HTML 엔티티(`&quot;`, `&#10;` 등)는 디코딩한다(DOMParser나 textarea 이용, HTML로 렌더링하지 않음).
   `&#10;`는 줄바꿈으로 보여준다(`whitespace-pre-line`).

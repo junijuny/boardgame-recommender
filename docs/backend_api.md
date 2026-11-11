@@ -38,8 +38,8 @@ uv run --locked uvicorn backend.main:app --reload --port 8000
 curl 'http://localhost:8000/games/search?query=Catan'
 ```
 
-검색 결과 항목의 필드: `BGGId`, `Name`, `YearPublished`, `ImagePath` /
-검색 결과가 없으면 `200`과 빈 배열 `[]`을 반환.
+- 검색 결과 항목의 필드: `BGGId`, `Name`, `YearPublished`, `ImagePath`
+- 검색 결과가 없으면 `200`과 빈 배열 `[]`을 반환함.
 
 ### 조건 필터
 
@@ -47,7 +47,7 @@ curl 'http://localhost:8000/games/search?query=Catan'
 curl 'http://localhost:8000/games/filter?players=4&max_time=90'
 ```
 
-4명이 플레이할 수 있고 최대 시간이 90분 이내이며 평점이 5.5 이상인 게임을 반환함 조건에 맞는 게임이 없으면 `200`과 `[]`을 반환함.
+4명이 플레이할 수 있고 최대 시간이 90분 이내이며 평점이 5.5 이상인 게임을 반환함. 조건에 맞는 게임이 없으면 `200`과 `[]`을 반환함.
 
 ### 추천
 
@@ -61,7 +61,7 @@ curl -X POST 'http://localhost:8000/recommend' \
 `exclude_ids`(게임 ID 목록)를 보내면 그 게임들을 빼고 추천함. "다른 게임 5개 추천받기"에서 지금까지 보여준 게임 ID를 쌓아서 보내는 용도이며, 남은 후보가 없으면 `404`.
 조건 필터를 통과한 게임을 하이브리드 유사도(메커니즘·테마·카테고리·텍스트·협업 필터링)와 평점을 합친 `Score`로 정렬한 뒤, 서로 너무 비슷한 게임이 몰리지 않게 다양성 재정렬하여 반환함. 기준 게임 자체는 제외하고, 같은 시리즈 변형판은 감점함. 자세한 내용은 [recommendation_pipeline.md](recommendation_pipeline.md).
 
-추천 결과의 각 항목에는 다음 필드가 있으며, 대문자로 시작하는 키 이름을 그대로 사용함
+추천 결과의 각 항목에는 다음 필드가 있으며, 대문자로 시작하는 키 이름을 그대로 사용함.
 
 | 필드 | 의미 |
 | --- | --- |
@@ -71,7 +71,7 @@ curl -X POST 'http://localhost:8000/recommend' \
 | `MinPlayers`, `MaxPlayers` | 최소·최대 인원 |
 | `ComMinPlaytime`, `ComMaxPlaytime` | 최소·최대 플레이 시간(분) |
 | `BayesAvgRating`, `NumUserRatings` | 평점과 평가 수 |
-| `Similarity` | 기준 게임과의 하이브리드 유사도(0~1). 추천·자연어 검색 응답에만 포함 |
+| `Similarity` | 기준 게임과의 하이브리드 유사도(0\~1). 추천·자연어 검색 응답에만 포함 |
 | `Score` | 유사도와 평점을 합친 최종 점수. 추천·자연어 검색 응답에만 포함 |
 | `SharedMechanics`, `SharedThemes` | 기준 게임과 공통인 메커니즘·테마 (드문 것부터 최대 3개). 추천 응답에만 포함 |
 

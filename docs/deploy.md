@@ -32,6 +32,7 @@ flowchart LR
 3. **Git Provider → GitHub** 에서 `boardgame-recommender` 저장소를 고릅니다.
    목록에 없으면 **Configure account** 로 저장소 접근을 허용합니다.
 4. 설정:
+
    | 항목 | 값 |
    | :--- | :--- |
    | Name | 예: `boardgame-recommender-api` (주소가 `https://boardgame-recommender-api.onrender.com` 이 됨) |
@@ -40,12 +41,13 @@ flowchart LR
    | Root Directory | 비워 둠 |
    | Instance Type | **Free** |
 5. **Environment Variables** 에 CORS 허용 주소를 추가합니다.
+
    | Key | Value |
    | :--- | :--- |
    | `ALLOWED_ORIGINS` | Vercel 대표 주소 (예: `https://boardgame-recommender-nine.vercel.app`) |
 
    `https://` 포함, 끝에 `/` 없이 입력합니다. 여러 주소는 쉼표로 구분합니다.
-6. **Deploy Web Service** 를 누릅니다. 첫 빌드는 5~10분 걸립니다.
+6. **Deploy Web Service** 를 누릅니다. 첫 빌드는 5\~10분 걸립니다.
 7. 화면 왼쪽 위의 주소 뒤에 `/docs` 를 붙여 열었을 때 API 문서가 보이면 성공입니다.
 
 ---
@@ -55,6 +57,7 @@ flowchart LR
 1. [vercel.com](https://vercel.com) 에 GitHub 계정으로 가입합니다.
 2. **Add New → Project** 에서 `boardgame-recommender` 저장소를 가져옵니다.
 3. 설정:
+
    | 항목 | 값 |
    | :--- | :--- |
    | Root Directory | `frontend` |

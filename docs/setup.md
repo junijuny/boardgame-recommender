@@ -115,7 +115,7 @@ VS Code 왼쪽 확장 탭(`Ctrl + Shift + X`)에서 아래 익스텐션을 설�
 ### 4.2 주피터 노트북 커널 지정
 1. VS Code에서 새 주피터 노트북(`.ipynb`)을 생성하거나 엽니다.
 2. 노트북 우측 상단의 **[Select Kernel]** 버튼을 클릭합니다.
-3. **[Python Environments...]** 선택 $\rightarrow$ 프로젝트 루트의 **`.venv (Python 3.12.x)`** 가상환경을 선택합니다.
+3. **[Python Environments...]** 선택 → 프로젝트 루트의 **`.venv (Python 3.12.x)`** 가상환경을 선택합니다.
 4. 코드 셀을 실행(`Shift + Enter`)하여 정상 구동되는지 확인합니다.
 
 > 💡 별도의 웹 브라우저에서 주피터 랩을 띄우려면 터미널에 `uv run jupyter lab`을 입력하세요.
