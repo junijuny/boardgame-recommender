@@ -240,12 +240,25 @@ def get_game_by_name(game_name: str) -> pd.Series | None:
 
 
 def search_games(query: str, limit: int = 10) -> list[dict[str, Any]]:
-    """게임 이름 부분 검색 (자동완성 및 검색용)"""
+    """게임 이름 부분 검색 (자동완성 및 검색용)
+
+    1) 이름이 검색어와 정확히 같은 게임 2) 이름이 검색어로 시작하는 게임
+    3) 이름 중간에 검색어가 들어간 게임 순으로, 같은 순위 안에서는 리뷰 수가 많은 순으로 정렬"""
     query = query.strip()
     if not query:
         return []
 
-    results = df[df["Name"].str.contains(query, case=False, na=False, regex=False)]
+    q = query.lower()
+    # 순위: 0 정확히 같음, 1 검색어로 시작, 2 중간에 포함, 3 해당 없음
+    exact = (_names_lower == q).to_numpy(dtype=bool, na_value=False)
+    prefix = _names_lower.str.startswith(q).to_numpy(dtype=bool, na_value=False)
+    contains = _names_lower.str.contains(q, regex=False).to_numpy(dtype=bool, na_value=False)
+    rank = np.select([exact, prefix, contains], [0, 1, 2], default=3)
+
+    matched = rank < 3
+    results = df[matched].assign(_rank=rank[matched]).sort_values(
+        ["_rank", "NumUserRatings"], ascending=[True, False]
+    )
     return results[["BGGId", "Name", "YearPublished", "ImagePath"]].head(limit).to_dict(
         orient="records"
     )

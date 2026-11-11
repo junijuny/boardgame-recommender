@@ -22,7 +22,7 @@ uv run --locked uvicorn backend.main:app --reload --port 8000
 | 메서드·경로 | 입력 | 성공 응답 |
 | --- | --- | --- |
 | `GET /` | 없음 | 서버 이름, `total_games`, 사용 중인 추천 신호 `signals`, 자연어 검색 가능 여부 `semantic_search` |
-| `GET /games/search` | 쿼리 `query` | 최대 10개 게임 목록 |
+| `GET /games/search` | 쿼리 `query` | 최대 10개 게임 목록. 이름이 정확히 같은 게임 → 검색어로 시작하는 게임 → 포함하는 게임 순, 같은 순위는 리뷰 수 순 |
 | `GET /games/filter` | 쿼리 `players`, `max_time` | 조건을 만족하는 최대 10개 게임, 평점 내림차순 |
 | `POST /recommend` | JSON `game_name`, `players`, `max_time`, 선택 `exclude_ids` | 조건을 만족하는 최대 5개 추천 게임 |
 | `GET /games/semantic-search` | 쿼리 `query`, 선택 `players`, `max_time` | 자연어(한국어 가능) 설명에 맞는 최대 10개 게임. 임베딩 미준비 시 `503` |

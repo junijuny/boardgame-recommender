@@ -444,5 +444,18 @@ class APITests(unittest.TestCase):
     def test_recommend_rejects_invalid_exclude_ids(self):
         response = self.recommend(exclude_ids="abc")
         self.assertEqual(response.status_code, 422)
+
+    def test_search_exact_name_comes_first(self):
+        # "catan"이 들어간 게임은 많지만 이름이 정확히 같은 Catan이 맨 위
+        response = self.client.get("/games/search", params={"query": "catan"})
+        self.assertEqual(response.json()[0]["Name"], "Catan")
+
+    def test_search_prefix_matches_come_before_contains(self):
+        response = self.client.get("/games/search", params={"query": "pandemic"})
+        names = [game["Name"].lower() for game in response.json()]
+        self.assertEqual(names[0], "pandemic")
+        starts = [name.startswith("pandemic") for name in names]
+        self.assertEqual(starts, sorted(starts, reverse=True))
+
 if __name__ == "__main__":
     unittest.main()
