@@ -1,0 +1,26 @@
+# PR을 올리거나 main에 합쳐질 때 백엔드 API 테스트를 자동으로 실행
+# 테스트가 하나라도 실패하면 PR에 빨간 X가 표시됨
+name: Backend tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 코드 받기
+        uses: actions/checkout@v5
+
+      - name: uv 설치
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: 패키지 설치
+        run: uv sync --locked
+
+      - name: 테스트 실행
+        run: uv run python -m unittest discover -s tests -v
