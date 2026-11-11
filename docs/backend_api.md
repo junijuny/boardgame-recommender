@@ -85,15 +85,15 @@ curl 'http://localhost:8000/genres'
 [
   {
     "key": "strategy",
-    "label": "전략",
-    "description": "깊이 있는 계획과 수 싸움",
+    "label": "Strategy",
+    "description": "Deep planning and clever moves",
     "games": [{"BGGId": 174430, "Name": "Gloomhaven", "YearPublished": 2017, "ImagePath": "...",
                "GameWeight": 3.87, "ComMinPlaytime": 60, "ComMaxPlaytime": 120, "BayesAvgRating": 8.51}]
   }
 ]
 ```
 
-장르 순서는 `strategy`(전략), `family`(가족), `party`(파티), `thematic`(테마), `war`(워게임), `childrens`(어린이), `cgs`(카드게임), `deduction`(추리).
+장르 순서는 `strategy`(Strategy), `family`(Family), `party`(Party), `thematic`(Thematic), `war`(Wargames), `childrens`(Children's), `cgs`(Card Games), `deduction`(Deduction). 화면이 영어라 `label`, `description`도 영어로 반환함.
 전략은 BGG 카테고리 `Cat:Strategy` 또는 `Cat:Abstract`, 추리는 메커니즘 `Deduction`, 나머지는 같은 이름의 `Cat:*` 카테고리로 판정함.
 리뷰 1,000개 이상인 게임 중 `BayesAvgRating` 내림차순으로 최대 6개를 담음. 한 게임이 여러 장르에 나올 수 있음. 목록은 서버 시작 시 한 번 계산함.
 
