@@ -408,5 +408,41 @@ class APITests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [])    
 
+    def test_recommend_refresh_excludes_seen_games(self):
+        first = self.recommend()
+        self.assertEqual(first.status_code, 200)
+        seen = [game["BGGId"] for game in first.json()]
+
+        second = self.recommend(exclude_ids=seen)
+        self.assertEqual(second.status_code, 200)
+        next_ids = [game["BGGId"] for game in second.json()]
+        self.assertTrue(next_ids)
+        self.assertFalse(set(seen) & set(next_ids))
+
+    def test_recommend_repeated_refresh_never_repeats_games(self):
+        seen = []
+        for _ in range(3):
+            response = self.recommend(exclude_ids=seen)
+            self.assertEqual(response.status_code, 200)
+            ids = [game["BGGId"] for game in response.json()]
+            self.assertFalse(set(seen) & set(ids))
+            seen.extend(ids)
+        self.assertEqual(len(seen), len(set(seen)))
+
+    def test_recommend_unrelated_exclude_id_keeps_results(self):
+        # 후보에 없는 ID를 빼달라고 해도 결과는 그대로
+        base = [game["BGGId"] for game in self.recommend().json()]
+        same = [game["BGGId"] for game in self.recommend(exclude_ids=[999999999]).json()]
+        self.assertEqual(base, same)
+
+    def test_recommend_without_remaining_candidates_is_not_found(self):
+        # 모든 게임을 제외하면 더 추천할 게임이 없음
+        response = self.recommend(exclude_ids=df["BGGId"].tolist())
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["detail"], "No games match the selected conditions")
+
+    def test_recommend_rejects_invalid_exclude_ids(self):
+        response = self.recommend(exclude_ids="abc")
+        self.assertEqual(response.status_code, 422)
 if __name__ == "__main__":
     unittest.main()

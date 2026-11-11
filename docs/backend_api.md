@@ -24,7 +24,7 @@ uv run --locked uvicorn backend.main:app --reload --port 8000
 | `GET /` | 없음 | 서버 이름, `total_games`, 사용 중인 추천 신호 `signals`, 자연어 검색 가능 여부 `semantic_search` |
 | `GET /games/search` | 쿼리 `query` | 최대 10개 게임 목록 |
 | `GET /games/filter` | 쿼리 `players`, `max_time` | 조건을 만족하는 최대 10개 게임, 평점 내림차순 |
-| `POST /recommend` | JSON `game_name`, `players`, `max_time` | 조건을 만족하는 최대 5개 추천 게임 |
+| `POST /recommend` | JSON `game_name`, `players`, `max_time`, 선택 `exclude_ids` | 조건을 만족하는 최대 5개 추천 게임 |
 | `GET /games/semantic-search` | 쿼리 `query`, 선택 `players`, `max_time` | 자연어(한국어 가능) 설명에 맞는 최대 10개 게임. 임베딩 미준비 시 `503` |
 | `GET /games/{bgg_id}` | 경로의 게임 ID(`BGGId`) | 게임 한 개의 상세 정보(설명, 난이도, 인원, 시간, 평점) |
 | `GET /genres` | 없음 | 장르 8개와 장르별 대표 게임 최대 6개 |
@@ -58,6 +58,7 @@ curl -X POST 'http://localhost:8000/recommend' \
 ```
 
 `players`와 `max_time`은 1 이상의 정수이고, 시간 단위는 분.
+`exclude_ids`(게임 ID 목록)를 보내면 그 게임들을 빼고 추천함. "다른 게임 5개 추천받기"에서 지금까지 보여준 게임 ID를 쌓아서 보내는 용도이며, 남은 후보가 없으면 `404`.
 조건 필터를 통과한 게임을 하이브리드 유사도(메커니즘·테마·카테고리·텍스트·협업 필터링)와 평점을 합친 `Score`로 정렬한 뒤, 서로 너무 비슷한 게임이 몰리지 않게 다양성 재정렬하여 반환함. 기준 게임 자체는 제외하고, 같은 시리즈 변형판은 감점함. 자세한 내용은 [recommendation_pipeline.md](recommendation_pipeline.md).
 
 추천 결과의 각 항목에는 다음 필드가 있으며, 대문자로 시작하는 키 이름을 그대로 사용함
