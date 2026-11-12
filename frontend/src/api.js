@@ -91,5 +91,41 @@ export async function getGenreGames(
   return res.data;
 }
 
-// 장르별 플레이 인원·시간 조건에 맞는 게임 조회
+// 6. 영어 자연어 문장으로 보드게임 검색
+// 영어 자연어 문장으로 보드게임 추천
+export async function semanticSearch(
+  query,
+  players,
+  maxTime,
+  excludeIds = [],
+  signal,
+) {
+  const res = await axios.get(
+    `${API_URL}/games/semantic-search`,
+    {
+      params: {
+        query,
+        players,
+        max_time: maxTime,
+        exclude_ids: excludeIds,
+      },
+      paramsSerializer: {
+        indexes: null,
+      },
+      signal,
+      timeout: TIMEOUT,
+    },
+  );
 
+  return res.data;
+}
+
+// 입력한 영어 문장에서 기존 보드게임 이름 인식
+export async function detectGameName(query) {
+  const res = await axios.get(`${API_URL}/games/detect-name`, {
+    params: { query },
+    timeout: TIMEOUT,
+  });
+
+  return res.data.game_name;
+}

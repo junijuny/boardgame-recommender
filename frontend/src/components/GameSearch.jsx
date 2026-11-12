@@ -16,7 +16,13 @@ import { searchGames } from "../api.js";
 import GameThumb from "./GameThumb.jsx";
 import SelectedGameCard from "./SelectedGameCard.jsx";
 
-export default function GameSearch({ value, onChange, onShowDetail, disabled }) {
+export default function GameSearch({
+  value,
+  onChange,
+  onQueryChange,
+  onShowDetail,
+  disabled,
+}) {
   const [query, setQuery] = useState(value?.Name ?? "");
   const [matches, setMatches] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -38,9 +44,11 @@ export default function GameSearch({ value, onChange, onShowDetail, disabled }) 
         }
       } catch (err) {
         if (!controller.signal.aborted) {
-          setSearchError(err.response
-            ? "게임 검색에 실패했습니다. 다시 시도해 주세요."
-            : "게임 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+          setSearchError(
+            err.response
+              ? "게임 검색에 실패했습니다. 다시 시도해 주세요."
+              : "게임 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+          );
         }
       } finally {
         if (!controller.signal.aborted) setSearching(false);
@@ -55,9 +63,12 @@ export default function GameSearch({ value, onChange, onShowDetail, disabled }) 
 
   return (
     <div>
-      <label htmlFor="game-search" className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
+      <label
+        htmlFor="game-search"
+        className="mb-2 flex items-center gap-1.5 text-sm font-semibold"
+      >
         <Heart className="h-4 w-4 text-primary" aria-hidden="true" />
-        좋아하는 게임 검색
+        게임 검색 및 추천
       </label>
       <input
         id="game-search"
@@ -65,20 +76,24 @@ export default function GameSearch({ value, onChange, onShowDetail, disabled }) 
         value={query}
         disabled={disabled}
         autoComplete="off"
-        placeholder="영문 게임 이름 입력 (예: Catan, Wingspan)"
+        placeholder="e.g. Catan or Easy cooperative games for 4 players"
         aria-describedby="game-search-help"
         onChange={(event) => {
-          setQuery(event.target.value);
+          const text = event.target.value;
+
+          setQuery(text);
           setMatches([]);
           setFinished(false);
           setSearchError("");
-          setSearching(event.target.value.trim().length >= 2);
+          setSearching(text.trim().length >= 2);
+
           onChange(null);
+          onQueryChange?.(text);
         }}
         className="w-full rounded-lg border border-line bg-page px-3 py-2.5 focus:border-primary-dark focus:outline-none"
       />
       <p id="game-search-help" className="mt-2 text-sm text-ink/60">
-        영문 이름을 2글자 이상 입력한 뒤 검색 결과에서 게임을 선택해 주세요.
+        게임 이름을 선택하거나 원하는 게임을 영어 문장으로 설명해 주세요.
       </p>
       <div className="mt-3" aria-live="polite" aria-busy={searching}>
         {value && <SelectedGameCard game={value} onShowDetail={onShowDetail} />}
@@ -86,20 +101,34 @@ export default function GameSearch({ value, onChange, onShowDetail, disabled }) 
         {searchError && (
           <div className="text-sm text-danger">
             <p>{searchError}</p>
-            <button type="button" disabled={disabled} onClick={() => {
-              setSearchError("");
-              setSearching(true);
-              setRetry((count) => count + 1);
-            }} className="mt-2 underline">
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => {
+                setSearchError("");
+                setSearching(true);
+                setRetry((count) => count + 1);
+              }}
+              className="mt-2 underline"
+            >
               다시 검색
             </button>
           </div>
         )}
-        {finished && matches.length === 0 && <p className="text-sm text-ink/60">검색 결과가 없어요. 다른 영문 이름을 입력해 주세요.</p>}
+        {finished && matches.length === 0 && (
+          <p className="text-sm text-ink/60">
+            게임 이름을 찾지 못했어요. 영어 문장으로 추천받으려면 아래 추천받기 버튼을 눌러 주세요.
+          </p>
+        )}
         {matches.length > 0 && (
           <>
-            <p className="mb-2 text-sm text-ink/60">최대 10개 표시 · 찾는 게임이 없으면 이름을 더 입력해 주세요.</p>
-            <ul aria-label="게임 검색 결과" className="max-h-80 overflow-y-auto divide-y divide-line rounded-lg border border-line">
+            <p className="mb-2 text-sm text-ink/60">
+              최대 10개 표시 · 찾는 게임이 없으면 이름을 더 입력해 주세요.
+            </p>
+            <ul
+              aria-label="게임 검색 결과"
+              className="max-h-80 overflow-y-auto divide-y divide-line rounded-lg border border-line"
+            >
               {matches.map((item) => (
                 <li key={item.BGGId}>
                   <button
@@ -110,15 +139,25 @@ export default function GameSearch({ value, onChange, onShowDetail, disabled }) 
                       setMatches([]);
                       setFinished(false);
                       setSearching(false);
+
                       onChange(item);
+                      onQueryChange?.(item.Name);
                     }}
                     className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-line focus-visible:outline-2 focus-visible:outline-primary"
                   >
                     {/* 작은 표지 이미지 (없으면 주사위 아이콘) */}
-                    <GameThumb src={item.ImagePath} className="h-10 w-10 rounded" iconClassName="h-5 w-5" />
+                    <GameThumb
+                      src={item.ImagePath}
+                      className="h-10 w-10 rounded"
+                      iconClassName="h-5 w-5"
+                    />
                     <span className="min-w-0">
                       <span className="font-semibold">{item.Name}</span>
-                      {item.YearPublished > 0 && <span className="ml-2 text-sm text-ink/60">({item.YearPublished})</span>}
+                      {item.YearPublished > 0 && (
+                        <span className="ml-2 text-sm text-ink/60">
+                          ({item.YearPublished})
+                        </span>
+                      )}
                     </span>
                   </button>
                 </li>

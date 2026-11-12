@@ -27,7 +27,7 @@ import {
   SearchX,       // 엑스 표시 돋보기 (결과 없음)
   Users,         // 사람들 (인원)
 } from "lucide-react";
-import { recommend } from "../api.js";
+import { detectGameName, recommend, semanticSearch } from "../api.js";
 import { formatMinutes, formatPlaytime, withWa } from "../format.js";
 import { backButton, primaryButton } from "../styles.js";
 import GameDetailModal from "../components/GameDetailModal.jsx";
@@ -47,6 +47,13 @@ export default function RecommendScreen({ initialGame, onBack, onRecommendSimila
 
   // 검색 결과에서 선택한 게임 { BGGId, Name, ... } (선택 안 했으면 null)
   const [game, setGame] = useState(initialGame);
+  // 검색창에 입력한 게임 이름 또는 영어 문장
+  const [query, setQuery] = useState(initialGame?.Name ?? "");
+
+  // 현재 추천 결과가 어떤 검색어를 기준으로 만들어졌는지 저장
+  const [resultLabel, setResultLabel] = useState("");
+  const [resultMode, setResultMode] = useState("game");
+  const [resultTargetName, setResultTargetName] = useState(initialGame?.Name ?? null);
   // 사용자가 고른 인원 (처음엔 4명)
   const [players, setPlayers] = useState(4);
   // 사용자가 고른 최대 플레이 시간 (처음엔 60분)
@@ -76,64 +83,120 @@ export default function RecommendScreen({ initialGame, onBack, onRecommendSimila
   }
 
   // refresh=true이면 지금까지 보여준 게임을 제외하고 다음 5개 추천
-  async function handleRecommend(refresh = false) {
-    if (!game || loading) return;
+  // 게임 이름 검색과 영어 자연어 검색을 하나의 버튼으로 처리
+async function handleRecommend(refresh = false) {
+  const text = query.trim();
 
-    setLoading(true);
-    setError("");
-    const excluded = refresh ? seenIds : [];
+  if ((!text && !game) || loading) return;
 
-    try {
-      const data = await recommend({
-        game_name: game.Name,
+  setLoading(true);
+  setError("");
+
+  const excluded = refresh ? seenIds : [];
+
+  try {
+    // 새 추천일 때만 검색어를 분석한다.
+    // 새로고침에서는 이전 추천 방식을 그대로 사용한다.
+    let mode = resultMode;
+    let targetName = refresh ? resultTargetName : (game?.Name ?? null);
+
+    if (!refresh) {
+      if (game) {
+        mode = "game";
+        targetName = game.Name;
+      } else {
+        const detectedName = await detectGameName(text);
+
+        if (detectedName) {
+          mode = "game";
+          targetName = detectedName;
+        } else {
+          mode = "semantic";
+          targetName = null;
+        }
+      }
+    }
+
+    let data;
+
+    if (mode === "game") {
+      data = await recommend({
+        game_name: targetName,
         players,
         max_time: maxTime,
         exclude_ids: excluded,
       });
-
-      // 백엔드가 제외 목록을 적용했는지 프론트에서도 한 번 더 확인
-      const nextResults = data.filter((item) => !excluded.includes(item.BGGId));
-      if (nextResults.length === 0) {
-        if (refresh) {
-          setExhausted(true);
-        } else {
-          setResults([]);
-          setSeenIds([]);
-          setExhausted(true);
-        }
-      } else {
-        setResults(nextResults);
-        setSeenIds([...new Set([...excluded, ...nextResults.map((g) => g.BGGId)])]);
-        setExhausted(false);
-      }
-    } catch (err) {
-      console.error(err);
-      const status = err.response?.status;
-      const detail = err.response?.data?.detail;
-
-      if (status === 404 && detail === "No games match the selected conditions") {
-        if (refresh) {
-          // 다음 추천이 없더라도 마지막으로 본 결과는 남겨 둔다.
-          setExhausted(true);
-        } else {
-          setResults([]);
-          setSeenIds([]);
-          setExhausted(true);
-        }
-      } else if (status === 404 && detail === "Game not found") {
-        setError("선택한 게임을 찾을 수 없습니다. 다른 게임을 선택해 주세요.");
-      } else if (status === 400 || status === 422) {
-        setError("게임, 인원, 플레이 시간을 확인해 주세요.");
-      } else if (!err.response) {
-        setError("서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.");
-      } else {
-        setError("추천을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
-      }
-    } finally {
-      setLoading(false);
-      setSearched(true);
+    } else {
+      data = await semanticSearch(
+        text,
+        players,
+        maxTime,
+        excluded,
+      );
     }
+
+    // 혹시 백엔드에서 중복 결과가 오더라도 화면에서 한 번 더 제외
+    const nextResults = data.filter(
+      (item) => !excluded.includes(item.BGGId),
+    );
+
+    if (nextResults.length === 0) {
+      if (refresh) {
+        setExhausted(true);
+      } else {
+        setResults([]);
+        setSeenIds([]);
+        setExhausted(true);
+      }
+    } else {
+      setResults(nextResults);
+      setSeenIds([
+        ...new Set([
+          ...excluded,
+          ...nextResults.map((item) => item.BGGId),
+        ]),
+      ]);
+      setExhausted(false);
+    }
+
+    if (!refresh) {
+      setResultMode(mode);
+      setResultTargetName(targetName);
+      setResultLabel(mode === "game" ? targetName : text);
+    }
+  } catch (err) {
+    console.error(err);
+
+    const status = err.response?.status;
+    const detail = err.response?.data?.detail;
+
+    if (
+      status === 404 &&
+      detail === "No games match the selected conditions"
+    ) {
+      if (refresh) {
+        setExhausted(true);
+      } else {
+        setResults([]);
+        setSeenIds([]);
+        setExhausted(true);
+      }
+    } else if (status === 404 && detail === "Game not found") {
+      setError("선택한 게임을 찾을 수 없습니다. 다른 게임을 선택해 주세요.");
+    } else if (status === 503) {
+      setError("자연어 검색을 사용할 수 없습니다. 서버 설정을 확인해 주세요.");
+    } else if (status === 400 || status === 422) {
+      setError("검색어, 인원, 플레이 시간을 확인해 주세요.");
+    } else if (!err.response) {
+      setError("서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.");
+    } else {
+      setError("추천을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    }
+  } finally {
+    setLoading(false);
+    setSearched(true);
   }
+}
 
   // return 안에 있는 것이 실제로 화면에 그려지는 부분 (JSX)
   // className에 있는 글자들은 Tailwind 디자인 설정
@@ -168,6 +231,10 @@ export default function RecommendScreen({ initialGame, onBack, onRecommendSimila
               setGame(picked);
               clearRecommendation();
             }}
+            onQueryChange={(text) => {
+              setQuery(text);
+              clearRecommendation();
+            }}
             onShowDetail={setSelectedId}
           />
 
@@ -198,7 +265,7 @@ export default function RecommendScreen({ initialGame, onBack, onRecommendSimila
           <button
             type="button"
             onClick={() => handleRecommend(false)}
-            disabled={loading || !game}
+            disabled={loading || (!query.trim() && !game)}
             className={`${primaryButton} w-full py-3 text-lg`}
           >
             {loading ? (
@@ -219,7 +286,8 @@ export default function RecommendScreen({ initialGame, onBack, onRecommendSimila
         {/* aria-live: 결과가 바뀌면 화면 읽기 프로그램이 알려주도록 하는 설정 (접근성) */}
         <div className="mt-10" aria-live="polite">
           <Results
-            gameLabel={game?.Name ?? ""}
+            gameLabel={resultLabel}
+            mode={resultMode}
             results={results}
             loading={loading && results.length === 0}
             error={error}
@@ -267,7 +335,7 @@ export default function RecommendScreen({ initialGame, onBack, onRecommendSimila
 // 위에서부터 순서대로 확인해서, 해당하는 것 하나만 보여준다.
 // onSelect: 결과 한 줄을 눌렀을 때 그 게임 ID를 넘겨받는 함수
 // ---------------------------------------------------------------------
-function Results({ gameLabel, results, loading, error, searched, onSelect }) {
+function Results({ gameLabel, mode, results, loading, error, searched, onSelect }) {
   // 1) 불러오는 중일 때
   if (loading) {
     return (
@@ -304,7 +372,9 @@ function Results({ gameLabel, results, loading, error, searched, onSelect }) {
       {/* 예) "카탄과 비슷한 게임" + 주사위 아이콘 */}
       <h2 className="flex items-center gap-2 text-lg font-bold">
         <Dices className="h-5 w-5 text-primary" aria-hidden="true" />
-        {withWa(gameLabel)} 비슷한 게임
+        {mode === "game"
+          ? `${withWa(gameLabel)} 비슷한 게임`
+          : `"${gameLabel}" 검색 추천 결과`}
       </h2>
       <p className="mb-3 mt-1 text-sm text-ink/60">게임을 누르면 자세한 설명을 볼 수 있어요.</p>
       {/* divide-y: 목록 줄 사이에 구분선 넣기 */}
