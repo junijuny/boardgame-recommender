@@ -249,7 +249,38 @@ def search_games(query: str, limit: int = 10) -> list[dict[str, Any]]:
     return results[["BGGId", "Name", "YearPublished", "ImagePath"]].head(limit).to_dict(
         orient="records"
     )
+import re
 
+
+def detect_game_name(query: str) -> str | None:
+    """영어 검색어에서 명확한 게임 이름을 찾아 반환한다."""
+    text = query.strip()
+    if not text:
+        return None
+
+    # 1. 게임 이름이 정확히 일치하는 경우
+    exact = df[_names_lower == text.casefold()]
+    if len(exact) == 1:
+        return str(exact.iloc[0]["Name"])
+
+    # 2. 'Games like Catan' 등의 표현에서 게임 이름 추출
+    patterns = [
+        r"^(?:games?|board games?)\s+(?:like|similar to)\s+(.+?)[.!?]?$",
+        r"^(?:something|anything)\s+similar to\s+(.+?)[.!?]?$",
+    ]
+
+    for pattern in patterns:
+        match = re.match(pattern, text, flags=re.IGNORECASE)
+        if not match:
+            continue
+
+        candidate = match.group(1).strip()
+        found = df[_names_lower == candidate.casefold()]
+
+        if len(found) == 1:
+            return str(found.iloc[0]["Name"])
+
+    return None
 
 def _condition_mask(players: int, max_time: int, min_rating: float) -> pd.Series:
     return (
@@ -322,6 +353,91 @@ def recommend_games(
         results.append(record)
     return results
 
+def semantic_query_bonus(query: str, cand_idx: np.ndarray) -> np.ndarray:
+    """자연어 검색 의도에 따라 난이도, 메커니즘, 테마 가산점을 계산한다."""
+    q = query.lower()
+    bonus = np.zeros(len(cand_idx), dtype=np.float32)
+
+    weights = np.nan_to_num(_weights[cand_idx], nan=0.0)
+
+    def feature_bonus(feature_data, names, amount):
+        """특정 메커니즘/테마가 있는 게임에 가산점 부여."""
+        columns = [
+            i for i, name in enumerate(feature_data.names)
+            if str(name).lower() in [n.lower() for n in names]
+        ]
+
+        if not columns:
+            return np.zeros(len(cand_idx), dtype=np.float32)
+
+        matched = feature_data.binary[cand_idx][:, columns]
+
+        return (
+            np.asarray(matched.sum(axis=1)).ravel() > 0
+        ).astype(np.float32) * amount
+
+    # 1. 깊은 전략을 원하는 검색
+    strategy_query = any(word in q for word in [
+        "deep strategy", "strategic", "complex",
+        "challenging decisions", "heavy strategy"
+    ])
+
+    if strategy_query:
+        # 난이도가 3.0 이상인 전략 게임에 높은 가산점 부여
+        strategy_score = np.clip((weights - 2.0) / 2.0, 0.0, 1.0)
+        bonus += 0.35 * strategy_score
+
+        # 난이도가 2.0 미만인 게임은 감점
+        low_weight_penalty = np.clip((2.0 - weights) / 1.0, 0.0, 1.0)
+        bonus -= 0.25 * low_weight_penalty
+
+        # 전략적인 메커니즘을 가진 게임에 추가 가산점
+        bonus += feature_bonus(mechanics, [
+            "Worker Placement",
+            "Area Majority / Influence",
+            "Deck, Bag, and Pool Building",
+        ], 0.15)
+
+    # 2. 어린이 또는 쉬운 게임
+    if any(word in q for word in [
+        "young children", "kids", "children",
+        "family friendly", "easy", "simple"
+    ]):
+        easy_score = np.clip((2.5 - weights) / 1.5, 0.0, 1.0)
+        bonus += 0.15 * easy_score * (weights > 0)
+
+    # 3. 협력 게임
+    cooperative_query = any(word in q for word in [
+        "cooperative", "co-op", "work together",
+        "teamwork", "협력"
+    ])
+
+    if cooperative_query:
+        bonus += feature_bonus(
+            mechanics, ["Cooperative Game"], 0.25
+        )
+
+    # 4. 생존 게임
+    survival_query = any(word in q for word in [
+        "survive", "survival", "생존"
+    ])
+
+    if survival_query:
+        bonus += feature_bonus(
+            themes, ["Theme_Survival"], 0.20
+        )
+
+    # 5. 경쟁형 검색에서 협력 게임 감점
+    competitive_query = any(word in q for word in [
+        "competitive", "competition", "경쟁"
+    ])
+
+    if competitive_query and not cooperative_query:
+        bonus -= feature_bonus(
+            mechanics, ["Cooperative Game"], 0.20
+        )
+
+    return bonus
 
 def semantic_search_available() -> bool:
     return embeddings is not None and semantic.is_installed()
@@ -333,6 +449,7 @@ def semantic_search(
     max_time: int | None = None,
     limit: int = 10,
     min_rating: float = 5.5,
+    exclude_ids: list[int] | None = None,
 ) -> list[dict[str, Any]]:
     """자연어(한국어 포함) 설명으로 게임 검색. 예: '친구들과 가볍게 하는 협력 게임'"""
     query = query.strip()
@@ -342,10 +459,71 @@ def semantic_search(
         raise RuntimeError("Semantic search is not available")
 
     mask = df["BayesAvgRating"] >= min_rating
+        # 어려운 전략 게임 검색 시 난이도 3.0 이상만 추천
+    q = query.lower()
+    if any(word in q for word in [
+        "deep strategy",
+        "heavy strategy",
+        "challenging decisions",
+        "complex",
+        "strategic",
+    ]):
+        mask &= df["GameWeight"] >= 3.0
+
+    # 경쟁형 게임 검색에서는 협력 메커니즘 게임 제외
+    competitive_query = any(word in q for word in [
+        "competitive", "competition", "경쟁"
+    ])
+    cooperative_query = any(word in q for word in [
+        "cooperative", "co-op", "work together",
+        "teamwork", "협력"
+    ])
+
+    if competitive_query and not cooperative_query:
+        coop_columns = [
+            i for i, name in enumerate(mechanics.names)
+            if str(name).strip().lower() == "cooperative game"
+        ]
+
+        if coop_columns:
+            coop_flags = (
+                mechanics.binary[:, coop_columns].sum(axis=1)
+            )
+            coop_flags = np.asarray(coop_flags).ravel() > 0
+            mask &= ~pd.Series(coop_flags, index=df.index)
+
+    # 생존 게임 검색 시 생존 테마 게임만 추천
+    survival_query = any(word in q for word in [
+        "survive", "survival", "생존"
+    ])
+
+    if survival_query:
+        survival_columns = [
+            i for i, name in enumerate(themes.names)
+            if str(name).strip().lower() == "theme_survival"
+        ]
+
+        if survival_columns:
+            survival_flags = (
+                themes.binary[:, survival_columns].sum(axis=1)
+            )
+            survival_flags = np.asarray(survival_flags).ravel() > 0
+            mask &= ~pd.Series(~survival_flags, index=df.index)
+
+    # 이전 추천 게임의 ID와 동일한 이름의 게임까지 제외
+    if exclude_ids:
+        excluded_names = set(
+            df.loc[df["BGGId"].isin(exclude_ids), "Name"]
+            .str.strip()
+            .str.casefold()
+        )
+
+        mask &= ~df["BGGId"].isin(exclude_ids)
+        mask &= ~df["Name"].str.strip().str.casefold().isin(excluded_names)
     if players is not None:
         mask &= (df["MinPlayers"] <= players) & (df["MaxPlayers"] >= players)
     if max_time is not None:
-        mask &= df["ComMaxPlaytime"] <= max_time
+        mask &= (df["ComMaxPlaytime"] > 0) & (df["ComMaxPlaytime"] <= max_time)
     mask &= pd.Series(embeddings.present)
     cand_idx = np.flatnonzero(mask.to_numpy())
     if len(cand_idx) == 0:
@@ -355,15 +533,35 @@ def semantic_search(
     # 질의-문서 유사도는 질의마다 범위가 달라서, 후보 중 중앙값~최댓값을 0~1로 환산
     low, high = np.median(raw), raw.max()
     similarity = np.clip((raw - low) / max(high - low, 1e-6), 0.0, 1.0)
-    score = (1 - RATING_WEIGHT) * similarity + RATING_WEIGHT * rating_score(cand_idx)
+    score = (
+        (1 - RATING_WEIGHT) * similarity
+        + RATING_WEIGHT * rating_score(cand_idx)
+        + semantic_query_bonus(query, cand_idx)
+    )
 
-    order = np.argsort(-score, kind="stable")[:limit]
+    order = np.argsort(-score, kind="stable")
+
     results = []
+    seen_names = set()
+
     for pos in order:
         record = df.loc[int(cand_idx[pos]), DEFAULT_COLUMNS].to_dict()
+
+        # 이름이 동일한 게임은 한 번만 추천
+        normalized_name = str(record["Name"]).strip().casefold()
+
+        if normalized_name in seen_names:
+            continue
+
+        seen_names.add(normalized_name)
+
         record["Similarity"] = float(similarity[pos])
         record["Score"] = float(score[pos])
         results.append(record)
+
+        # 중복을 제외하고 최대 5개(limit) 채우기
+        if len(results) >= limit:
+            break
     return results
 
 

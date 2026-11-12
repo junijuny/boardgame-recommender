@@ -1,7 +1,7 @@
 
 import os
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -23,26 +23,32 @@ try:
         search_games as engine_search_games,
     )
     from backend.recommend_engine import (
+        detect_game_name as engine_detect_game_name,
+    )
+    from backend.recommend_engine import (
         semantic_search as engine_semantic_search,
     )
 except ImportError:
-    from genres import build_genres, genre_games
-    from recommend_engine import (
+    from backend.genres import build_genres, genre_games
+    from backend.recommend_engine import (
         active_signals,
         df,
         mechanics,
         semantic_search_available,
     )
-    from recommend_engine import (
+    from backend.recommend_engine import (
         filter_games as engine_filter_games,
     )
-    from recommend_engine import (
+    from backend.recommend_engine import (
         recommend_games as engine_recommend_games,
     )
-    from recommend_engine import (
+    from backend.recommend_engine import (
         search_games as engine_search_games,
     )
-    from recommend_engine import (
+    from backend.recommend_engine import (
+        detect_game_name as engine_detect_game_name,
+    )
+    from backend.recommend_engine import (
         semantic_search as engine_semantic_search,
     )
 
@@ -77,7 +83,7 @@ class RecommendRequest(BaseModel):
     players: int
     max_time: int
 
-    # 새 기능: 이전에 추천한 게임 ID 목록
+    # 이전에 추천한 게임 ID 목록
     # 전달하지 않으면 기존 추천 방식 그대로 동작
     exclude_ids: list[int] = Field(default_factory=list)
 
@@ -201,12 +207,22 @@ def recommend_games(request: RecommendRequest):
         )
 
 
+# 영어 검색어에서 기존 게임 이름 자동 인식
 # /games/{bgg_id}보다 먼저 선언해야 함
+@app.get("/games/detect-name")
+def detect_game_name(query: str):
+    return {
+        "game_name": engine_detect_game_name(query)
+    }
+
+
+# 영어 자연어 문장으로 보드게임 추천
 @app.get("/games/semantic-search")
 def semantic_search(
     query: str,
     players: int | None = None,
     max_time: int | None = None,
+    exclude_ids: list[int] | None = Query(default=None),
 ):
     query = query.strip()
 
@@ -238,7 +254,8 @@ def semantic_search(
         query=query,
         players=players,
         max_time=max_time,
-        limit=10,
+        limit=5,
+        exclude_ids=exclude_ids,
     )
 
 
