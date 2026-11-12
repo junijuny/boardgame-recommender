@@ -76,7 +76,7 @@ export default function GameSearch({
         value={query}
         disabled={disabled}
         autoComplete="off"
-        placeholder="e.g. Catan or Easy cooperative games for 4 players"
+        placeholder="e.g. Catan or Competitive board games for friends"
         aria-describedby="game-search-help"
         onChange={(event) => {
           const text = event.target.value;
@@ -115,11 +115,7 @@ export default function GameSearch({
             </button>
           </div>
         )}
-        {finished && matches.length === 0 && (
-          <p className="text-sm text-ink/60">
-            게임 이름을 찾지 못했어요. 영어 문장으로 추천받으려면 아래 추천받기 버튼을 눌러 주세요.
-          </p>
-        )}
+        
         {matches.length > 0 && (
           <>
             <p className="mb-2 text-sm text-ink/60">
