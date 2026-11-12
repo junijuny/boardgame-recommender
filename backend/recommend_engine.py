@@ -353,6 +353,59 @@ def recommend_games(
         results.append(record)
     return results
 
+def child_age_bonus(query: str, cand_idx: np.ndarray) -> np.ndarray:
+    """어린이 검색에만 권장 연령 가산점을 적용한다."""
+    import re
+    from pathlib import Path
+
+    q = query.lower()
+    child_words = [
+        "young children", "children", "kids", "kid",
+        "toddler", "preschool", "어린이", "아이", "유아",
+    ]
+
+    if not any(word in q for word in child_words):
+        return np.zeros(len(cand_idx), dtype=np.float32)
+
+    match = re.search(
+        r"(\d{1,2})\s*(?:-year-old|years? old|세)", q
+    )
+    target_age = int(match.group(1)) if match else 8
+
+    if not hasattr(child_age_bonus, "_age_data"):
+        path = Path(__file__).resolve().parent.parent / "data" / "games.csv"
+        child_age_bonus._age_data = pd.read_csv(
+            path,
+            usecols=["BGGId", "ComAgeRec", "MfgAgeRec"],
+        ).set_index("BGGId")
+
+    age_df = child_age_bonus._age_data
+    ids = df.iloc[cand_idx]["BGGId"]
+    ages = age_df.reindex(ids.to_numpy())
+
+    community = pd.to_numeric(
+        ages["ComAgeRec"], errors="coerce"
+    ).to_numpy(dtype=float).copy()
+
+    manufacturer = pd.to_numeric(
+        ages["MfgAgeRec"], errors="coerce"
+    ).to_numpy(dtype=float).copy()
+
+    community[community <= 0] = np.nan
+    manufacturer[manufacturer <= 0] = np.nan
+
+    mfg_bonus = np.where(
+        np.isfinite(manufacturer) & (manufacturer <= target_age),
+        0.10, 0.0
+    )
+    community_bonus = np.where(
+        np.isfinite(community) & (community <= target_age),
+        0.10, 0.0
+    )
+
+    return (mfg_bonus + community_bonus).astype(np.float32)
+
+
 def semantic_query_bonus(query: str, cand_idx: np.ndarray) -> np.ndarray:
     """자연어 검색 의도에 따라 난이도, 메커니즘, 테마 가산점을 계산한다."""
     q = query.lower()
@@ -537,6 +590,7 @@ def semantic_search(
         (1 - RATING_WEIGHT) * similarity
         + RATING_WEIGHT * rating_score(cand_idx)
         + semantic_query_bonus(query, cand_idx)
+        + child_age_bonus(query, cand_idx)
     )
 
     order = np.argsort(-score, kind="stable")
