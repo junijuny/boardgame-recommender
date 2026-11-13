@@ -1,4 +1,4 @@
-# 백엔드(FastAPI) 배포용 이미지 — Render(Docker) 기준
+# 백엔드(FastAPI) 배포용 이미지 — Google Cloud Run(Docker) 기준
 # 배포 방법: docs/deploy.md
 FROM python:3.12-slim
 
@@ -18,14 +18,16 @@ RUN uv sync --frozen --no-dev
 COPY backend ./backend
 COPY data ./data
 
-# 설명글 TF-IDF 캐시를 이미지 빌드 때 미리 만들어 서버 시작 시간을 줄임
-RUN cd backend && python -c "import features; features.load_or_compute_tfidf(features.load_games())"
+# embeddings.npz 가 없을 때만 TF-IDF 캐시를 이미지 빌드 때 미리 생성
+RUN if [ ! -f data/embeddings.npz ]; then \
+      cd backend && python -c "import features; features.load_or_compute_tfidf(features.load_games())"; \
+    fi
 
 # root 가 아닌 일반 사용자로 실행
 RUN useradd -m -u 1000 user && chown -R user /app
 USER user
 
 WORKDIR /app/backend
-# Render 는 PORT 환경변수(기본 10000)로 포트를 알려줌
-EXPOSE 10000
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}"]
+# Cloud Run은 PORT 환경변수(기본 8080)로 포트를 알려줌
+EXPOSE 8080
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}"]

@@ -22,7 +22,8 @@
 //   danger       : 에러
 // =====================================================================
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { warmupServer } from "./api.js";
 import GenreScreen from "./screens/GenreScreen.jsx";
 import RecommendScreen from "./screens/RecommendScreen.jsx";
 import StartScreen from "./screens/StartScreen.jsx";
@@ -32,6 +33,9 @@ import StartScreen from "./screens/StartScreen.jsx";
 // (컴포넌트 = 화면 조각을 만드는 함수. 이름은 대문자로 시작해야 함)
 // ---------------------------------------------------------------------
 export default function App() {
+  useEffect(() => {
+    warmupServer();
+  }, []);
   // 지금 보여줄 화면: "start" = 시작, "recommend" = 추천, "genres" = 장르
   const [screen, setScreen] = useState("start");
   // 추천 화면에 처음부터 선택해 둘 게임 { BGGId, Name, ... } (없으면 null)

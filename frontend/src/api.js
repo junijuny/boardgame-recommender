@@ -14,6 +14,12 @@ const API_URL = (
 const TIMEOUT = 60000;
 
 
+// 0. 백엔드 서버 미리 깨우기 (콜드 스타트 체감 지연 완화, 실패해도 무시)
+export function warmupServer() {
+  axios.get(`${API_URL}/`, { timeout: TIMEOUT }).catch(() => {});
+}
+
+
 // 1. 게임 이름 검색 (최대 10개)
 export async function searchGames(query, signal) {
   const res = await axios.get(`${API_URL}/games/search`, {

@@ -1,0 +1,75 @@
+# main 브랜치의 백엔드/데이터/Dockerfile 변경 시 Google Cloud Run(서울)에 자동 배포
+name: Deploy Backend to Cloud Run
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "data/**"
+      - "Dockerfile"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".dockerignore"
+      - ".github/workflows/deploy-backend.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: boardgame-recommender-514606
+  REGION: asia-northeast3
+  AR_REPO: boardgame-api
+  SERVICE_NAME: boardgame-recommender-api
+  WIF_PROVIDER: projects/692239785516/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+  SERVICE_ACCOUNT: boardgame-github-deployer@boardgame-recommender-514606.iam.gserviceaccount.com
+  ALLOWED_ORIGINS: https://boardgame-recommender-nine.vercel.app
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 코드 받기
+        uses: actions/checkout@v5
+
+      - name: Google Cloud 인증 (OIDC)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.SERVICE_ACCOUNT }}
+
+      - name: gcloud CLI 설정
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Artifact Registry Docker 로그인
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Docker 이미지 빌드 및 푸시
+        run: |
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/backend:${{ github.sha }}"
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+
+      - name: Cloud Run 배포
+        run: |
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/backend:${{ github.sha }}"
+          gcloud run deploy "${{ env.SERVICE_NAME }}" \
+            --image "$IMAGE" \
+            --region "${{ env.REGION }}" \
+            --platform managed \
+            --allow-unauthenticated \
+            --memory 1Gi \
+            --cpu 1 \
+            --cpu-boost \
+            --min-instances 0 \
+            --max-instances 2 \
+            --set-env-vars "ALLOWED_ORIGINS=${{ env.ALLOWED_ORIGINS }}"
+
+      - name: 배포 URL 확인
+        run: |
+          URL=$(gcloud run services describe "${{ env.SERVICE_NAME }}" \
+            --region "${{ env.REGION }}" \
+            --format="value(status.url)")
+          echo "Cloud Run URL: $URL"

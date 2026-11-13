@@ -32,9 +32,13 @@ df = features.load_games()
 mechanics = features.load_binary_features(features.MECHANICS_PATH, df["BGGId"])
 themes = features.load_binary_features(features.THEMES_PATH, df["BGGId"])
 category_matrix = features.build_category_matrix(df)
-tfidf, tfidf_matrix = features.load_or_compute_tfidf(df)
 embeddings = features.load_embeddings(df["BGGId"])  # 없으면 None
 cf = features.load_cf(df["BGGId"])                  # 없으면 None
+# 임베딩이 있으면 운영 API에서는 TF-IDF를 쓰지 않으므로 지연 로드(evaluate.py 등 호출 시에만 로드)
+if embeddings is None:
+    tfidf, tfidf_matrix = features.load_or_compute_tfidf(df)
+else:
+    tfidf, tfidf_matrix = None, None
 
 _has_mechanics = np.diff(mechanics.binary.indptr) > 0
 _has_themes = np.diff(themes.binary.indptr) > 0
@@ -95,6 +99,13 @@ def _sparse_cosine(matrix, target_idx: int, cand_idx: np.ndarray) -> np.ndarray:
     return np.asarray(matrix[cand_idx] @ matrix[target_idx].T.toarray()).ravel()
 
 
+def _get_tfidf_matrix():
+    global tfidf, tfidf_matrix
+    if tfidf_matrix is None:
+        tfidf, tfidf_matrix = features.load_or_compute_tfidf(df)
+    return tfidf_matrix
+
+
 def signal_similarities(
     target_idx: int, cand_idx: np.ndarray, signals: list[str]
 ) -> dict[str, tuple[np.ndarray, np.ndarray]]:
@@ -122,7 +133,7 @@ def signal_similarities(
         )
         result["category"] = (0.5 * cat_sim + 0.5 * weight_sim, ones)
     if "tfidf" in signals:
-        result["tfidf"] = (_sparse_cosine(tfidf_matrix, target_idx, cand_idx), ones)
+        result["tfidf"] = (_sparse_cosine(_get_tfidf_matrix(), target_idx, cand_idx), ones)
     if "embedding" in signals and embeddings is not None and embeddings.present[target_idx]:
         raw = embeddings.vectors[cand_idx] @ embeddings.vectors[target_idx]
         result["embedding"] = (

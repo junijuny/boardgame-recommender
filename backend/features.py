@@ -15,12 +15,9 @@ backend/features.py
 from dataclasses import dataclass
 from pathlib import Path
 
-import joblib
 import numpy as np
 import pandas as pd
 from scipy import sparse
-from sklearn.feature_extraction.text import TfidfTransformer, TfidfVectorizer
-from sklearn.preprocessing import normalize
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
@@ -84,23 +81,34 @@ class BinaryFeatures:
 def load_binary_features(path: Path, bgg_ids: pd.Series) -> BinaryFeatures:
     table = pd.read_csv(path).set_index("BGGId").reindex(bgg_ids, fill_value=0)
     binary = sparse.csr_matrix((table.to_numpy() > 0).astype(np.float32))
-    transformer = TfidfTransformer(norm="l2", smooth_idf=True)
-    weighted = transformer.fit_transform(binary).tocsr().astype(np.float32)
+    # TfidfTransformer(norm="l2", smooth_idf=True)와 동일한 계산을 sklearn import 없이 수행
+    n_samples = binary.shape[0]
+    doc_freq = np.asarray(binary.sum(axis=0)).ravel()
+    idf = np.log((1.0 + n_samples) / (1.0 + doc_freq)) + 1.0
+    weighted = (binary @ sparse.diags(idf)).tocsr()
+    row_norms = np.sqrt(weighted.multiply(weighted).sum(axis=1)).A1
+    inv_norms = np.divide(1.0, row_norms, out=np.zeros_like(row_norms), where=row_norms > 0)
+    weighted = (sparse.diags(inv_norms) @ weighted).tocsr().astype(np.float32)
     return BinaryFeatures(
         names=table.columns.to_numpy(),
         binary=binary,
         weighted=weighted,
-        idf=transformer.idf_,
+        idf=idf,
     )
 
 
 def build_category_matrix(df: pd.DataFrame) -> np.ndarray:
     """Cat:* 0/1 값을 L2 정규화 (카테고리가 없는 게임은 0 벡터)"""
-    return normalize(df[CATEGORY_COLUMNS].to_numpy(dtype=np.float32))
+    arr = df[CATEGORY_COLUMNS].to_numpy(dtype=np.float32)
+    norms = np.linalg.norm(arr, axis=1, keepdims=True)
+    return np.divide(arr, norms, out=np.zeros_like(arr), where=norms > 0)
 
 
 def load_or_compute_tfidf(df: pd.DataFrame):
     """설명글 TF-IDF 행렬 (디스크 캐시가 CSV보다 최신이면 재사용)"""
+    import joblib
+    from sklearn.feature_extraction.text import TfidfVectorizer
+
     if TFIDF_CACHE_PATH.exists():
         try:
             if TFIDF_CACHE_PATH.stat().st_mtime >= CLEAN_GAMES_PATH.stat().st_mtime:
