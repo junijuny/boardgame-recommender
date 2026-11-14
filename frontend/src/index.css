@@ -7,66 +7,79 @@
 
 
 /* ==========================================================
-   2. 폰트 등록하기 (넥슨 Lv.1 고딕, 눈누 웹폰트)
-   같은 이름으로 굵기별 파일 3개를 등록한다.
-   300 = 얇게, normal = 보통, 700 = 굵게
-   ========================================================== */
-
-@font-face {
-  font-family: 'NexonLv1Gothic';
-  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_20-04@2.1/NEXON Lv1 Gothic OTF Light.woff') format('woff');
-  font-weight: 300;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'NexonLv1Gothic';
-  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_20-04@2.1/NEXON Lv1 Gothic OTF.woff') format('woff');
-  font-weight: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'NexonLv1Gothic';
-  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_20-04@2.1/NEXON Lv1 Gothic OTF Bold.woff') format('woff');
-  font-weight: 700;
-  font-display: swap;
-}
-
-
-/* ==========================================================
-   3. 테마 (색과 폰트에 이름 붙이기)
+   2. 테마 (색, 폰트, 움직임에 이름 붙이기)
    --color-이름 으로 정하면 코드에서 bg-이름, text-이름, border-이름 으로 쓸 수 있다.
    예) --color-primary  ->  bg-primary, text-primary, border-primary
-   색을 바꾸고 싶으면 여기 값만 바꾸면 화면 전체에 적용된다.
+   폰트는 index.html에서 Google Fonts로 불러온다.
    ========================================================== */
 
 @theme {
   /* 바탕 */
-  --color-page: #f5f1ea;          /* 전체 배경 (크림색) */
-  --color-card: #fdfcf9;          /* 입력 박스, 결과 목록, 이용 방법 칸 배경 */
+  --color-page: #f5f1ea;          /* 전체 배경 */
+  --color-card: #fdfcf9;          /* 헤더, 패널, 카드, 팝업 배경 */
   --color-line: #e4ded3;          /* 테두리, 구분선, 이미지 없을 때 칸 */
 
   /* 포인트 */
-  --color-primary: #1a2847;       /* 메인 색: 버튼, 아이콘 (진한 네이비) */
-  --color-primary-dark: #0f1a33;  /* 더 진한 메인 색: 선택된 버튼, 마우스 올렸을 때 */
+  --color-primary: #1a2847;       /* 메인 색: 버튼, 로고, 난이도 칸 (진한 네이비) */
+  --color-primary-dark: #0f1a33;  /* 더 진한 메인 색: 선택된 버튼, 포커스 테두리 */
 
   /* 글자 */
-  --color-ink: #1e2a3d;           /* 기본 글자색 (네이비 섞인 먹색) */
+  --color-ink: #1e2a3d;           /* 기본 글자색. 흐린 글자는 text-ink/70 */
 
   /* 상태 */
   --color-danger: #b04a42;        /* 에러 메시지 */
 
-  /* 폰트 (불러오기 실패하면 컴퓨터 기본 폰트로 대신 보여줌) */
-  --font-sans: 'NexonLv1Gothic', system-ui, sans-serif;
+  /* 폰트: 제목은 font-display, 나머지는 기본(font-sans) */
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-display: 'Bricolage Grotesque', 'IBM Plex Sans', system-ui, sans-serif;
+
+  /* 움직임: motion-safe:animate-이름 으로 쓰면 "동작 줄이기" 설정을 켠 사람에게는 멈춰 보인다 */
+  --animate-skeleton: skeleton-sweep 1.4s ease-in-out infinite;  /* 로딩 뼈대 반짝임 */
+  --animate-dice-wobble: dice-wobble 1.2s ease-in-out infinite;  /* 서버 깨우는 중 주사위 */
+  --animate-bar-run: bar-run 1.1s ease-in-out infinite;          /* 다시 불러오는 중 막대 */
+  --animate-drift-down: drift-down 48s linear infinite;          /* 시작 화면 사진 줄 */
+
+  @keyframes skeleton-sweep {
+    from { background-position: 100% 0; }
+    to { background-position: -100% 0; }
+  }
+  @keyframes dice-wobble {
+    0%, 100% { transform: rotate(0); }
+    25% { transform: rotate(-14deg); }
+    75% { transform: rotate(10deg); }
+  }
+  @keyframes bar-run {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(320%); }
+  }
+  /* 사진 목록을 두 번 이어 붙여 두고 절반만큼 내려가면 끊김 없이 반복된다 */
+  @keyframes drift-down {
+    from { transform: translateY(-50%); }
+    to { transform: translateY(0); }
+  }
 }
 
 
 /* ==========================================================
-   4. 기본 스타일
+   3. 기본 스타일
    ========================================================== */
 
 /* 화면 전체(body)에 기본 배경색, 폰트, 글자색 적용 */
 body {
   @apply bg-page font-sans text-ink;
+}
+
+/* 누를 수 있는 버튼 위에서는 손가락 모양 커서 (Tailwind 4는 기본값이 화살표)
+   못 누르는 버튼(disabled)은 화살표 그대로 둔다 */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+}
+
+/* 로딩 뼈대: 선 색 위로 밝은 띠가 지나간다 */
+.skeleton {
+  background: linear-gradient(90deg, var(--color-line) 0%, #eee9e0 50%, var(--color-line) 100%);
+  background-size: 200% 100%;
 }
