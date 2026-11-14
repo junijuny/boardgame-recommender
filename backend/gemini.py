@@ -89,6 +89,7 @@ Request: {query}
 
 EXPLAIN_PROMPT = """\
 You write short reasons why recommended board games fit.
+Always write in English, even when the basis is in another language (translate its meaning).
 Write exactly one English sentence (at most 25 words) per game, using only the facts given.
 Never mention facts that are not in the input.
 {mode_rule}

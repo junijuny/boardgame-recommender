@@ -1,5 +1,6 @@
 
 import os
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +8,7 @@ from pydantic import BaseModel, Field
 
 try:
     from backend import gemini
+    from backend.explain import explain_games
     from backend.genres import build_genres, genre_games
     from backend.limits import RateLimiter, client_ip
     from backend.natural_search import natural_search, natural_search_available
@@ -30,6 +32,7 @@ try:
     )
 except ImportError:
     import gemini
+    from explain import explain_games
     from genres import build_genres, genre_games
     from limits import RateLimiter, client_ip
     from natural_search import natural_search, natural_search_available
@@ -100,6 +103,19 @@ MAX_NATURAL_QUERY_LENGTH = 300
 
 # 테스트에서 교체할 수 있도록 모듈 전역으로 둔다
 natural_limiter = RateLimiter(10, 60)
+
+
+# POST /explain 요청 데이터
+class ExplainRequest(BaseModel):
+    mode: Literal["similar", "query"]
+    basis: str
+    game_ids: list[int]
+
+
+MAX_EXPLAIN_BASIS_LENGTH = 300
+MAX_EXPLAIN_GAMES = 10
+
+explain_limiter = RateLimiter(30, 60)
 
 
 @app.get("/")
@@ -287,6 +303,56 @@ def search_natural(body: NaturalSearchRequest, request: Request):
         )
 
     return results
+
+
+@app.post("/explain")
+def explain(body: ExplainRequest, request: Request):
+    basis = body.basis.strip()
+
+    if not basis:
+        raise HTTPException(
+            status_code=400,
+            detail="Basis cannot be empty"
+        )
+
+    if len(basis) > MAX_EXPLAIN_BASIS_LENGTH:
+        raise HTTPException(
+            status_code=400,
+            detail="Basis is too long"
+        )
+
+    if not body.game_ids or len(body.game_ids) > MAX_EXPLAIN_GAMES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Provide between 1 and {MAX_EXPLAIN_GAMES} game ids"
+        )
+
+    if gemini.get_client() is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Explanations are not available"
+        )
+
+    if not explain_limiter.allow(client_ip(request)):
+        raise HTTPException(
+            status_code=429,
+            detail="Too many requests"
+        )
+
+    try:
+        reasons = explain_games(body.mode, basis, body.game_ids)
+    except LookupError:
+        raise HTTPException(
+            status_code=404,
+            detail="Game not found"
+        )
+    except gemini.GeminiError:
+        raise HTTPException(
+            status_code=503,
+            detail="Explanations are temporarily unavailable"
+        )
+
+    return {"reasons": {str(k): v for k, v in reasons.items()}}
 
 
 # /games/{bgg_id}보다 먼저 선언해야 함
