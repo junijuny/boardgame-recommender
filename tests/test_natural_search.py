@@ -72,12 +72,29 @@ class NaturalSearchTest(unittest.TestCase):
         for g in games:
             self.assertFalse(has_tag(eng.mechanics, g["BGGId"], "Dice Rolling"))
 
+    def test_excludes_games_with_few_reviews(self):
+        # 리뷰가 적은 무명 게임은 설명글이 짧고 일반적이라 짧은 질의와 가장 가깝게 나온다 → 후보에서 뺀다
+        mask = eng._condition_mask(4, 120, 5.5) & (eng.df["NumUserRatings"] < ns.MIN_REVIEWS)
+        idx = int(eng.df.index[mask][0])
+        ns.set_index(make_index(idx))
+        games = natural_search("obscure", 4, 120)
+        self.assertTrue(games)
+        self.assertNotIn(int(eng.df.at[idx, "BGGId"]), [g["BGGId"] for g in games])
+        for g in games:
+            self.assertGreaterEqual(g["NumUserRatings"], ns.MIN_REVIEWS)
+
     def test_weight_range_keeps_unknown_weight(self):
+        # 난이도 정보가 없는 게임은 모두 리뷰 1,000개 미만이라 하한을 잠시 끄고 난이도 규칙만 확인
         mask = eng._condition_mask(4, 120, 5.5) & (eng.df["GameWeight"] == 0)
         idx = int(eng.df.index[mask][0])
         ns.set_index(make_index(idx))
         self.fake.intent = QueryIntent("x", weight_max=1.5)
-        games = natural_search("w", 4, 120)
+        original = ns.MIN_REVIEWS
+        ns.MIN_REVIEWS = 0
+        try:
+            games = natural_search("w", 4, 120)
+        finally:
+            ns.MIN_REVIEWS = original
         self.assertEqual(games[0]["BGGId"], int(eng.df.at[idx, "BGGId"]))
         for g in games:
             self.assertTrue(g["GameWeight"] == 0 or g["GameWeight"] <= 1.5)

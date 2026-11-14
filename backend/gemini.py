@@ -78,7 +78,10 @@ class GeminiClient(Protocol):
 EXTRACT_PROMPT = """\
 You convert a board-game search request (any language, often Korean) into structured filters.
 Rules:
-- search_text: English text describing the play experience the user wants. Translate Korean to English.
+- search_text: 2-3 English sentences describing the gameplay that would satisfy the request:
+  genre, core mechanisms, how players interact, and the mood. Describe the kind of game, not a title.
+  Do not use proper nouns or game titles (e.g. turn "like Mafia" into hidden roles and bluffing).
+  Do not add requirements the request does not imply. Translate Korean meaning into English.
 - Ignore player counts and play time; the UI supplies them.
 - Weight is BGG complexity on a 1-5 scale. Map "light/easy" (e.g. 가벼운) to a low range such as 1.0-2.5,
   and "heavy/complex" to a high range such as 3.5-5.0. Leave weight_min/weight_max null if not implied.

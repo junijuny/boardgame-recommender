@@ -17,6 +17,9 @@ except ImportError:
     import recommend_engine as eng
 
 MIN_RATING = 5.5
+# 리뷰가 적은 무명 게임은 설명글이 짧고 일반적이라("우주를 탐험하는 게임입니다") 짧은 질의와
+# 가장 가깝게 나와 대표 게임을 밀어낸다. 장르 화면과 같은 기준(리뷰 1,000개 이상)으로 후보를 제한
+MIN_REVIEWS = 1000
 EMBEDDING_WEIGHT = 0.8   # 유사도 중 임베딩 비중 (나머지는 태그 일치)
 SIMILARITY_WEIGHT = 0.75  # 최종 점수 중 유사도 비중 (나머지는 평점)
 CACHE_SIZE = 256
@@ -175,6 +178,7 @@ def natural_search(
 
     df = eng.df
     mask = eng._condition_mask(players, max_time, MIN_RATING).to_numpy() & index.present
+    mask &= df["NumUserRatings"].to_numpy() >= MIN_REVIEWS
     if exclude_ids:
         mask &= ~df["BGGId"].isin(exclude_ids).to_numpy()
     weight = df["GameWeight"].to_numpy(dtype=float)
