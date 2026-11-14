@@ -26,7 +26,7 @@ npm run preview   # 빌드 결과 미리보기
 | :--- | :--- |
 | 로컬 백엔드 사용 | `.env`에 지정하지 않음 → `http://localhost:8000` 사용 |
 | 배포된 백엔드 사용 | `.env.example`을 참고해 `.env`에 `VITE_BASE_URL=...` 지정 (끝에 `/` 없이) |
-| 프론트 배포 | 배포 플랫폼 환경변수에 같은 `VITE_BASE_URL` 지정 후 다시 빌드 ([deploy.md](../docs/deploy.md)) |
+| 프론트 배포 | 배포 플랫폼 환경변수에 Google Cloud Run 백엔드 주소를 `VITE_BASE_URL`로 지정 후 다시 빌드 ([deploy.md](../docs/deploy.md)) |
 
 - 예전 이름 `VITE_API_URL`도 인식합니다. 둘 다 있으면 `VITE_BASE_URL`을 씁니다.
 - `npm run dev`로 실행할 때는 요청을 `/api`로 보내고, Vite 개발 서버가 배포된 백엔드로 대신 전달합니다 (`vite.config.js`의 `proxy`). 배포된 백엔드의 CORS 허용 목록에 `localhost`가 없어도 로컬에서 쓸 수 있습니다.
@@ -48,6 +48,7 @@ App.tsx
 
 | 파일 | 역할 |
 | :--- | :--- |
+| `public/favicon.png` | 주사위 파비콘 이미지 (`index.html`에서 연결) |
 | `src/screens/` | 화면 단위 컴포넌트 |
 | `src/components/Header.tsx` | 헤더. 데이터가 있는 상태에서 다시 불러오는 동안 아래에 진행 막대 표시 |
 | `src/components/GameSearch.tsx` | 게임 이름 자동완성 검색 (입력이 멈추면 검색, 검색어가 바뀌면 이전 요청 취소) |

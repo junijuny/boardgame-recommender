@@ -53,7 +53,7 @@ curl 'http://localhost:8000/games/semantic-search?query=친구들과%20가볍게
 
 - `embeddings.npz`만 있고 `semantic` 패키지가 없으면 추천에는 임베딩을 쓰지만 자연어 검색은 `503`
 - `embeddings.npz`는 배포에 필요해서 git에 포함되어 있음. 다시 만들었다면 함께 커밋함
-- 배포 서버(Render)에는 `semantic` 패키지를 설치하지 않으므로 추천에는 임베딩을 쓰지만 자연어 검색은 꺼져 있음
+- 배포 서버(Google Cloud Run)에는 `semantic` 패키지를 설치하지 않으므로 추천에는 임베딩을 쓰지만 자연어 검색은 꺼져 있음
 
 ## 3. 3단계: 협업 필터링 (선택)
 

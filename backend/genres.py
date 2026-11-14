@@ -20,14 +20,14 @@ except ImportError:
 
 # 화면에 보여줄 순서대로 정리한 장르 목록
 GENRES = [
-    {"key": "strategy", "label": "전략", "description": "깊이 있는 계획과 수 싸움"},
-    {"key": "family", "label": "가족", "description": "누구나 쉽게 함께"},
-    {"key": "party", "label": "파티", "description": "여럿이 왁자지껄"},
-    {"key": "thematic", "label": "테마", "description": "이야기와 세계관에 몰입"},
-    {"key": "war", "label": "워게임", "description": "전투와 역사 시뮬레이션"},
-    {"key": "childrens", "label": "어린이", "description": "아이와 함께 즐기는"},
-    {"key": "cgs", "label": "카드게임", "description": "카드를 모으고 덱을 짜는"},
-    {"key": "deduction", "label": "추리", "description": "단서를 모아 정답을 맞히는"},
+    {"key": "strategy", "label": "Strategy", "description": "Deep planning and clever moves"},
+    {"key": "family", "label": "Family", "description": "Easy for everyone to join in"},
+    {"key": "party", "label": "Party", "description": "Loud fun for big groups"},
+    {"key": "thematic", "label": "Thematic", "description": "Immersive stories and worlds"},
+    {"key": "war", "label": "Wargames", "description": "Battles and historical simulations"},
+    {"key": "childrens", "label": "Children's", "description": "Fun to play with kids"},
+    {"key": "cgs", "label": "Card Games", "description": "Collect cards and build your deck"},
+    {"key": "deduction", "label": "Deduction", "description": "Gather clues and find the answer"},
 ]
 
 # 카테고리 컬럼 하나로 판정하는 장르
@@ -82,6 +82,7 @@ def genre_games(
     key: str,
     players: int | None = None,
     max_time: int | None = None,
+    exclude_ids: list[int] | None = None,
     limit: int = 6,
     min_ratings: int = 1000,
     min_rating: float = 5.5,
@@ -89,12 +90,16 @@ def genre_games(
     """장르 + 인원/시간 조건에 맞는 게임 (players, max_time은 선택)
 
     리뷰 수 min_ratings 이상인 인기 게임을 먼저, 그 안에서 평점 높은 순으로 고름
-    조건이 까다로워 인기 게임이 limit개보다 적으면 나머지 게임으로 채움"""
+    조건이 까다로워 인기 게임이 limit개보다 적으면 나머지 게임으로 채움
+    exclude_ids에 든 게임(이미 보여 준 게임)은 결과에서 뺌"""
     mask = genre_mask(df, mechanics, key) & (df["BayesAvgRating"] >= min_rating).to_numpy()
     if players is not None:
         mask = mask & ((df["MinPlayers"] <= players) & (df["MaxPlayers"] >= players)).to_numpy()
     if max_time is not None:
         mask = mask & (df["ComMaxPlaytime"] <= max_time).to_numpy()
+    # 이미 보여 준 게임은 빼기 (장르 화면의 "다른 게임 보기"용)
+    if exclude_ids:
+        mask = mask & ~df["BGGId"].isin(exclude_ids).to_numpy()
 
     picked = df[mask].copy()
     picked["IsPopular"] = picked["NumUserRatings"] >= min_ratings

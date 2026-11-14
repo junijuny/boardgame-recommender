@@ -14,7 +14,7 @@ uv run --locked uvicorn backend.main:app --reload --port 8000
 - 클릭해서 요청을 보낼 수 있는 Swagger 문서: http://localhost:8000/docs
 - 서버 종료: 실행한 터미널에서 `Ctrl+C`
 - `.python-version`에 지정된 Python 3.12와 `uv.lock`의 패키지 버전을 사용함
-- 첫 실행 시 TF-IDF 캐시가 생성되므로 이후 실행보다 시간이 걸릴 수 있음
+- `data/embeddings.npz`가 있으면 시작 시 TF-IDF 계산을 건너뛰며, 임베딩이 없을 때만 첫 요청 시 TF-IDF 캐시를 생성함
 - 추천 알고리즘과 선택 기능(임베딩, 협업 필터링, 평가) 준비 방법은 [recommendation_pipeline.md](recommendation_pipeline.md) 참고
 
 ## 2. 요청과 응답
@@ -28,7 +28,7 @@ uv run --locked uvicorn backend.main:app --reload --port 8000
 | `GET /games/semantic-search` | 쿼리 `query`, 선택 `players`, `max_time` | 자연어(한국어 가능) 설명에 맞는 최대 10개 게임. 임베딩 미준비 시 `503` |
 | `GET /games/{bgg_id}` | 경로의 게임 ID(`BGGId`) | 게임 한 개의 상세 정보(설명, 난이도, 인원, 시간, 평점) |
 | `GET /genres` | 없음 | 장르 8개와 장르별 대표 게임 최대 6개 |
-| `GET /genres/{key}/games` | 경로의 장르 `key`, 선택 쿼리 `players`, `max_time` | 조건에 맞는 장르 게임 최대 6개. 리뷰 1000개 이상 게임 우선, 그 안에서 평점순. 없으면 빈 목록 |
+| `GET /genres/{key}/games` | 경로의 장르 `key`, 선택 쿼리 `players`, `max_time`, `exclude_ids` | 조건(최소 평점 5.5, 인원·시간)에 맞는 장르 게임 최대 6개. 리뷰 1,000개 이상 게임 우선, 그 안에서 평점순. `exclude_ids`의 게임은 제외(`?exclude_ids=13&exclude_ids=822`처럼 여러 번 붙임). 없으면 빈 목록 |
 
 게임 이름은 데이터에 저장된 영어 이름을 사용함. 검색 결과의 `Name`을 추천 요청의 `game_name`으로 전달하면 되며, 대소문자와 앞뒤 공백은 무시함.
 
@@ -85,15 +85,15 @@ curl 'http://localhost:8000/genres'
 [
   {
     "key": "strategy",
-    "label": "전략",
-    "description": "깊이 있는 계획과 수 싸움",
+    "label": "Strategy",
+    "description": "Deep planning and clever moves",
     "games": [{"BGGId": 174430, "Name": "Gloomhaven", "YearPublished": 2017, "ImagePath": "...",
                "GameWeight": 3.87, "ComMinPlaytime": 60, "ComMaxPlaytime": 120, "BayesAvgRating": 8.51}]
   }
 ]
 ```
 
-장르 순서는 `strategy`(전략), `family`(가족), `party`(파티), `thematic`(테마), `war`(워게임), `childrens`(어린이), `cgs`(카드게임), `deduction`(추리).
+장르 순서는 `strategy`(Strategy), `family`(Family), `party`(Party), `thematic`(Thematic), `war`(Wargames), `childrens`(Children's), `cgs`(Card Games), `deduction`(Deduction). 화면이 영어라 `label`, `description`도 영어로 반환함.
 전략은 BGG 카테고리 `Cat:Strategy` 또는 `Cat:Abstract`, 추리는 메커니즘 `Deduction`, 나머지는 같은 이름의 `Cat:*` 카테고리로 판정함.
 리뷰 1,000개 이상인 게임 중 `BayesAvgRating` 내림차순으로 최대 6개를 담음. 한 게임이 여러 장르에 나올 수 있음. 목록은 서버 시작 시 한 번 계산함.
 
@@ -124,7 +124,7 @@ curl 'http://localhost:8000/genres'
 
 화면 주소의 프로토콜, 호스트, 포트를 함께 비교함. 프론트 포트가 5174로 바뀌면 5173으로 맞추거나 환경변수 `ALLOWED_ORIGINS`에 실제 주소를 지정해야 함.
 
-`ALLOWED_ORIGINS`를 지정하면 위 기본 목록을 대신하므로, 필요한 주소를 모두 쉼표로 구분해 넣음. 배포 서버(Render)에는 Vercel 주소를 지정함 ([deploy.md](deploy.md) 참고).
+`ALLOWED_ORIGINS`를 지정하면 위 기본 목록을 대신하므로, 필요한 주소를 모두 쉼표로 구분해 넣음. 배포 서버(Google Cloud Run)에는 Vercel 주소를 지정함 ([deploy.md](deploy.md) 참고).
 
 ```bash
 ALLOWED_ORIGINS=https://boardgame-recommender.vercel.app,http://localhost:5173
@@ -154,7 +154,7 @@ async function getRecommendations() {
 
 ## 5. 자동 테스트
 
-서버를 별도로 켜지 않아도 실행됨. Python 기본 `unittest`와 FastAPI의 `TestClient`를 사용하고, 필요한 `httpx`는 개발 의존성에 명시되어 있음.
+서버를 별도로 켜지 않아도 실행됨. Python 기본 `unittest`와 FastAPI의 `TestClient`를 사용하고, 필요한 `httpx`는 개발 의존성에 명시되어 있음. GitHub Actions(`.github/workflows/test.yml`)를 통해 Pull Request 및 `main` 브랜치 push 시에도 자동으로 실행됨.
 
 ```bash
 uv sync --locked
@@ -164,12 +164,14 @@ uv run --locked ruff check backend/main.py tests/test_api.py
 
 테스트 메서드가 다음을 검증함. 여러 입력을 확인하는 하위 테스트도 포함.
 
-- 실제 데이터 로딩, 검색, 조건 필터, 추천 순위와 기준 게임 제외
+- 실제 데이터 로딩, 검색(정확히 일치·접두어·포함 순 정렬), 조건 필터, 추천 순위와 기준 게임 제외
+- `exclude_ids`를 이용한 중복 없는 재추천("다른 게임 5개 추천받기") 및 남은 후보 없음 처리
 - 빈 입력, 누락된 필드, 잘못된 자료형, 존재하지 않는 게임, 후보 없음
 - 추천 요청의 POST 사용
 - 두 개발 화면 출처의 사전 확인 요청과 정상·오류 응답의 CORS 헤더
 - 허용 목록에 없는 출처에는 CORS 허용 헤더를 제공하지 않음
 - 장르 8개의 순서, 장르별 인기·정렬·개수 조건, 전략의 추상 게임 포함, 추리의 Deduction 판정
+- `GET /genres/{key}/games`의 인원·시간 조건 필터링, 인기 게임 우선 정렬, 잘못된 조건·장르 처리
 
 테스트는 저장소의 실제 데이터에 `Catan`이 존재하는 것을 전제로 함. 데이터셋을 교체하면 해당 기준 게임도 점검해야 함.
 
