@@ -25,6 +25,7 @@
 - `/search/natural` returns 5 results; no results → `404 "No games match the selected conditions"` (same text as `/recommend`).
 - Backend modules use the existing dual import pattern (`try: from backend import x` / `except ImportError: import x`) because the Docker image runs from `backend/`.
 - Tests: `uv run python -m unittest discover -s tests -v`. CI has no key; no test may call the real API.
+- Real-key steps: the key is in the repo-root `.env` (git-ignored) as `GEMINI_API_KEY`. Run those commands as `uv run --env-file .env <command>` (wherever a step writes `GEMINI_API_KEY=... uv run`). Never print, log, or commit the key's value; never read `.env` contents into output.
 
 ## Review Focus
 
