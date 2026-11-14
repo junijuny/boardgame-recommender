@@ -21,11 +21,13 @@ uv run --locked uvicorn backend.main:app --reload --port 8000
 
 | 메서드·경로 | 입력 | 성공 응답 |
 | --- | --- | --- |
-| `GET /` | 없음 | 서버 이름, `total_games`, 사용 중인 추천 신호 `signals`, 자연어 검색 가능 여부 `semantic_search` |
+| `GET /` | 없음 | 서버 이름, `total_games`, 사용 중인 추천 신호 `signals`, `GET /games/semantic-search` 사용 가능 여부 `semantic_search`, Gemini 자연어 검색 가능 여부 `natural_search`, 설명 문장 가능 여부 `explanations` (모두 bool) |
 | `GET /games/search` | 쿼리 `query` | 최대 10개 게임 목록. 이름이 정확히 같은 게임 → 검색어로 시작하는 게임 → 포함하는 게임 순, 같은 순위는 리뷰 수 순 |
 | `GET /games/filter` | 쿼리 `players`, `max_time` | 조건을 만족하는 최대 10개 게임, 평점 내림차순 |
 | `POST /recommend` | JSON `game_name`, `players`, `max_time`, 선택 `exclude_ids` | 조건을 만족하는 최대 5개 추천 게임 |
 | `GET /games/semantic-search` | 쿼리 `query`, 선택 `players`, `max_time` | 자연어(한국어 가능) 설명에 맞는 최대 10개 게임. 임베딩 미준비 시 `503` |
+| `POST /search/natural` | JSON `query`, `players`, `max_time`, 선택 `exclude_ids` | 검색어(한국어·영어)에 맞는 최대 5개 게임. 항목은 게임 필드와 `Similarity`, `Score`, `MatchedMechanics`, `MatchedThemes`. 키·임베딩이 없으면 `503` |
+| `POST /explain` | JSON `mode`(`similar` 또는 `query`), `basis`, `game_ids` | `{"reasons": {"<BGGId>": "영어 한 문장"}}`. 키가 없으면 `503` |
 | `GET /games/{bgg_id}` | 경로의 게임 ID(`BGGId`) | 게임 한 개의 상세 정보(설명, 난이도, 인원, 시간, 평점) |
 | `GET /genres` | 없음 | 장르 8개와 장르별 대표 게임 최대 6개 |
 | `GET /genres/{key}/games` | 경로의 장르 `key`, 선택 쿼리 `players`, `max_time`, `exclude_ids` | 조건(최소 평점 5.5, 인원·시간)에 맞는 장르 게임 최대 6개. 리뷰 1,000개 이상 게임 우선, 그 안에서 평점순. `exclude_ids`의 게임은 제외(`?exclude_ids=13&exclude_ids=822`처럼 여러 번 붙임). 없으면 빈 목록 |
@@ -75,6 +77,31 @@ curl -X POST 'http://localhost:8000/recommend' \
 | `Score` | 유사도와 평점을 합친 최종 점수. 추천·자연어 검색 응답에만 포함 |
 | `SharedMechanics`, `SharedThemes` | 기준 게임과 공통인 메커니즘·테마 (드문 것부터 최대 3개). 추천 응답에만 포함 |
 
+### 자연어 검색 (Gemini)
+
+```bash
+curl -X POST 'http://localhost:8000/search/natural' \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"친구들과 가볍게 하는 협력 게임","players":4,"max_time":60}'
+```
+
+- Gemini(`gemini-3.5-flash-lite`)가 검색어를 조건(포함·제외 메커니즘/테마, 난이도 범위, 영어 검색 문장)으로 바꾸고, `gemini-embedding-2`(768차원)로 만든 `data/gemini_embeddings.npz`와 비교함. 인원·시간은 요청 값만 사용함
+- 응답은 추천과 같은 게임 필드에 `Similarity`, `Score`, `MatchedMechanics`, `MatchedThemes`(검색어에서 뽑은 태그 중 게임이 가진 것)를 더한 5개. `exclude_ids`로 이미 본 게임을 빼고 다시 받을 수 있음
+- 검색어는 300자 이하. IP당 60초에 10회까지
+
+### 설명 문장
+
+```bash
+curl -X POST 'http://localhost:8000/explain' \
+  -H 'Content-Type: application/json' \
+  -d '{"mode":"similar","basis":"Catan","game_ids":[822,13]}'
+```
+
+- `mode="similar"`는 `basis`를 기준 게임 이름으로, `mode="query"`는 사용자 검색어로 보고 각 게임이 왜 맞는지 영어 한 문장으로 설명함. 게임 정보(메커니즘·테마·난이도·인원·시간·설명글 앞부분)만 근거로 씀
+- `basis`는 300자 이하, `game_ids`는 1~10개. IP당 60초에 30회까지
+- 응답 예: `{"reasons": {"822": "One English sentence."}}`. 실패하면 화면은 설명 없이 공통 메커니즘 칩을 보여 줌
+- Gemini 호출은 `GEMINI_DAILY_CALL_LIMIT`회(기본 2000, UTC 자정 초기화)로 제한하되, 카운터가 인스턴스 메모리에만 있어 인스턴스가 새로 시작되면 0으로 돌아가는 느슨한 안전장치임. 실제 하드 한도는 Google 쪽 쿼터·예산 알림으로 설정함 ([deploy.md](deploy.md) 참고). 같은 검색어·설명은 서버 메모리에 캐시함
+
 ### 장르별 대표 게임
 
 ```bash
@@ -110,6 +137,15 @@ curl 'http://localhost:8000/genres'
 | 필수 필드 누락 또는 잘못된 자료형 | 422 | FastAPI 검증 오류 목록 |
 | 추천 주소를 GET으로 호출 | 405 | `Method Not Allowed` |
 | 존재하지 않는 게임 ID로 상세 조회 | 404 | `Game not found` |
+| 자연어 검색 검색어가 너무 김(300자 초과) | 400 | `Search query is too long` |
+| 설명 요청의 `basis`가 비었거나 300자 초과, `game_ids`가 1~10개가 아님 | 400 | `Basis cannot be empty` / `Basis is too long` / `Provide between 1 and 10 game ids` |
+| `GEMINI_API_KEY` 또는 `gemini_embeddings.npz`가 없을 때 `POST /search/natural` | 503 | `Natural language search is not available` |
+| `GEMINI_API_KEY`가 없을 때 `POST /explain` | 503 | `Explanations are not available` |
+| `POST /search/natural`이 IP 제한(분당 10회) 초과 | 429 | `Too many requests` |
+| `POST /explain`이 IP 제한(분당 30회) 초과 | 429 | `Too many requests` |
+| Gemini 호출 실패(타임아웃 등) 또는 일일 호출 상한(`GEMINI_DAILY_CALL_LIMIT`) 소진 | 503 | `Natural language search is temporarily unavailable` / `Explanations are temporarily unavailable` |
+| 자연어 검색 조건에 맞는 게임이 없음 | 404 | `No games match the selected conditions` |
+| 설명 요청의 `mode`가 `similar`인데 `basis`가 알려진 게임이 아님 | 404 | `Game not found` (`game_ids`에 없는 ID는 오류 없이 무시되어 `200`) |
 | 임베딩 파일이 없거나 `semantic` 패키지 미설치 상태에서 자연어 검색 | 503 | `Semantic search is not available` |
 | 존재하지 않는 장르 키로 장르 게임 조회 | 404 | `Genre not found` |
 

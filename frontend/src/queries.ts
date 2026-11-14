@@ -11,8 +11,10 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
-  errorResponse, getGameDetail, getGenres, getOtherGenreGames, getRandomPhotos, recommend, searchGames,
+  errorResponse, explain, getGameDetail, getGenres, getOtherGenreGames, getRandomPhotos, getServerInfo, naturalSearch,
+  recommend, searchGames,
 } from "./api";
+import type { ExplainRequest } from "./types";
 
 // 장르 8개와 장르별 대표 게임 (서버가 켜질 때 한 번 계산되므로 다시 불러올 필요 없음)
 export function useGenres() {
@@ -65,6 +67,33 @@ export function useGenreRefresh() {
 // 비슷한 게임 추천 (POST 요청이라 useMutation 사용)
 export function useRecommend() {
   return useMutation({ mutationFn: recommend });
+}
+
+// 서버 정보 (자연어 검색·추천 이유 기능이 켜져 있는지). 한 번만 불러온다.
+export function useServerInfo() {
+  return useQuery({
+    queryKey: ["server-info"],
+    queryFn: getServerInfo,
+    staleTime: Infinity,
+    retry: 1,
+  });
+}
+
+// 자연어 검색 (POST 요청이라 useMutation 사용)
+export function useNaturalSearch() {
+  return useMutation({ mutationFn: naturalSearch });
+}
+
+// 결과 게임들의 한 문장 추천 이유. req가 null이면 요청하지 않는다.
+// 같은 요청은 다시 보내지 않는다 (staleTime: Infinity). 실패해도 재시도 없이 조용히 넘어간다.
+export function useExplanations(req: ExplainRequest | null) {
+  return useQuery({
+    queryKey: ["explain", req?.mode, req?.basis, ...(req?.game_ids ?? [])],
+    queryFn: () => explain(req!),
+    enabled: req != null,
+    staleTime: Infinity,
+    retry: false,
+  });
 }
 
 // 값이 delay(ms) 동안 바뀌지 않아야 그 값을 돌려준다 (검색어 입력 지연용)

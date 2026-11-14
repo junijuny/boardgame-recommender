@@ -30,6 +30,7 @@ USER_RATINGS_PATH = DATA_DIR / "user_ratings.csv"
 
 TFIDF_CACHE_PATH = DATA_DIR / "tfidf_cache.joblib"
 EMBEDDINGS_PATH = DATA_DIR / "embeddings.npz"
+GEMINI_EMBEDDINGS_PATH = DATA_DIR / "gemini_embeddings.npz"
 CF_PATH = DATA_DIR / "cf_factors.npz"
 
 CATEGORY_COLUMNS = [
