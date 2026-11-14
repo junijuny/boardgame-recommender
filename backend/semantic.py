@@ -27,22 +27,30 @@ def is_installed() -> bool:
     return importlib.util.find_spec("sentence_transformers") is not None
 
 
-def build_passages(df: pd.DataFrame, mechanics, themes) -> list[str]:
-    """게임 이름 + 메커니즘 + 테마 + 설명글을 하나의 문서로 만듦"""
+def game_documents(df: pd.DataFrame, mechanics, themes) -> list[tuple[str, str]]:
+    """게임마다 (이름, 본문) 쌍을 만듦. 본문 = 메커니즘 + 테마 + 설명글"""
     mech_names = mechanics.names
     theme_names = themes.names
-    passages = []
+    docs = []
     for i, row in enumerate(df.itertuples(index=False)):
         mech = ", ".join(mech_names[mechanics.binary[i].indices])
         theme = ", ".join(theme_names[themes.binary[i].indices])
-        parts = [f"{row.Name}."]
+        parts = []
         if mech:
             parts.append(f"Mechanics: {mech}.")
         if theme:
             parts.append(f"Themes: {theme}.")
         parts.append(str(row.Description)[:MAX_DESCRIPTION_CHARS])
-        passages.append(PASSAGE_PREFIX + " ".join(parts))
-    return passages
+        docs.append((row.Name, " ".join(parts)))
+    return docs
+
+
+def build_passages(df: pd.DataFrame, mechanics, themes) -> list[str]:
+    """게임 이름 + 메커니즘 + 테마 + 설명글을 하나의 문서로 만듦"""
+    return [
+        f"{PASSAGE_PREFIX}{name}. {body}"
+        for name, body in game_documents(df, mechanics, themes)
+    ]
 
 
 def load_model(device: str | None = None):
