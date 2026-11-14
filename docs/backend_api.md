@@ -80,7 +80,9 @@ curl -X POST 'http://localhost:8000/recommend' \
 ### 자연어 검색 (Gemini)
 
 ```bash
-curl -X POST 'http://localhost:8000/search/natural' \n  -H 'Content-Type: application/json' \n  -d '{"query":"친구들과 가볍게 하는 협력 게임","players":4,"max_time":60}'
+curl -X POST 'http://localhost:8000/search/natural' \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"친구들과 가볍게 하는 협력 게임","players":4,"max_time":60}'
 ```
 
 - Gemini(`gemini-3.5-flash-lite`)가 검색어를 조건(포함·제외 메커니즘/테마, 난이도 범위, 영어 검색 문장)으로 바꾸고, `gemini-embedding-2`(768차원)로 만든 `data/gemini_embeddings.npz`와 비교함. 인원·시간은 요청 값만 사용함
@@ -90,7 +92,9 @@ curl -X POST 'http://localhost:8000/search/natural' \n  -H 'Content-Type: applic
 ### 설명 문장
 
 ```bash
-curl -X POST 'http://localhost:8000/explain' \n  -H 'Content-Type: application/json' \n  -d '{"mode":"similar","basis":"Catan","game_ids":[822,13]}'
+curl -X POST 'http://localhost:8000/explain' \
+  -H 'Content-Type: application/json' \
+  -d '{"mode":"similar","basis":"Catan","game_ids":[822,13]}'
 ```
 
 - `mode="similar"`는 `basis`를 기준 게임 이름으로, `mode="query"`는 사용자 검색어로 보고 각 게임이 왜 맞는지 영어 한 문장으로 설명함. 게임 정보(메커니즘·테마·난이도·인원·시간·설명글 앞부분)만 근거로 씀
