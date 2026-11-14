@@ -20,7 +20,7 @@ interface HeaderProps {
 }
 
 const MENU: { screen: Screen; label: string }[] = [
-  { screen: "recommend", label: "Find similar games" },
+  { screen: "recommend", label: "Find games" },
   { screen: "genres", label: "Browse by genre" },
 ];
 
