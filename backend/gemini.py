@@ -26,6 +26,8 @@ EXPLAIN_MODEL = "gemini-3.5-flash-lite"
 EMBED_MODEL = "gemini-embedding-2"
 EMBED_DIM = 768
 TIMEOUT_SECONDS = 10
+EXTRACT_MAX_TOKENS = 512
+EXPLAIN_MAX_TOKENS = 1024
 
 
 class GeminiError(Exception):
@@ -87,11 +89,11 @@ Allowed themes: {themes}
 Request: {query}
 """
 
-EXPLAIN_PROMPT = """\
-You write short reasons why recommended board games fit.
+EXPLAIN_PROMPT = """You write short reasons why recommended board games fit.
 Always write in English, even when the basis is in another language (translate its meaning).
 Write exactly one English sentence (at most 25 words) per game, using only the facts given.
 Never mention facts that are not in the input.
+Never restate the player count, play time or difficulty; the game card already shows them.
 {mode_rule}
 Return one entry per game, keyed by its bgg_id.
 Basis: {basis}
@@ -100,8 +102,14 @@ Games: {games}
 """
 
 MODE_RULES = {
-    "similar": "For each game, say what it shares with the basis game.",
-    "query": "For each game, say which part of the user's request it fits.",
+    "similar": (
+        "For each game, describe in natural words what play experience it shares with the basis game, "
+        "naming at most two shared features. Do not list mechanics separated by commas."
+    ),
+    "query": (
+        "For each game, say what about its actual gameplay or theme delivers what the user asked for "
+        "(for example how cooperation or tension works in it), grounded in its description, mechanics and themes."
+    ),
 }
 
 
@@ -155,7 +163,7 @@ class GoogleGeminiClient:
         # HttpOptions.timeout 단위는 밀리초
         return self._types.HttpOptions(timeout=TIMEOUT_SECONDS * 1000)
 
-    def _generate(self, model: str, prompt: str, schema: dict) -> dict:
+    def _generate(self, model: str, prompt: str, schema: dict, max_output_tokens: int) -> dict:
         t = self._types
         try:
             resp = self._client.models.generate_content(
@@ -164,6 +172,7 @@ class GoogleGeminiClient:
                 config=t.GenerateContentConfig(
                     response_mime_type="application/json",
                     response_schema=schema,
+                    max_output_tokens=max_output_tokens,
                     thinking_config=t.ThinkingConfig(thinking_level=t.ThinkingLevel.MINIMAL),
                     http_options=self._http_options(),
                 ),
@@ -190,7 +199,7 @@ class GoogleGeminiClient:
                 query=query,
                 mechanics=json.dumps(list(mechanic_names), ensure_ascii=False),
                 themes=json.dumps(list(theme_names), ensure_ascii=False),
-            ), schema)
+            ), schema, EXTRACT_MAX_TOKENS)
         return _intent_from_dict(data)
 
     def _embed(self, texts: list[str]) -> np.ndarray:
@@ -243,9 +252,13 @@ class GoogleGeminiClient:
             basis_facts=json.dumps(basis_facts, ensure_ascii=False),
             games=json.dumps(list(games), ensure_ascii=False),
         )
-        data = self._generate(EXPLAIN_MODEL, prompt, schema)
+        data = self._generate(EXPLAIN_MODEL, prompt, schema, EXPLAIN_MAX_TOKENS)
         try:
-            return {int(r["bgg_id"]): str(r["reason"]) for r in data["reasons"]}
+            return {
+                int(r["bgg_id"]): r["reason"]
+                for r in data["reasons"]
+                if isinstance(r["reason"], str)
+            }
         except (KeyError, TypeError, ValueError) as exc:
             raise GeminiError(f"Unexpected explanation response: {exc}") from exc
 
