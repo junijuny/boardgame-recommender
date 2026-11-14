@@ -11,6 +11,23 @@ from backend.limits import DailyBudget
 from tests.gemini_fake import FakeGeminiClient
 
 
+class IntentParsingTest(unittest.TestCase):
+    def test_null_and_string_fields_are_coerced(self):
+        i = gemini._intent_from_dict({
+            "search_text": None, "include_mechanics": "Dice Rolling",
+            "exclude_themes": [1, None, "War"], "weight_min": None, "weight_max": 2,
+        })
+        self.assertEqual(i.search_text, "")
+        self.assertEqual(i.include_mechanics, ("Dice Rolling",))
+        self.assertEqual(i.exclude_themes, ("1", "War"))
+        self.assertEqual((i.weight_min, i.weight_max), (None, 2.0))
+        self.assertEqual(gemini._intent_from_dict({}).search_text, "")
+
+    def test_bad_weight_raises_gemini_error(self):
+        with self.assertRaises(gemini.GeminiError):
+            gemini._intent_from_dict({"weight_min": "abc"})
+
+
 class GeminiModuleTest(unittest.TestCase):
     def setUp(self):
         self._client = gemini._client

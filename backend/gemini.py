@@ -119,6 +119,30 @@ def _opt_float(value) -> float | None:
     return None if value is None else float(value)
 
 
+def _tags(value) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        return (value,)
+    return tuple(str(v) for v in value if v is not None)
+
+
+def _intent_from_dict(data: dict) -> QueryIntent:
+    try:
+        search_text = data.get("search_text")
+        return QueryIntent(
+            search_text="" if search_text is None else str(search_text),
+            include_mechanics=_tags(data.get("include_mechanics")),
+            exclude_mechanics=_tags(data.get("exclude_mechanics")),
+            include_themes=_tags(data.get("include_themes")),
+            exclude_themes=_tags(data.get("exclude_themes")),
+            weight_min=_opt_float(data.get("weight_min")),
+            weight_max=_opt_float(data.get("weight_max")),
+        )
+    except (TypeError, ValueError, AttributeError) as exc:
+        raise GeminiError(f"Unexpected intent response: {exc}") from exc
+
+
 class GoogleGeminiClient:
     def __init__(self, api_key: str):
         from google import genai
@@ -166,18 +190,7 @@ class GoogleGeminiClient:
                 mechanics=json.dumps(list(mechanic_names), ensure_ascii=False),
                 themes=json.dumps(list(theme_names), ensure_ascii=False),
             ), schema)
-        try:
-            return QueryIntent(
-                search_text=str(data["search_text"]),
-                include_mechanics=tuple(data.get("include_mechanics") or ()),
-                exclude_mechanics=tuple(data.get("exclude_mechanics") or ()),
-                include_themes=tuple(data.get("include_themes") or ()),
-                exclude_themes=tuple(data.get("exclude_themes") or ()),
-                weight_min=_opt_float(data.get("weight_min")),
-                weight_max=_opt_float(data.get("weight_max")),
-            )
-        except (KeyError, TypeError, ValueError, AttributeError) as exc:
-            raise GeminiError(f"Unexpected intent response: {exc}") from exc
+        return _intent_from_dict(data)
 
     def _embed(self, texts: list[str]) -> np.ndarray:
         t = self._types
