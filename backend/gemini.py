@@ -47,6 +47,11 @@ class QueryIntent:
     exclude_themes: tuple[str, ...] = ()
     weight_min: float | None = None
     weight_max: float | None = None
+    # 순위 기준. relevance = 설명글 유사도, 나머지는 리뷰 수·평점·출시 연도 순
+    sort: str = "relevance"
+
+
+SORT_OPTIONS = ("relevance", "popularity", "rating", "newest")
 
 
 def query_text(search_text: str) -> str:
@@ -82,6 +87,14 @@ Rules:
   genre, core mechanisms, how players interact, and the mood. Describe the kind of game, not a title.
   Do not use proper nouns or game titles (e.g. turn "like Mafia" into hidden roles and bluffing).
   Do not add requirements the request does not imply. Translate Korean meaning into English.
+  If the request has no genre or gameplay aspect at all (only "famous", "best rated", "newest" etc.),
+  set search_text to an empty string.
+- sort: how to rank the results.
+  "popularity" for famous / popular / well-known / classic / everyone plays it (e.g. 유명한, 인기 있는, 국민 게임).
+  "rating" for best rated / highest rated / masterpiece / best ever (e.g. 평점 높은, 명작). This means the BGG
+  user rating, NOT scoring points inside a game.
+  "newest" for new / recent / latest releases (e.g. 최신, 요즘 나온).
+  "relevance" for everything else (default).
 - Ignore player counts and play time; the UI supplies them.
 - Weight is BGG complexity on a 1-5 scale. Map "light/easy" (e.g. 가벼운) to a low range such as 1.0-2.5,
   and "heavy/complex" to a high range such as 3.5-5.0. Leave weight_min/weight_max null if not implied.
@@ -111,7 +124,10 @@ MODE_RULES = {
     ),
     "query": (
         "For each game, say what about its actual gameplay or theme delivers what the user asked for "
-        "(for example how cooperation or tension works in it), grounded in its description, mechanics and themes."
+        "(for example how cooperation or tension works in it), grounded in its description, mechanics and themes. "
+        "If the request asks for famous, popular, highly rated or new games, you may cite its BGG review count "
+        "(reviews), BGG rating (rating) or release year (year) from the facts as part of the reason. "
+        "Round review counts in words (e.g. 'over 100,000 BGG reviews', 'about 45,000 reviews')."
     ),
 }
 
@@ -139,6 +155,12 @@ def _tags(value) -> tuple[str, ...]:
     return tuple(str(v) for v in value if v is not None)
 
 
+def _sort(value) -> str:
+    """모르는 값은 기본(relevance)으로"""
+    value = str(value or "").strip().lower()
+    return value if value in SORT_OPTIONS else "relevance"
+
+
 def _intent_from_dict(data: dict) -> QueryIntent:
     try:
         search_text = data.get("search_text")
@@ -150,6 +172,7 @@ def _intent_from_dict(data: dict) -> QueryIntent:
             exclude_themes=_tags(data.get("exclude_themes")),
             weight_min=_opt_float(data.get("weight_min")),
             weight_max=_opt_float(data.get("weight_max")),
+            sort=_sort(data.get("sort")),
         )
     except (TypeError, ValueError, AttributeError) as exc:
         raise GeminiError(f"Unexpected intent response: {exc}") from exc
@@ -195,6 +218,7 @@ class GoogleGeminiClient:
                 "exclude_themes": _tag_array(),
                 "weight_min": {"type": "NUMBER", "nullable": True},
                 "weight_max": {"type": "NUMBER", "nullable": True},
+                "sort": {"type": "STRING", "enum": list(SORT_OPTIONS)},
             },
             "required": ["search_text"],
         }

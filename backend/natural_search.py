@@ -20,6 +20,10 @@ MIN_RATING = 5.5
 # 리뷰가 적은 무명 게임은 설명글이 짧고 일반적이라("우주를 탐험하는 게임입니다") 짧은 질의와
 # 가장 가깝게 나와 대표 게임을 밀어낸다. 장르 화면과 같은 기준(리뷰 1,000개 이상)으로 후보를 제한
 MIN_REVIEWS = 1000
+# "가장 유명한/평점 높은/최신" 질의는 설명글 유사도가 아니라 이 열의 값 순으로 고른다
+SORT_COLUMNS = {"popularity": "NumUserRatings", "rating": "BayesAvgRating", "newest": "YearPublished"}
+# 순위 질의에 장르 묘사도 있으면("가장 유명한 우주 게임") 임베딩 상위 이 개수 안에서만 정렬
+SORT_POOL = 50
 EMBEDDING_WEIGHT = 0.8   # 유사도 중 임베딩 비중 (나머지는 태그 일치)
 SIMILARITY_WEIGHT = 0.75  # 최종 점수 중 유사도 비중 (나머지는 평점)
 CACHE_SIZE = 256
@@ -119,14 +123,21 @@ def sanitize_intent(intent: gemini.QueryIntent, raw_query: str) -> gemini.QueryI
     if low is not None and high is not None and low > high:
         low, high = high, low
 
+    sort = intent.sort if intent.sort in gemini.SORT_OPTIONS else "relevance"
+    search_text = (intent.search_text or "").strip()
+    # 순위 질의("가장 유명한 게임")는 장르 묘사가 없을 수 있다 → 빈 문장이면 임베딩 없이 정렬만 한다
+    if not search_text and sort == "relevance":
+        search_text = raw_query
+
     return gemini.QueryIntent(
-        search_text=(intent.search_text or "").strip() or raw_query,
+        search_text=search_text,
         include_mechanics=_clean_tags(intent.include_mechanics, mech_vocab, set(exclude_mechanics)),
         exclude_mechanics=exclude_mechanics,
         include_themes=_clean_tags(intent.include_themes, theme_vocab, set(exclude_themes)),
         exclude_themes=exclude_themes,
         weight_min=low,
         weight_max=high,
+        sort=sort,
     )
 
 
@@ -174,7 +185,7 @@ def natural_search(
         raise RuntimeError("Natural language search is not available")
 
     intent = _get_intent(client, query)
-    query_vec = _get_query_vector(client, intent.search_text, index.vectors.shape[1])
+    sort_column = SORT_COLUMNS.get(intent.sort)
 
     df = eng.df
     mask = eng._condition_mask(players, max_time, MIN_RATING).to_numpy() & index.present
@@ -192,16 +203,29 @@ def natural_search(
             hit = feats.binary[:, _tag_columns(feats, names)].sum(axis=1)
             mask &= np.asarray(hit).ravel() == 0
 
+    include_total = len(intent.include_mechanics) + len(intent.include_themes)
+    if sort_column and include_total:
+        # "가장 유명한 협력 게임": 장르 태그가 있는 게임 안에서만 순위를 매긴다
+        has_tag = np.zeros(len(df), dtype=bool)
+        for feats, names in ((eng.mechanics, intent.include_mechanics), (eng.themes, intent.include_themes)):
+            if names:
+                has_tag |= np.asarray(feats.binary[:, _tag_columns(feats, names)].sum(axis=1)).ravel() > 0
+        mask &= has_tag
+
     cand_idx = np.flatnonzero(mask)
     if len(cand_idx) == 0:
         return []
 
-    raw = (index.vectors @ query_vec)[cand_idx]
-    low, high = np.median(raw), raw.max()
-    embedding = np.clip((raw - low) / max(high - low, 1e-6), 0.0, 1.0)
+    # 장르 묘사가 없는 순위 질의("가장 유명한 게임")는 임베딩을 계산하지 않는다 (Gemini 호출도 줄어듦)
+    embedding = None
+    if intent.search_text:
+        query_vec = _get_query_vector(client, intent.search_text, index.vectors.shape[1])
+        raw = (index.vectors @ query_vec)[cand_idx]
+        low, high = np.median(raw), raw.max()
+        embedding = np.clip((raw - low) / max(high - low, 1e-6), 0.0, 1.0)
 
     matched: dict[str, np.ndarray] = {}
-    include_total = len(intent.include_mechanics) + len(intent.include_themes)
+    tag_ratio = None
     if include_total:
         tag_hits = np.zeros(len(cand_idx))
         for key, feats, names in (
@@ -212,13 +236,27 @@ def natural_search(
                 sub = feats.binary[cand_idx][:, _tag_columns(feats, names)].toarray() > 0
                 matched[key] = sub
                 tag_hits += sub.sum(axis=1)
-        similarity = EMBEDDING_WEIGHT * embedding + (1 - EMBEDDING_WEIGHT) * tag_hits / include_total
-    else:
+        tag_ratio = tag_hits / include_total
+    if embedding is not None and tag_ratio is not None:
+        similarity = EMBEDDING_WEIGHT * embedding + (1 - EMBEDDING_WEIGHT) * tag_ratio
+    elif embedding is not None:
         similarity = embedding
-    score = SIMILARITY_WEIGHT * similarity + (1 - SIMILARITY_WEIGHT) * eng.rating_score(cand_idx)
+    elif tag_ratio is not None:
+        similarity = tag_ratio
+    else:
+        similarity = np.zeros(len(cand_idx))
+
+    if sort_column:
+        picked = _sorted_positions(cand_idx, similarity, sort_column, top_n, narrow=embedding is not None)
+        # 정렬 질의의 Score는 순위 (1.0, 0.8, ... 1위가 가장 높음)
+        score = np.zeros(len(cand_idx))
+        score[picked] = 1.0 - np.arange(len(picked)) / max(len(picked), 1)
+    else:
+        score = SIMILARITY_WEIGHT * similarity + (1 - SIMILARITY_WEIGHT) * eng.rating_score(cand_idx)
+        picked = eng.diversify(cand_idx, score, top_n)
 
     results = []
-    for pos in eng.diversify(cand_idx, score, top_n):
+    for pos in picked:
         record = df.loc[int(cand_idx[pos]), eng.DEFAULT_COLUMNS].to_dict()
         record["Similarity"] = float(similarity[pos])
         record["Score"] = float(score[pos])
@@ -228,5 +266,21 @@ def natural_search(
         record["MatchedThemes"] = (
             [n for n, h in zip(intent.include_themes, matched["theme"][pos]) if h] if "theme" in matched else []
         )
+        record["SortedBy"] = intent.sort
         results.append(record)
     return results
+
+
+def _sorted_positions(
+    cand_idx: np.ndarray, similarity: np.ndarray, column: str, top_n: int, narrow: bool
+) -> np.ndarray:
+    """정렬 질의: (장르 묘사가 있으면 유사도 상위 SORT_POOL개 안에서) column 값이 큰 순, 같으면 리뷰 수 순.
+    반환값은 cand_idx 안에서의 위치 배열."""
+    pos = np.arange(len(cand_idx))
+    if narrow:
+        pos = np.argsort(-similarity, kind="stable")[:SORT_POOL]
+    df = eng.df
+    values = df[column].to_numpy(dtype=float)[cand_idx[pos]]
+    reviews = df["NumUserRatings"].to_numpy(dtype=float)[cand_idx[pos]]
+    order = np.lexsort((-reviews, -values))  # 마지막 키가 1순위
+    return pos[order][:top_n]

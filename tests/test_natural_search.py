@@ -168,5 +168,81 @@ class NaturalSearchTest(unittest.TestCase):
         self.assertEqual(s.include_themes, ("Economic",))
 
 
+class SortedSearchTest(unittest.TestCase):
+    """'가장 유명한/평점 높은/최신' 질의: 설명글 유사도가 아니라 리뷰 수·평점·연도 순으로 고른다"""
+
+    def setUp(self):
+        self._client = gemini._client
+        self._index = ns._index
+        ns.clear_caches()
+        e0 = np.zeros(8, dtype=np.float32)
+        e0[0] = 1.0
+        self.fake = FakeGeminiClient(query_vector=e0)
+        set_client(self.fake)
+        ns.set_index(make_index(idx_of("Pandemic")))
+
+    def tearDown(self):
+        gemini._client = self._client
+        ns._index = self._index
+        ns.clear_caches()
+
+    def expected(self, column, players=4, max_time=120, tag=None):
+        df = eng.df
+        mask = eng._condition_mask(players, max_time, 5.5) & (df["NumUserRatings"] >= ns.MIN_REVIEWS)
+        if tag is not None:
+            col = int(np.flatnonzero(eng.mechanics.names == tag)[0])
+            mask &= np.asarray(eng.mechanics.binary[:, col].toarray()).ravel() > 0
+        top = df[mask].sort_values([column, "NumUserRatings"], ascending=False, kind="stable")
+        return [int(i) for i in top["BGGId"].head(5)]
+
+    def test_popularity_without_genre_sorts_by_reviews_and_skips_embedding(self):
+        self.fake.intent = QueryIntent("", sort="popularity")
+        games = natural_search("가장 유명한 게임", 4, 120)
+        self.assertEqual([g["BGGId"] for g in games], self.expected("NumUserRatings"))
+        self.assertTrue(all(g["SortedBy"] == "popularity" for g in games))
+        self.assertFalse(any(c[0] == "embed_query" for c in self.fake.calls))
+
+    def test_rating_and_newest_sort_by_their_columns(self):
+        self.fake.intent = QueryIntent("", sort="rating")
+        self.assertEqual([g["BGGId"] for g in natural_search("best rated", 4, 120)], self.expected("BayesAvgRating"))
+        self.fake.intent = QueryIntent("", sort="newest")
+        games = natural_search("newest", 4, 120)
+        self.assertEqual([g["BGGId"] for g in games], self.expected("YearPublished"))
+        self.assertTrue(all(g["SortedBy"] == "newest" for g in games))
+
+    def test_popularity_within_include_tag(self):
+        self.fake.intent = QueryIntent("", include_mechanics=("Cooperative Game",), sort="popularity")
+        games = natural_search("가장 유명한 협력 게임", 4, 120)
+        self.assertEqual([g["BGGId"] for g in games], self.expected("NumUserRatings", tag="Cooperative Game"))
+        for g in games:
+            self.assertEqual(g["MatchedMechanics"], ["Cooperative Game"])
+
+    def test_genre_text_narrows_pool_before_sorting(self):
+        # search_text가 있으면 임베딩 상위 SORT_POOL개 안에서만 정렬 → 가장 비슷한 게임(Pandemic)이 반드시 포함
+        self.fake.intent = QueryIntent("cooperative disease fighting", sort="popularity")
+        games = natural_search("가장 유명한 전염병 게임", 4, 120)
+        self.assertIn(int(eng.df.at[idx_of("Pandemic"), "BGGId"]), [g["BGGId"] for g in games])
+        reviews = [g["NumUserRatings"] for g in games]
+        self.assertEqual(reviews, sorted(reviews, reverse=True))
+        self.assertTrue(any(c[0] == "embed_query" for c in self.fake.calls))
+
+    def test_relevance_keeps_similarity_ranking(self):
+        self.fake.intent = QueryIntent("co-op")
+        games = natural_search("co-op", 4, 60)
+        self.assertEqual(games[0]["Name"], "Pandemic")
+        self.assertTrue(all(g["SortedBy"] == "relevance" for g in games))
+
+    def test_sanitize_keeps_blank_text_only_for_sorted_queries(self):
+        self.assertEqual(sanitize_intent(QueryIntent(" ", sort="popularity"), "가장 유명한 게임").search_text, "")
+        self.assertEqual(sanitize_intent(QueryIntent(" "), "원문").search_text, "원문")
+
+    def test_refresh_excludes_shown_games_in_sorted_mode(self):
+        self.fake.intent = QueryIntent("", sort="popularity")
+        first = natural_search("가장 유명한 게임", 4, 120)
+        second = natural_search("가장 유명한 게임", 4, 120, exclude_ids=[g["BGGId"] for g in first])
+        self.assertTrue(second)
+        self.assertFalse({g["BGGId"] for g in first} & {g["BGGId"] for g in second})
+
+
 if __name__ == "__main__":
     unittest.main()

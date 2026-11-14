@@ -155,6 +155,12 @@ export default function DescriptionSearch({ onShowDetail }: DescriptionSearchPro
             onStartOver={handleSearch}
           />
         )}
+        {/* "최신 게임" 검색: 데이터셋이 2021년 출시작까지라 그보다 새 게임은 나올 수 없음을 알린다 */}
+        {search.isSuccess && search.data[0]?.SortedBy === "newest" && (
+          <p className="rounded-xl border border-line bg-card px-4 py-3 text-[15px] text-ink/80">
+            Our game data covers releases up to {DATA_LAST_YEAR}, so these are the newest games in it.
+          </p>
+        )}
         {search.isSuccess && (
           <ResultList
             items={search.data.map((g) => ({ game: g, chips: [...g.MatchedMechanics, ...g.MatchedThemes].slice(0, 3) }))}
@@ -172,6 +178,9 @@ export default function DescriptionSearch({ onShowDetail }: DescriptionSearchPro
     </div>
   );
 }
+
+// 게임 데이터(BGG 데이터셋)에 들어 있는 가장 최근 출시 연도. 데이터를 새로 받으면 함께 바꾼다
+const DATA_LAST_YEAR = 2021;
 
 // 결과 위의 조건 요약. 예) 'Matching "co-op, no dice", 4 players, up to 1 hr'
 function summarize({ query, players, max_time }: NaturalSearchRequest) {
