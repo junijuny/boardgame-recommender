@@ -188,7 +188,7 @@ boardgame-recommender/
 ├── frontend/                    # React 프론트엔드 (Vite)
 │   ├── .env.example             # VITE_API_URL 예시
 │   ├── index.html               # HTML 진입점 (파비콘 연결)
-│   ├── public/                  # 파비콘(favicon.png, favicon.ico) 등 정적 파일
+│   ├── public/                  # 파비콘(favicon.png) 등 정적 파일
 │   └── src/
 │       ├── App.jsx              # 화면 전환 (시작 / 추천 / 장르) + 상세 팝업
 │       ├── screens/             # StartScreen, RecommendScreen, GenreScreen

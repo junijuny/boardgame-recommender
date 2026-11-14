@@ -1,0 +1,22 @@
+{
+  // 타입 검사 전용 설정. 실제 변환·번들은 Vite가 하고, tsc는 오류만 확인한다.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "jsx": "react-jsx",
+    "types": ["vite/client"],
+
+    // tsc가 .js 파일을 만들지 않게 함 (만들면 .tsx보다 먼저 읽혀서 옛 코드가 실행될 수 있음)
+    "noEmit": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+
+    "strict": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src"]
+}

@@ -192,7 +192,7 @@
   - [x] 3. **추천 이유 표시**: 기준 게임과 공통인 메커니즘·테마를 응답에 포함.
   - [x] 4. **오프라인 평가**: 학습에서 제외한 사용자 1,000명 기준 HitRate@10이 TF-IDF 0.134 → 하이브리드 0.450.
   - [x] 5. **자연어 검색 API** (`GET /games/semantic-search`, 선택 기능): 한국어 문장으로 게임 검색.
-  - [x] 6. **기능·품질·배포 고도화**: 장르별 인원·시간 맞춤 추천(`GET /genres/{key}/games`, 장르명·설명 영문 반환), 다른 게임 5개 새로 추천받기(`exclude_ids`), 검색 시 정확히 일치하는 이름 우선 정렬, GitHub Actions CI 백엔드 자동 테스트(`.github/workflows/test.yml`), Google Cloud Run 자동 배포(`.github/workflows/deploy-backend.yml`) 및 백엔드 워밍업(`warmupServer`), 주사위 파비콘(`favicon.png`, `favicon.ico`) 적용.
+  - [x] 6. **기능·품질·배포 고도화**: 장르별 인원·시간 맞춤 추천(`GET /genres/{key}/games`, 장르명·설명 영문 반환), 다른 게임 5개 새로 추천받기(`exclude_ids`), 검색 시 정확히 일치하는 이름 우선 정렬, GitHub Actions CI 백엔드 자동 테스트(`.github/workflows/test.yml`), Google Cloud Run 자동 배포(`.github/workflows/deploy-backend.yml`) 및 백엔드 워밍업(`warmupServer`), 주사위 파비콘(`favicon.png`) 적용.
 
 ---
 
