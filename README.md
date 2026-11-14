@@ -53,6 +53,7 @@
 | **시작 화면** | 이용 방법 3단계 안내, "비슷한 게임 추천받기" / "장르별로 둘러보기" 선택 |
 | **추천 화면** | 게임 이름 자동완성 검색(정확히 일치하는 이름 우선) → 인원(2\~6명)·플레이 시간(30분\~2시간 이하) 선택 → 비슷한 게임 Top 5와 공통 메커니즘 표시, "다른 게임 5개 추천받기" 지원 |
 | **장르 화면** | 전략·가족·파티·테마·워게임·어린이·카드게임·추리 8개 장르별 대표 게임 (리뷰 1,000개 이상 중 평점 상위 6개) + 인원(1\~10명)·최대 시간(15분\~4시간) 조건별 맞춤 추천 |
+| **Find games 화면** | "By game"(비슷한 게임) / "By description"(원하는 분위기를 한국어·영어로 설명하면 Gemini가 조건을 이해해 Top 5 추천) 탭. 각 결과 아래에 이유를 영어 한 문장으로 표시 (`GEMINI_API_KEY`가 없으면 설명 탭은 숨겨지고 공통 메커니즘 칩으로 대체) |
 | **게임 상세 팝업** | 어느 화면에서든 게임을 누르면 인원·시간·난이도·평점·설명·BoardGameGeek 링크를 보여 주고, 그 게임 기준으로 바로 추천받기 |
 
 백엔드에는 화면에서 아직 쓰지 않는 **자연어(한국어 가능) 게임 검색 API** (`GET /games/semantic-search`)도 있습니다. 선택 패키지를 설치해야 동작합니다. 전체 API 목록은 [docs/backend_api.md](docs/backend_api.md)를 참고하세요.
@@ -264,6 +265,7 @@ uv run python -m unittest discover -s tests -v
 ```
 
 ### 선택 기능
+- **Gemini 자연어 검색·설명**: 루트 `.env`에 `GEMINI_API_KEY=...` 후 `uv run --env-file .env uvicorn backend.main:app --reload --port 8000` ([docs/setup.md](docs/setup.md), 배포 시 시크릿 등록은 [docs/deploy.md](docs/deploy.md))
 - **자연어 검색 활성화**: `uv sync --extra semantic` 후 `uv run --extra semantic uvicorn backend.main:app --reload`
 - **임베딩·협업 필터링 재생성, 성능 평가**: [docs/recommendation_pipeline.md](docs/recommendation_pipeline.md)
 - **배포**: [docs/deploy.md](docs/deploy.md)

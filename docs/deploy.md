@@ -39,6 +39,15 @@ flowchart LR
    - 속성 조건: `assertion.repository == '<소유자>/<저장소>'`
    - 서비스 계정에 `repository` 속성 기준으로 액세스 권한 부여
 
+### Gemini API 키 (자연어 검색·설명)
+
+1. **`main`에 merge하기 전에** GitHub 저장소 **Settings → Secrets and variables → Actions** 에 저장소 시크릿 `GEMINI_API_KEY`를 등록합니다. 등록 전에 배포되면 키가 비어 새 기능(`/search/natural`, `/explain`)만 `503`이고 기존 기능은 정상입니다.
+2. 워크플로가 `--set-env-vars "ALLOWED_ORIGINS=...,GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}"`로 키를 Cloud Run에 전달합니다.
+3. `--set-env-vars`는 기존 환경 변수를 **모두 덮어씁니다**. Cloud Run 콘솔에서 손으로 넣은 값은 다음 배포 때 사라지므로, 필요한 값은 워크플로에 넣습니다.
+4. 키는 Cloud Run 서비스에 **일반 환경 변수로 보입니다** (콘솔에서 서비스 편집 권한이 있는 사람이 볼 수 있음). 키는 백엔드에만 두고 Vercel/프론트엔드에는 절대 넣지 않습니다.
+5. 선택: `GEMINI_DAILY_CALL_LIMIT`(인스턴스당 하루 Gemini 호출 상한, 기본 2000, UTC 자정 초기화)을 바꾸려면 워크플로의 `--set-env-vars`에 함께 추가합니다. 인스턴스가 최대 2개라 전체 상한은 약 2배입니다.
+6. `data/gemini_embeddings.npz`는 이미지에 포함되어 배포됩니다. 파일이 없으면 자연어 검색은 `503`입니다.
+
 ### 배포 실행 및 주소 확인
 1. `main` 브랜치에 push하거나 GitHub **Actions → Deploy Backend to Cloud Run → Run workflow** 를 실행합니다.
 2. 마지막 **배포 URL 확인** 단계 로그(또는 GCP 콘솔 Cloud Run 서비스 상세)에서 `https://...run.app` 주소를 복사합니다.

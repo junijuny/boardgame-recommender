@@ -55,6 +55,28 @@ curl 'http://localhost:8000/games/semantic-search?query=친구들과%20가볍게
 - `embeddings.npz`는 배포에 필요해서 git에 포함되어 있음. 다시 만들었다면 함께 커밋함
 - 배포 서버(Google Cloud Run)에는 `semantic` 패키지를 설치하지 않으므로 추천에는 임베딩을 쓰지만 자연어 검색은 꺼져 있음
 
+### Gemini 자연어 검색 (`POST /search/natural`)
+
+한국어·영어 검색어를 Gemini로 이해해 5개를 추천함. 로컬 모델(`sentence-transformers`)이 필요 없고 Cloud Run에서도 동작함.
+
+1. **질의 이해**: `gemini-3.5-flash-lite`가 검색어를 `search_text`(영어), 포함·제외 메커니즘/테마(데이터의 이름 목록 안에서만 선택), 난이도 범위로 바꿈. 인원·시간은 화면 값만 사용함
+2. **하드 필터**: 인원, 최대 시간, 평점 5.5 이상 + 제외 태그를 가진 게임·난이도 범위 밖·`exclude_ids` 제외
+3. **질의 임베딩**: `gemini-embedding-2`(768차원)로 `search_text`를 벡터화해 `data/gemini_embeddings.npz`의 게임 벡터와 코사인 유사도 계산
+4. **점수**: 유사도 = 0.8·임베딩 + 0.2·포함 태그 일치 비율(태그 조건이 없으면 임베딩만), 최종 점수는 기존과 같이 0.75·유사도 + 0.25·평점
+5. **다양성 재정렬**: MMR로 5개 선택
+
+`POST /explain`은 결과 5개의 이유를 Gemini 한 번 호출로 영어 한 문장씩 만듦 (주어진 게임 정보만 근거). "Find similar games" 결과에도 같은 설명이 붙음.
+
+```bash
+# 키는 저장소 루트 .env 에 GEMINI_API_KEY=... 로 두고 (git 제외됨) 실행
+uv run --env-file .env python -m backend.build_gemini_embeddings   # data/gemini_embeddings.npz 생성
+```
+
+- 게임 21,125개, 약 7분, 비용 약 $1.7. 이어서 실행(중간 저장)을 지원함
+- 게임 데이터가 바뀌면 다시 만들어 `gemini_embeddings.npz`를 함께 커밋해야 함 (배포 이미지에 포함됨)
+- 파일에 저장된 모델·차원이 코드와 다르면 자연어 검색이 꺼짐. 기존 `embeddings.npz`(e5)는 "비슷한 게임" 추천용으로 그대로 사용함
+- 호출 제한: `/search/natural` IP당 분당 10회, `/explain` 분당 30회, Gemini 호출 인스턴스당 하루 `GEMINI_DAILY_CALL_LIMIT`회(기본 2000)
+
 ## 3. 3단계: 협업 필터링 (선택)
 
 학습된 `data/cf_factors.npz`가 git에 포함되어 있으므로 추천에는 별도 준비가 필요 없음. 아래는 다시 학습할 때의 절차.
@@ -115,5 +137,7 @@ Top 10에 얼마나 들어오는지 측정함. 평점순, 기존 TF-IDF, 1·2·3
 | `backend/recommend_engine.py` | 하이브리드 점수, 변형판 감점, MMR, 자연어 검색 |
 | `backend/semantic.py` | 임베딩 모델 로드와 문서·질의 인코딩 |
 | `backend/build_embeddings.py` | `data/embeddings.npz` 생성 |
+| `backend/gemini.py`, `backend/natural_search.py`, `backend/explain.py` | Gemini 호출, 자연어 검색 파이프라인, 설명 문장 |
+| `backend/build_gemini_embeddings.py` | `data/gemini_embeddings.npz` 생성 |
 | `backend/build_cf.py` | `data/cf_factors.npz` 생성 |
 | `backend/evaluate.py` | 오프라인 성능 비교 |

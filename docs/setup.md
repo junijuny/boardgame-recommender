@@ -155,6 +155,19 @@ uv run python -m unittest discover -s tests -v
   uv sync --extra semantic
   uv run --extra semantic uvicorn backend.main:app --reload --port 8000
   ```
+- Gemini 자연어 검색("By description" 탭)과 결과 설명 문장은 **선택**입니다. 저장소 루트의 `.env`(git 제외)에 키를 넣고 `--env-file`로 실행합니다:
+  ```bash
+  # .env
+  GEMINI_API_KEY=여기에_키
+  ```
+  ```bash
+  uv run --env-file .env uvicorn backend.main:app --reload --port 8000
+  ```
+  키가 없어도 앱은 정상 동작하며, "By description" 탭이 숨겨지고 결과 설명은 공통 메커니즘 칩으로 대체됩니다. 키는 프론트엔드에 넣지 않습니다.
+- `data/gemini_embeddings.npz`는 git에 포함되어 있습니다. 게임 데이터를 바꿨다면 다시 만들어 커밋합니다 (약 7분, 약 $1.7, 키 필요):
+  ```bash
+  uv run --env-file .env python -m backend.build_gemini_embeddings
+  ```
 - 임베딩·협업 필터링 재생성과 성능 평가 방법은 [recommendation_pipeline.md](recommendation_pipeline.md)를 참고하세요.
 - API 명세와 오류 응답은 [backend_api.md](backend_api.md)를 참고하세요.
 

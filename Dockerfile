@@ -11,6 +11,8 @@ ENV UV_COMPILE_BYTECODE=1 \
 WORKDIR /app
 
 # 의존성만 먼저 설치 (코드가 바뀌어도 이 단계는 캐시 재사용)
+# 자연어 검색·설명(Gemini)은 HTTP API(google-genai)라서 무거운 의존성이 추가되지 않음
+# (data/gemini_embeddings.npz 는 아래 COPY data 로 함께 들어가고, GEMINI_API_KEY 는 배포 시 환경 변수로 전달)
 # 의미 기반 검색(sentence-transformers)은 설치하지 않음 → 추천은 embeddings.npz 로 정상 동작
 COPY pyproject.toml uv.lock .python-version ./
 RUN uv sync --frozen --no-dev
