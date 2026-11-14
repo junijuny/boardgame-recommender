@@ -20,14 +20,14 @@ except ImportError:
 
 # 화면에 보여줄 순서대로 정리한 장르 목록
 GENRES = [
-    {"key": "strategy", "label": "전략", "description": "깊이 있는 계획과 수 싸움"},
-    {"key": "family", "label": "가족", "description": "누구나 쉽게 함께"},
-    {"key": "party", "label": "파티", "description": "여럿이 왁자지껄"},
-    {"key": "thematic", "label": "테마", "description": "이야기와 세계관에 몰입"},
-    {"key": "war", "label": "워게임", "description": "전투와 역사 시뮬레이션"},
-    {"key": "childrens", "label": "어린이", "description": "아이와 함께 즐기는"},
-    {"key": "cgs", "label": "카드게임", "description": "카드를 모으고 덱을 짜는"},
-    {"key": "deduction", "label": "추리", "description": "단서를 모아 정답을 맞히는"},
+    {"key": "strategy", "label": "Strategy", "description": "Deep planning and clever moves"},
+    {"key": "family", "label": "Family", "description": "Easy for everyone to join in"},
+    {"key": "party", "label": "Party", "description": "Loud fun for big groups"},
+    {"key": "thematic", "label": "Thematic", "description": "Immersive stories and worlds"},
+    {"key": "war", "label": "Wargames", "description": "Battles and historical simulations"},
+    {"key": "childrens", "label": "Children's", "description": "Fun to play with kids"},
+    {"key": "cgs", "label": "Card Games", "description": "Collect cards and build your deck"},
+    {"key": "deduction", "label": "Deduction", "description": "Gather clues and find the answer"},
 ]
 
 # 카테고리 컬럼 하나로 판정하는 장르

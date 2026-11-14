@@ -316,7 +316,7 @@ class APITests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         genres = response.json()
         self.assertEqual([g["key"] for g in genres], GENRE_KEYS)
-        self.assertEqual(genres[0]["label"], "전략")
+        self.assertEqual(genres[0]["label"], "Strategy")
         for genre in genres:
             self.assertTrue(genre["label"] and genre["description"])
 
