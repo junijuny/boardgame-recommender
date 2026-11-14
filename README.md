@@ -10,7 +10,7 @@
 ![Scikit-Learn](https://img.shields.io/badge/scikit--learn-F7931E?style=flat-square&logo=scikit-learn&logoColor=white)
 ![Pandas](https://img.shields.io/badge/Pandas-150458?style=flat-square&logo=pandas&logoColor=white)
 ![uv](https://img.shields.io/badge/uv-DE5FE9?style=flat-square&logo=uv&logoColor=white)
-![Render](https://img.shields.io/badge/Backend-Render-46E3B7?style=flat-square&logo=render&logoColor=white)
+![Google Cloud Run](https://img.shields.io/badge/Backend-Cloud_Run-4285F4?style=flat-square&logo=google-cloud&logoColor=white)
 ![Vercel](https://img.shields.io/badge/Frontend-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 <br/>
@@ -42,7 +42,7 @@
 * **목표**: BoardGameGeek(BGG) 보드게임 데이터를 정제하고, 메커니즘·테마·설명글·사용자 평점을 결합한 하이브리드 추천 엔진을 FastAPI 백엔드와 React 프론트엔드로 서비스
 * **수행 기간**: 총 7주 (주당 6\~8시간 학습 및 실습)
 * **참여 인원**: 4명
-* **배포**: 백엔드 Render (Docker), 프론트엔드 Vercel
+* **배포**: 백엔드 Google Cloud Run (Docker, GitHub Actions), 프론트엔드 Vercel
 
 ---
 
@@ -51,9 +51,9 @@
 | 화면 | 기능 |
 | :--- | :--- |
 | **시작 화면** | 이용 방법 3단계 안내, "비슷한 게임 추천받기" / "장르별로 둘러보기" 선택 |
-| **추천 화면** | 게임 이름 자동완성 검색 → 인원(2\~6명)·플레이 시간(30분\~2시간 이하) 선택 → 비슷한 게임 Top 5와 공통 메커니즘·테마(추천 이유) 표시 |
-| **장르 화면** | 전략·가족·파티·테마·워게임·어린이·카드게임·추리 8개 장르별 대표 게임 (리뷰 1,000개 이상 중 평점 상위 6개) |
-| **게임 상세 팝업** | 어느 화면에서든 게임을 누르면 인원·시간·난이도·평점·설명을 보여 주고, 그 게임 기준으로 바로 추천받기 |
+| **추천 화면** | 게임 이름 자동완성 검색(정확히 일치하는 이름 우선) → 인원(2\~6명)·플레이 시간(30분\~2시간 이하) 선택 → 비슷한 게임 Top 5와 공통 메커니즘 표시, "다른 게임 5개 추천받기" 지원 |
+| **장르 화면** | 전략·가족·파티·테마·워게임·어린이·카드게임·추리 8개 장르별 대표 게임 (리뷰 1,000개 이상 중 평점 상위 6개) + 인원(1\~10명)·최대 시간(15분\~4시간) 조건별 맞춤 추천 |
+| **게임 상세 팝업** | 어느 화면에서든 게임을 누르면 인원·시간·난이도·평점·설명·BoardGameGeek 링크를 보여 주고, 그 게임 기준으로 바로 추천받기 |
 
 백엔드에는 화면에서 아직 쓰지 않는 **자연어(한국어 가능) 게임 검색 API** (`GET /games/semantic-search`)도 있습니다. 선택 패키지를 설치해야 동작합니다. 전체 API 목록은 [docs/backend_api.md](docs/backend_api.md)를 참고하세요.
 
@@ -98,12 +98,12 @@ graph TD
         Axios["api.js (Axios)"]
     end
 
-    subgraph Backend ["Backend · Render (FastAPI + Uvicorn, Docker)"]
+    subgraph Backend ["Backend · Google Cloud Run (FastAPI + Uvicorn, Docker)"]
         API["REST API"]
         Search["GET /games/search"]
         Recommend["POST /recommend"]
         Detail["GET /games/{bgg_id}"]
-        Genres["GET /genres"]
+        Genres["GET /genres · GET /genres/{key}/games"]
     end
 
     subgraph Engine ["추천 엔진 (Pandas · NumPy · SciPy · Scikit-learn)"]
@@ -132,8 +132,8 @@ graph TD
 | **Embedding (선택)** | `sentence-transformers` (`intfloat/multilingual-e5-small`) | 설명글 임베딩 생성, 자연어 검색 |
 | **Backend** | `FastAPI`, `Uvicorn` | REST API 서버, Swagger UI 문서화 |
 | **Frontend** | `React 19`, `Vite 8`, `Tailwind CSS 4`, `Axios`, `lucide-react` | 화면 구성, API 호출, 아이콘 |
-| **Quality** | `unittest` + `httpx`(TestClient), `ruff`, `oxlint` | API 테스트, Python·JS 린트 |
-| **Deploy** | `Docker`, `Render`, `Vercel` | 백엔드·프론트엔드 무료 배포 |
+| **Quality** | `unittest` + `httpx`(TestClient), `ruff`, `oxlint`, GitHub Actions | API 테스트, Python·JS 린트, PR·main 자동 테스트 |
+| **Deploy** | `Docker`, `Google Cloud Run`, `Vercel`, `GitHub Actions` | 백엔드·프론트엔드 배포 및 자동 배포 |
 | **Collaboration** | `Git`, `GitHub`, `Jupyter Lab`, `VS Code` | 버전 관리, 데이터 탐색(EDA) |
 
 ---
@@ -173,17 +173,22 @@ graph TD
 
 ```text
 boardgame-recommender/
+├── .github/workflows/
+│   ├── test.yml                 # PR·main push 시 백엔드 테스트 자동 실행
+│   └── deploy-backend.yml       # main push 시 Google Cloud Run 자동 배포
 ├── backend/                     # FastAPI 서버 & 추천 엔진
 │   ├── main.py                  # REST API 엔드포인트, CORS 설정
 │   ├── recommend_engine.py      # 조건 필터, 하이브리드 점수, 변형판 감점, MMR, 자연어 검색
 │   ├── features.py              # 데이터·특징 행렬 로드 (메커니즘, 테마, 카테고리, TF-IDF, 임베딩, CF)
-│   ├── genres.py                # 장르별 대표 게임 계산 (GET /genres)
+│   ├── genres.py                # 장르별 대표 게임 및 조건 맞춤 게임 계산 (GET /genres, GET /genres/{key}/games)
 │   ├── semantic.py              # 임베딩 모델 로드·인코딩 (선택 기능)
 │   ├── build_embeddings.py      # data/embeddings.npz 생성
 │   ├── build_cf.py              # data/cf_factors.npz 생성
 │   └── evaluate.py              # 오프라인 성능 평가
 ├── frontend/                    # React 프론트엔드 (Vite)
 │   ├── .env.example             # VITE_API_URL 예시
+│   ├── index.html               # HTML 진입점 (파비콘 연결)
+│   ├── public/                  # 파비콘(favicon.png, favicon.ico) 등 정적 파일
 │   └── src/
 │       ├── App.jsx              # 화면 전환 (시작 / 추천 / 장르) + 상세 팝업
 │       ├── screens/             # StartScreen, RecommendScreen, GenreScreen
@@ -202,8 +207,8 @@ boardgame-recommender/
 │   ├── setup.md                 # 개발 환경 세팅
 │   ├── backend_api.md           # API 명세, 오류 처리, 테스트
 │   ├── recommendation_pipeline.md # 추천 알고리즘, 선택 기능, 성능 평가
-│   └── deploy.md                # Render·Vercel 배포
-├── Dockerfile                   # 백엔드 배포 이미지 (Render)
+│   └── deploy.md                # Google Cloud Run·Vercel 배포
+├── Dockerfile                   # 백엔드 배포 이미지 (Cloud Run)
 ├── pyproject.toml / uv.lock     # Python 의존성
 └── README.md
 ```
@@ -218,8 +223,9 @@ boardgame-recommender/
 - [x] **4주차: 추천 함수 구현** — 조건 필터 + 유사도 정렬 + 평점 보정 (`recommend_games`)
 - [x] **5주차: FastAPI 백엔드** — 검색·필터·추천·상세·장르 API, 입력 검증과 오류 응답, 자동 테스트
 - [x] **6주차: React 프론트엔드** — 시작·추천·장르 화면, 자동완성 검색, 게임 상세 팝업
-- [x] **7주차: 연동·예외 처리·배포** — CORS 설정, 결과 없음·서버 오류 안내, Render·Vercel 배포
+- [x] **7주차: 연동·예외 처리·배포** — CORS 설정, 결과 없음·서버 오류 안내, Docker·Vercel·백엔드 배포
 - [x] **추가: 추천 품질 개선** — TF-IDF 단일 신호에서 메커니즘·테마·임베딩·협업 필터링 하이브리드로 전환, 변형판 감점, 다양성 재정렬, 오프라인 평가 도입
+- [x] **추가: 기능·검색·배포 고도화** — 장르별 인원·시간 맞춤 추천(장르명·설명 영문 제공), 다른 게임 5개 새로 추천받기(`exclude_ids`), 검색 시 정확히 일치하는 이름 우선 정렬, GitHub Actions CI·Google Cloud Run 자동 배포, 백엔드 워밍업(`warmupServer`), 주사위 파비콘 적용
 
 주차별 상세 내용은 [docs/project_plan.md](docs/project_plan.md)를 참고하세요.
 

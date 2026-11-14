@@ -140,11 +140,11 @@ uv run uvicorn main:app --reload --port 8000
 ```
 - **서버 주소**: `http://localhost:8000`
 - **인터랙티브 API 문서 (Swagger UI)**: `http://localhost:8000/docs`
-- 첫 실행 시 설명글 TF-IDF 캐시(`data/tfidf_cache.joblib`)를 만드느라 시간이 조금 걸립니다.
+- `data/embeddings.npz`가 있으면 서버 시작 시 TF-IDF 계산을 건너뛰며, 임베딩이 없을 때만 첫 요청 시 `data/tfidf_cache.joblib` 캐시를 생성합니다.
 - `http://localhost:8000/` 응답의 `signals`에서 현재 사용 중인 추천 신호를 확인할 수 있습니다.
 
 ### 5.2 자동 테스트
-서버를 따로 켜지 않아도 실행됩니다.
+서버를 따로 켜지 않아도 실행됩니다. Pull Request 및 `main` 브랜치 push 시 GitHub Actions(`.github/workflows/test.yml`)에서도 자동으로 실행됩니다.
 ```bash
 uv run python -m unittest discover -s tests -v
 ```
@@ -184,7 +184,7 @@ npm run build   # 배포용 빌드 (frontend/dist)
 ### 6.3 백엔드 주소 지정 (선택)
 기본값은 `http://localhost:8000`입니다. 다른 백엔드를 쓰려면 `frontend/.env.example`을 참고해 `frontend/.env.local`에 지정합니다:
 ```bash
-VITE_API_URL=https://<렌더서비스이름>.onrender.com
+VITE_API_URL=https://<서비스주소>.run.app
 ```
 > [!NOTE]
 > 프론트 포트가 5173이 아니게 되면(예: 5174) 백엔드 CORS에서 막힙니다. 5173을 쓰거나, 백엔드 실행 시 환경변수 `ALLOWED_ORIGINS`에 실제 주소를 추가하세요.
