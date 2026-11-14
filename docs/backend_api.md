@@ -80,7 +80,7 @@ curl -X POST 'http://localhost:8000/recommend' \
 ### 자연어 검색 (Gemini)
 
 ```bash
-curl -X POST 'http://localhost:8000/search/natural'   -H 'Content-Type: application/json'   -d '{"query":"친구들과 가볍게 하는 협력 게임","players":4,"max_time":60}'
+curl -X POST 'http://localhost:8000/search/natural' \n  -H 'Content-Type: application/json' \n  -d '{"query":"친구들과 가볍게 하는 협력 게임","players":4,"max_time":60}'
 ```
 
 - Gemini(`gemini-3.5-flash-lite`)가 검색어를 조건(포함·제외 메커니즘/테마, 난이도 범위, 영어 검색 문장)으로 바꾸고, `gemini-embedding-2`(768차원)로 만든 `data/gemini_embeddings.npz`와 비교함. 인원·시간은 요청 값만 사용함
@@ -90,7 +90,7 @@ curl -X POST 'http://localhost:8000/search/natural'   -H 'Content-Type: applicat
 ### 설명 문장
 
 ```bash
-curl -X POST 'http://localhost:8000/explain'   -H 'Content-Type: application/json'   -d '{"mode":"similar","basis":"Catan","game_ids":[822,13]}'
+curl -X POST 'http://localhost:8000/explain' \n  -H 'Content-Type: application/json' \n  -d '{"mode":"similar","basis":"Catan","game_ids":[822,13]}'
 ```
 
 - `mode="similar"`는 `basis`를 기준 게임 이름으로, `mode="query"`는 사용자 검색어로 보고 각 게임이 왜 맞는지 영어 한 문장으로 설명함. 게임 정보(메커니즘·테마·난이도·인원·시간·설명글 앞부분)만 근거로 씀
@@ -137,9 +137,10 @@ curl 'http://localhost:8000/genres'
 | 설명 요청의 `basis`가 비었거나 300자 초과, `game_ids`가 1~10개가 아님 | 400 | `Basis cannot be empty` / `Basis is too long` / `Provide between 1 and 10 game ids` |
 | `GEMINI_API_KEY` 또는 `gemini_embeddings.npz`가 없을 때 `POST /search/natural` | 503 | `Natural language search is not available` |
 | `GEMINI_API_KEY`가 없을 때 `POST /explain` | 503 | `Explanations are not available` |
-| `POST /search/natural`이 IP 제한(분당 10회) 또는 일일 호출 상한 초과 | 429 | `Too many requests` |
-| `POST /explain`이 IP 제한(분당 30회) 또는 일일 호출 상한 초과 | 429 | `Too many requests` |
-| Gemini 호출 실패(타임아웃 등) | 503 | `Natural language search is temporarily unavailable` / `Explanations are temporarily unavailable` |
+| `POST /search/natural`이 IP 제한(분당 10회) 초과 | 429 | `Too many requests` |
+| `POST /explain`이 IP 제한(분당 30회) 초과 | 429 | `Too many requests` |
+| Gemini 호출 실패(타임아웃 등) 또는 일일 호출 상한(`GEMINI_DAILY_CALL_LIMIT`) 소진 | 503 | `Natural language search is temporarily unavailable` / `Explanations are temporarily unavailable` |
+| 자연어 검색 조건에 맞는 게임이 없음 | 404 | `No games match the selected conditions` |
 | 설명 요청의 `game_ids`에 없는 게임 | 404 | `Game not found` |
 | 임베딩 파일이 없거나 `semantic` 패키지 미설치 상태에서 자연어 검색 | 503 | `Semantic search is not available` |
 | 존재하지 않는 장르 키로 장르 게임 조회 | 404 | `Genre not found` |
