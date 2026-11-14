@@ -7,7 +7,7 @@ import unittest
 
 from fastapi.testclient import TestClient
 
-from backend.genres import genre_mask
+from backend.genres import genre_games, genre_mask
 from backend.main import app
 from backend.recommend_engine import df, mechanics
 
@@ -406,7 +406,58 @@ class APITests(unittest.TestCase):
             "/genres/family/games", params={"players": 999999}
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])    
+        self.assertEqual(response.json(), [])
+
+    def test_genre_games_exclude_seen_games(self):
+        first = self.client.get("/genres/strategy/games").json()
+        seen = [game["BGGId"] for game in first]
+
+        response = self.client.get("/genres/strategy/games", params={"exclude_ids": seen})
+        self.assertEqual(response.status_code, 200)
+        next_ids = [game["BGGId"] for game in response.json()]
+        self.assertEqual(len(next_ids), 6)
+        self.assertFalse(set(seen) & set(next_ids))
+
+    def test_genre_games_repeated_refresh_never_repeats(self):
+        seen = []
+        for _ in range(3):
+            games = self.client.get(
+                "/genres/family/games",
+                params={"players": 4, "max_time": 60, "exclude_ids": seen},
+            ).json()
+            ids = [game["BGGId"] for game in games]
+            self.assertTrue(ids)
+            self.assertFalse(set(seen) & set(ids))
+            seen.extend(ids)
+
+    def test_genre_games_exclude_keeps_conditions(self):
+        # 제외해도 인원·시간 조건은 그대로 지켜짐
+        params = {"players": 6, "max_time": 30}
+        seen = [g["BGGId"] for g in self.client.get("/genres/party/games", params=params).json()]
+        games = self.client.get(
+            "/genres/party/games", params={**params, "exclude_ids": seen}
+        ).json()
+        info = df.set_index("BGGId")
+        for game in games:
+            row = info.loc[game["BGGId"]]
+            self.assertLessEqual(row["MinPlayers"], 6)
+            self.assertGreaterEqual(row["MaxPlayers"], 6)
+            self.assertLessEqual(row["ComMaxPlaytime"], 30)
+
+    def test_genre_games_exclude_all_returns_empty_list(self):
+        # 조건에 맞는 후보를 전부 제외하면 빈 목록
+        params = {"players": 4, "max_time": 30}
+        everything = genre_games(df, mechanics, "war", limit=100000, **params)
+        response = self.client.get(
+            "/genres/war/games",
+            params={**params, "exclude_ids": [g["BGGId"] for g in everything]},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
+    def test_genre_games_reject_invalid_exclude_ids(self):
+        response = self.client.get("/genres/family/games", params={"exclude_ids": "abc"})
+        self.assertEqual(response.status_code, 422)
 
     def test_recommend_refresh_excludes_seen_games(self):
         first = self.recommend()

@@ -82,6 +82,7 @@ def genre_games(
     key: str,
     players: int | None = None,
     max_time: int | None = None,
+    exclude_ids: list[int] | None = None,
     limit: int = 6,
     min_ratings: int = 1000,
     min_rating: float = 5.5,
@@ -89,12 +90,16 @@ def genre_games(
     """장르 + 인원/시간 조건에 맞는 게임 (players, max_time은 선택)
 
     리뷰 수 min_ratings 이상인 인기 게임을 먼저, 그 안에서 평점 높은 순으로 고름
-    조건이 까다로워 인기 게임이 limit개보다 적으면 나머지 게임으로 채움"""
+    조건이 까다로워 인기 게임이 limit개보다 적으면 나머지 게임으로 채움
+    exclude_ids에 든 게임(이미 보여 준 게임)은 결과에서 뺌"""
     mask = genre_mask(df, mechanics, key) & (df["BayesAvgRating"] >= min_rating).to_numpy()
     if players is not None:
         mask = mask & ((df["MinPlayers"] <= players) & (df["MaxPlayers"] >= players)).to_numpy()
     if max_time is not None:
         mask = mask & (df["ComMaxPlaytime"] <= max_time).to_numpy()
+    # 이미 보여 준 게임은 빼기 (장르 화면의 "다른 게임 보기"용)
+    if exclude_ids:
+        mask = mask & ~df["BGGId"].isin(exclude_ids).to_numpy()
 
     picked = df[mask].copy()
     picked["IsPopular"] = picked["NumUserRatings"] >= min_ratings

@@ -1,7 +1,7 @@
 
 import os
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -139,6 +139,8 @@ def list_genre_games(
     key: str,
     players: int | None = None,
     max_time: int | None = None,
+    # 이미 보여 준 게임 Id. 주소에 ?exclude_ids=13&exclude_ids=822처럼 여러 번 붙여서 보냄
+    exclude_ids: list[int] = Query(default=[]),
 ):
     if players is not None and players <= 0:
         raise HTTPException(
@@ -159,6 +161,7 @@ def list_genre_games(
             key,
             players=players,
             max_time=max_time,
+            exclude_ids=exclude_ids,
         )
     except ValueError:
         raise HTTPException(
