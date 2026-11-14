@@ -100,7 +100,7 @@ curl -X POST 'http://localhost:8000/explain' \
 - `mode="similar"`는 `basis`를 기준 게임 이름으로, `mode="query"`는 사용자 검색어로 보고 각 게임이 왜 맞는지 영어 한 문장으로 설명함. 게임 정보(메커니즘·테마·난이도·인원·시간·설명글 앞부분)만 근거로 씀
 - `basis`는 300자 이하, `game_ids`는 1~10개. IP당 60초에 30회까지
 - 응답 예: `{"reasons": {"822": "One English sentence."}}`. 실패하면 화면은 설명 없이 공통 메커니즘 칩을 보여 줌
-- Gemini 호출은 인스턴스당 하루 `GEMINI_DAILY_CALL_LIMIT`회(기본 2000, UTC 자정 초기화)로 제한됨. 같은 검색어·설명은 서버 메모리에 캐시함
+- Gemini 호출은 `GEMINI_DAILY_CALL_LIMIT`회(기본 2000, UTC 자정 초기화)로 제한하되, 카운터가 인스턴스 메모리에만 있어 인스턴스가 새로 시작되면 0으로 돌아가는 느슨한 안전장치임. 실제 하드 한도는 Google 쪽 쿼터·예산 알림으로 설정함 ([deploy.md](deploy.md) 참고). 같은 검색어·설명은 서버 메모리에 캐시함
 
 ### 장르별 대표 게임
 
@@ -145,7 +145,7 @@ curl 'http://localhost:8000/genres'
 | `POST /explain`이 IP 제한(분당 30회) 초과 | 429 | `Too many requests` |
 | Gemini 호출 실패(타임아웃 등) 또는 일일 호출 상한(`GEMINI_DAILY_CALL_LIMIT`) 소진 | 503 | `Natural language search is temporarily unavailable` / `Explanations are temporarily unavailable` |
 | 자연어 검색 조건에 맞는 게임이 없음 | 404 | `No games match the selected conditions` |
-| 설명 요청의 `game_ids`에 없는 게임 | 404 | `Game not found` |
+| 설명 요청의 `mode`가 `similar`인데 `basis`가 알려진 게임이 아님 | 404 | `Game not found` (`game_ids`에 없는 ID는 오류 없이 무시되어 `200`) |
 | 임베딩 파일이 없거나 `semantic` 패키지 미설치 상태에서 자연어 검색 | 503 | `Semantic search is not available` |
 | 존재하지 않는 장르 키로 장르 게임 조회 | 404 | `Genre not found` |
 

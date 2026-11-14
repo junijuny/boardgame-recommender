@@ -65,7 +65,7 @@ jobs:
             --cpu-boost \
             --min-instances 0 \
             --max-instances 2 \
-            --set-env-vars "ALLOWED_ORIGINS=${{ env.ALLOWED_ORIGINS }},GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}"
+            --set-env-vars "^@^ALLOWED_ORIGINS=${{ env.ALLOWED_ORIGINS }}@GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}"
 
       - name: 배포 URL 확인
         run: |

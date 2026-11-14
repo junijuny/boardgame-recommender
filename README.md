@@ -56,7 +56,7 @@
 | **Find games 화면** | "By game"(비슷한 게임) / "By description"(원하는 분위기를 한국어·영어로 설명하면 Gemini가 조건을 이해해 Top 5 추천) 탭. 각 결과 아래에 이유를 영어 한 문장으로 표시 (`GEMINI_API_KEY`가 없으면 설명 탭은 숨겨지고 공통 메커니즘 칩으로 대체) |
 | **게임 상세 팝업** | 어느 화면에서든 게임을 누르면 인원·시간·난이도·평점·설명·BoardGameGeek 링크를 보여 주고, 그 게임 기준으로 바로 추천받기 |
 
-백엔드에는 화면에서 아직 쓰지 않는 **자연어(한국어 가능) 게임 검색 API** (`GET /games/semantic-search`)도 있습니다. 선택 패키지를 설치해야 동작합니다. 전체 API 목록은 [docs/backend_api.md](docs/backend_api.md)를 참고하세요.
+백엔드에는 위 Gemini 설명 검색과 별개로, 화면에서 쓰지 않는 이전 방식의 **선택적 e5 임베딩 시맨틱 검색 API** (`GET /games/semantic-search`)도 있습니다. 선택 패키지를 설치해야 동작합니다. 전체 API 목록은 [docs/backend_api.md](docs/backend_api.md)를 참고하세요.
 
 ---
 
@@ -130,7 +130,7 @@ graph TD
 | :--- | :--- | :--- |
 | **Environment** | `uv`, `Python 3.12`, `Node.js` | 가상환경·패키지 관리, 프론트엔드 빌드 |
 | **Data & ML** | `Pandas`, `NumPy`, `SciPy`, `Scikit-learn` | 데이터 정제, 희소 행렬 코사인 유사도, TF-IDF, Truncated SVD(협업 필터링) |
-| **Embedding (선택)** | `sentence-transformers` (`intfloat/multilingual-e5-small`) | 설명글 임베딩 생성, 자연어 검색 |
+| **Embedding (선택)** | `sentence-transformers` (`intfloat/multilingual-e5-small`) | 설명글 임베딩 생성, e5 시맨틱 검색 API |
 | **Backend** | `FastAPI`, `Uvicorn` | REST API 서버, Swagger UI 문서화 |
 | **Frontend** | `React 19`, `Vite 8`, `Tailwind CSS 4`, `Axios`, `lucide-react` | 화면 구성, API 호출, 아이콘 |
 | **Quality** | `unittest` + `httpx`(TestClient), `ruff`, `oxlint`, GitHub Actions | API 테스트, Python·JS 린트, PR·main 자동 테스트 |
@@ -266,7 +266,7 @@ uv run python -m unittest discover -s tests -v
 
 ### 선택 기능
 - **Gemini 자연어 검색·설명**: 루트 `.env`에 `GEMINI_API_KEY=...` 후 `uv run --env-file .env uvicorn backend.main:app --reload --port 8000` ([docs/setup.md](docs/setup.md), 배포 시 시크릿 등록은 [docs/deploy.md](docs/deploy.md))
-- **자연어 검색 활성화**: `uv sync --extra semantic` 후 `uv run --extra semantic uvicorn backend.main:app --reload`
+- **e5 시맨틱 검색 API 활성화 (이전 방식, 화면에서는 미사용)**: `uv sync --extra semantic` 후 `uv run --extra semantic uvicorn backend.main:app --reload`
 - **임베딩·협업 필터링 재생성, 성능 평가**: [docs/recommendation_pipeline.md](docs/recommendation_pipeline.md)
 - **배포**: [docs/deploy.md](docs/deploy.md)
 
