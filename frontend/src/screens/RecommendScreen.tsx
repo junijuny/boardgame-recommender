@@ -10,19 +10,18 @@
 // ---------------------------------------------------------------------
 import clsx from "clsx";
 import { useState } from "react";
-import { ChevronRight, RefreshCw, Search, SearchX } from "lucide-react";
-import DifficultyPips from "../components/DifficultyPips";
+import { RefreshCw, Search, SearchX } from "lucide-react";
 import GameDetailModal from "../components/GameDetailModal";
 import GameSearch from "../components/GameSearch";
-import GameThumb from "../components/GameThumb";
+import { ResultList, ResultSkeleton } from "../components/ResultList";
 import { PlayerPicker, TimePicker } from "../components/ChoicePickers";
-import { ErrorNotice, ServerWakeNotice, Skeleton } from "../components/LoadingParts";
+import { ErrorNotice, ServerWakeNotice } from "../components/LoadingParts";
 import { errorResponse } from "../api";
 import { PLAYER_OPTIONS, TIME_OPTIONS } from "../filters";
-import { formatMinutes, formatPlayers, formatPlaytime, formatScore } from "../format";
-import { useIsSlow, useRecommend } from "../queries";
+import { formatMinutes } from "../format";
+import { useExplanations, useIsSlow, useRecommend, useServerInfo } from "../queries";
 import { container, focusRing, pageTitle, primaryButton } from "../styles";
-import type { GameDetail, GameSummary, RecommendRequest, RecommendedGame } from "../types";
+import type { GameDetail, GameSummary, RecommendRequest } from "../types";
 
 interface RecommendScreenProps {
   initialGame: GameSummary | null;
@@ -41,6 +40,15 @@ export default function RecommendScreen({ initialGame, onRecommendSimilar }: Rec
   const recommendation = useRecommend();
   const loading = recommendation.isPending;
   const slow = useIsSlow(loading);
+  // 한 문장 추천 이유: 서버가 켜 둔 경우에만, 추천이 성공한 뒤에 요청한다.
+  // 실패하거나 꺼져 있으면 reasons가 비어 카드는 기존처럼 공통 메커니즘 칩을 보여 준다.
+  const explanationsOn = useServerInfo().data?.explanations === true;
+  const results = recommendation.data;
+  const explanations = useExplanations(
+    explanationsOn && results && recommendation.variables
+      ? { mode: "similar", basis: recommendation.variables.game_name, game_ids: results.map((g) => g.BGGId) }
+      : null,
+  );
   // 지금 조건으로 지금까지 보여 준 게임 ID ("Refresh"를 누를 때 이 게임들은 빼고 받는다)
   const [shownIds, setShownIds] = useState<number[]>([]);
 
@@ -142,7 +150,7 @@ export default function RecommendScreen({ initialGame, onRecommendSimilar }: Rec
           </div>
 
           {slow && <ServerWakeNotice />}
-          {loading && <ResultSkeleton />}
+          {loading && <ResultSkeleton label="Finding similar games" />}
           {recommendation.isError && (
             <RecommendError
               error={recommendation.error}
@@ -151,7 +159,14 @@ export default function RecommendScreen({ initialGame, onRecommendSimilar }: Rec
               onStartOver={handleRecommend}
             />
           )}
-          {recommendation.isSuccess && <ResultList results={recommendation.data} onSelect={setSelectedId} />}
+          {recommendation.isSuccess && (
+            <ResultList
+              items={recommendation.data.map((g) => ({ game: g, chips: g.SharedMechanics }))}
+              reasons={explanations.data?.reasons}
+              reasonsLoading={explanations.isFetching}
+              onSelect={setSelectedId}
+            />
+          )}
           {recommendation.isIdle && (
             <p className="rounded-[20px] border border-dashed border-ink/25 px-5 py-8 text-center text-ink/70">
               Pick a game to get recommendations.
@@ -215,78 +230,4 @@ function RecommendError({ error, afterRefresh, onRetry, onStartOver }: Recommend
     return <ErrorNotice message="Can't reach the server." onRetry={onRetry} />;
   }
   return <ErrorNotice message="Couldn't load recommendations." onRetry={onRetry} />;
-}
-
-// 추천을 기다리는 동안 결과 5줄 자리를 미리 보여 준다
-function ResultSkeleton() {
-  return (
-    <>
-    <p role="status" className="sr-only">Finding similar games</p>
-    <ol className="overflow-hidden rounded-[20px] border border-line bg-card" aria-hidden="true">
-      {[62, 48, 70, 54, 66].map((width, i) => (
-        <li key={i} className="flex items-center gap-3 border-t border-line px-4 py-3.5 first:border-t-0 sm:gap-[18px] sm:px-[22px] sm:py-[18px]">
-          <Skeleton className="h-12 w-12 shrink-0 rounded-xl sm:h-16 sm:w-16" />
-          <span className="flex flex-1 flex-col gap-2.5">
-            <Skeleton className="h-[18px] rounded-md" style={{ width: `${width}%` }} />
-            <Skeleton className="h-3.5 w-4/5 rounded-md" />
-          </span>
-        </li>
-      ))}
-    </ol>
-    </>
-  );
-}
-
-// 추천 결과 목록. 한 줄을 누르면 상세 팝업 (onSelect에 게임 ID를 넘겨줌)
-function ResultList({ results, onSelect }: { results: RecommendedGame[]; onSelect: (bggId: number) => void }) {
-  return (
-    <ol className="overflow-hidden rounded-[20px] border border-line bg-card">
-      {results.map((game, i) => (
-        <li key={game.BGGId ?? game.Name} className="border-t border-line first:border-t-0">
-          <button
-            type="button"
-            onClick={() => onSelect(game.BGGId)}
-            aria-haspopup="dialog"
-            className={clsx("group flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-page sm:gap-[18px] sm:px-[22px] sm:py-[18px]", focusRing, "focus-visible:-outline-offset-2")}
-          >
-            <span className="w-[18px] flex-none text-center font-display text-lg font-extrabold text-ink/50 sm:w-7 sm:text-[26px]">
-              {i + 1}
-            </span>
-            <GameThumb
-              src={game.ImagePath}
-              name={game.Name}
-              className="h-12 w-12 rounded-xl sm:h-16 sm:w-16"
-              letterClassName="text-[22px] sm:text-[28px]"
-            />
-            <span className="flex min-w-0 flex-1 flex-col gap-1.5">
-              <span className="text-lg font-bold group-hover:underline">
-                {game.Name}
-                {game.YearPublished > 0 && <span className="ml-1.5 text-sm font-normal text-ink/70">{game.YearPublished}</span>}
-              </span>
-              <span className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-ink/70">
-                <span>{formatPlayers(game)}</span>
-                <span>{formatPlaytime(game)}</span>
-                <span className="inline-flex items-center gap-1.5">
-                  Difficulty
-                  <DifficultyPips weight={game.GameWeight} />
-                  {formatScore(game.GameWeight)}
-                </span>
-              </span>
-              {/* 추천 이유: 기준 게임과 공통으로 가진 메커니즘 (드문 것부터 최대 3개) */}
-              {game.SharedMechanics.length > 0 && (
-                <span className="flex flex-wrap gap-1.5">
-                  {game.SharedMechanics.map((name) => (
-                    <span key={name} className="inline-flex min-h-[26px] items-center rounded-full border border-line bg-page px-2.5 text-[13px] font-medium">
-                      {name}
-                    </span>
-                  ))}
-                </span>
-              )}
-            </span>
-            <ChevronRight className="h-5 w-5 shrink-0 text-ink/45 group-hover:text-primary" aria-hidden="true" />
-          </button>
-        </li>
-      ))}
-    </ol>
-  );
 }

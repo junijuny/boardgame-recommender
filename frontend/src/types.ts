@@ -70,6 +70,42 @@ export interface RecommendRequest {
   exclude_ids?: number[];
 }
 
+// 서버가 켜 둔 기능 (GET /)
+export interface ServerInfo {
+  natural_search: boolean;
+  explanations: boolean;
+}
+
+// 자연어 검색 요청 바디 (POST /search/natural)
+export interface NaturalSearchRequest {
+  query: string;
+  players: number;
+  max_time: number;
+  exclude_ids?: number[];
+}
+
+// 자연어 검색 결과 한 개: 필터 결과 + 유사도와 겹친 메커니즘·테마
+export interface NaturalGame extends FilteredGame {
+  Similarity: number;
+  Score: number;
+  MatchedMechanics: string[];
+  MatchedThemes: string[];
+}
+
+// 추천 이유 요청 (POST /explain): "similar" = 기준 게임 이름, "query" = 검색 설명문
+export type ExplainMode = "similar" | "query";
+
+export interface ExplainRequest {
+  mode: ExplainMode;
+  basis: string;
+  game_ids: number[];
+}
+
+// 추천 이유 응답: BGGId(문자열) -> 한 문장
+export interface ExplainResponse {
+  reasons: Record<string, string>;
+}
+
 // 백엔드가 오류일 때 돌려주는 바디 (FastAPI의 HTTPException)
 export interface ApiErrorBody {
   detail?: string;

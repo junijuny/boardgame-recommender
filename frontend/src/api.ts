@@ -9,7 +9,8 @@
 import axios from "axios";
 import { PLAYER_OPTIONS, TIME_OPTIONS } from "./filters";
 import type {
-  ApiErrorBody, FilteredGame, GameDetail, GameSummary, Genre, GenreGame, RecommendRequest, RecommendedGame,
+  ApiErrorBody, ExplainRequest, ExplainResponse, FilteredGame, GameDetail, GameSummary, Genre, GenreGame,
+  NaturalGame, NaturalSearchRequest, RecommendRequest, RecommendedGame, ServerInfo,
 } from "./types";
 
 // 백엔드 서버 주소
@@ -47,6 +48,29 @@ export async function recommend({ game_name, players, max_time, exclude_ids }: R
     max_time,
     ...(exclude_ids && exclude_ids.length > 0 ? { exclude_ids } : {}),
   });
+  return res.data;
+}
+
+// 서버 정보: 자연어 검색·추천 이유 기능이 켜져 있는지 (GET /)
+export async function getServerInfo() {
+  const res = await api.get<ServerInfo>("/");
+  return res.data;
+}
+
+// 자연어 검색 (최대 5개). exclude_ids는 recommend와 같이 비어 있으면 보내지 않는다.
+export async function naturalSearch({ query, players, max_time, exclude_ids }: NaturalSearchRequest) {
+  const res = await api.post<NaturalGame[]>("/search/natural", {
+    query,
+    players,
+    max_time,
+    ...(exclude_ids && exclude_ids.length > 0 ? { exclude_ids } : {}),
+  });
+  return res.data;
+}
+
+// 결과 게임마다 한 문장짜리 추천 이유 받기 (게임 1~10개)
+export async function explain(req: ExplainRequest) {
+  const res = await api.post<ExplainResponse>("/explain", req);
   return res.data;
 }
 
