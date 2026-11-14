@@ -62,29 +62,16 @@ export async function getGenres() {
   return res.data;
 }
 
-// 한 장르에서 인원·최대 시간 조건에 맞는 게임 (인기·평점 순 최대 6개)
-export async function getGenreGames(key: string, players: number, maxTime: number) {
-  const res = await api.get<GenreGame[]>(`/genres/${key}/games`, { params: { players, max_time: maxTime } });
+// 장르 새로고침: 이미 본 게임(exclude)을 뺀 같은 장르의 다른 게임 (인기·평점 순 최대 6개)
+// 백엔드가 exclude_ids에 든 게임을 빼고 다음 순위 게임을 돌려준다. 남은 게임이 없으면 빈 배열.
+// FastAPI는 목록을 ?exclude_ids=13&exclude_ids=822처럼 받으므로,
+// axios 기본값(exclude_ids[]=13)이 아니라 [] 없이 같은 이름을 반복해서 보낸다 (indexes: null).
+export async function getOtherGenreGames(key: string, exclude: number[]) {
+  const res = await api.get<GenreGame[]>(`/genres/${key}/games`, {
+    params: { exclude_ids: exclude },
+    paramsSerializer: { indexes: null },
+  });
   return res.data;
-}
-
-// 장르 새로고침: 이미 본 게임(exclude)을 뺀 같은 장르의 다른 게임 count개
-// 장르 API에는 "뺄 게임" 옵션이 없어서, 인원·시간 조건을 무작위로 바꿔 가며 최대 4번 불러오고
-// 처음 보는 게임만 모은다. 남은 게임이 없으면 빈 배열을 돌려준다.
-export async function getOtherGenreGames(key: string, exclude: number[], count = 6) {
-  const seen = new Set(exclude);
-  const picked: GenreGame[] = [];
-  for (const { players, maxTime } of randomCombos().slice(0, 4)) {
-    const games = await getGenreGames(key, players, maxTime);
-    for (const game of games) {
-      if (!seen.has(game.BGGId)) {
-        seen.add(game.BGGId);
-        picked.push(game);
-      }
-    }
-    if (picked.length >= count) break;
-  }
-  return picked.slice(0, count);
 }
 
 // 시작 화면용 무작위 사진
