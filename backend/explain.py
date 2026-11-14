@@ -50,6 +50,9 @@ def game_facts(idx: int) -> dict:
         "mechanics": _names(eng.mechanics, idx),
         "themes": _names(eng.themes, idx),
         "description": description[:DESCRIPTION_CHARS],
+        # "가장 유명한/평점 높은" 질의의 설명 근거
+        "reviews": int(row["NumUserRatings"]),
+        "rating": round(float(row["BayesAvgRating"]), 1),
     }
 
 

@@ -26,7 +26,7 @@ uv run --locked uvicorn backend.main:app --reload --port 8000
 | `GET /games/filter` | 쿼리 `players`, `max_time` | 조건을 만족하는 최대 10개 게임, 평점 내림차순 |
 | `POST /recommend` | JSON `game_name`, `players`, `max_time`, 선택 `exclude_ids` | 조건을 만족하는 최대 5개 추천 게임 |
 | `GET /games/semantic-search` | 쿼리 `query`, 선택 `players`, `max_time` | 자연어(한국어 가능) 설명에 맞는 최대 10개 게임. 임베딩 미준비 시 `503` |
-| `POST /search/natural` | JSON `query`, `players`, `max_time`, 선택 `exclude_ids` | 검색어(한국어·영어)의 장르적 특성에 맞는 최대 5개 게임(리뷰 1,000개 이상, 평점 5.5 이상 중에서). 항목은 게임 필드와 `Similarity`, `Score`, `MatchedMechanics`, `MatchedThemes`. 키·임베딩이 없으면 `503` |
+| `POST /search/natural` | JSON `query`, `players`, `max_time`, 선택 `exclude_ids` | 검색어(한국어·영어)의 장르적 특성에 맞는 최대 5개 게임(리뷰 1,000개 이상, 평점 5.5 이상 중에서). 항목은 게임 필드와 `Similarity`, `Score`, `MatchedMechanics`, `MatchedThemes`, `SortedBy`. "가장 유명한/평점 높은/최신" 같은 순위 질의는 리뷰 수·평점·출시 연도 순. 키·임베딩이 없으면 `503` |
 | `POST /explain` | JSON `mode`(`similar` 또는 `query`), `basis`, `game_ids` | `{"reasons": {"<BGGId>": "영어 한 문장"}}`. 키가 없으면 `503` |
 | `GET /games/{bgg_id}` | 경로의 게임 ID(`BGGId`) | 게임 한 개의 상세 정보(설명, 난이도, 인원, 시간, 평점) |
 | `GET /genres` | 없음 | 장르 8개와 장르별 대표 게임 최대 6개 |
@@ -86,7 +86,7 @@ curl -X POST 'http://localhost:8000/search/natural' \
 ```
 
 - Gemini(`gemini-3.5-flash-lite`)가 검색어를 조건(포함·제외 메커니즘/테마, 난이도 범위, 영어 검색 문장)으로 바꾸고, `gemini-embedding-2`(768차원)로 만든 `data/gemini_embeddings.npz`와 비교함. 인원·시간은 요청 값만 사용함
-- 응답은 추천과 같은 게임 필드에 `Similarity`, `Score`, `MatchedMechanics`, `MatchedThemes`(검색어에서 뽑은 태그 중 게임이 가진 것)를 더한 5개. `exclude_ids`로 이미 본 게임을 빼고 다시 받을 수 있음
+- 응답은 추천과 같은 게임 필드에 `Similarity`, `Score`, `MatchedMechanics`, `MatchedThemes`(검색어에서 뽑은 태그 중 게임이 가진 것), `SortedBy`(`relevance`·`popularity`·`rating`·`newest` 중 결과를 고른 기준)를 더한 5개. 순위 질의일 때 `Score`는 순위(1위 1.0, 2위 0.8, …). `exclude_ids`로 이미 본 게임을 빼고 다시 받을 수 있음
 - 검색어는 300자 이하. IP당 60초에 10회까지
 
 ### 설명 문장

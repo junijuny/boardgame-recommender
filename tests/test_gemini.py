@@ -35,6 +35,14 @@ class IntentParsingTest(unittest.TestCase):
         self.assertEqual((i.weight_min, i.weight_max), (None, 2.0))
         self.assertEqual(gemini._intent_from_dict({}).search_text, "")
 
+    def test_sort_is_parsed_and_unknown_values_fall_back_to_relevance(self):
+        self.assertEqual(gemini._intent_from_dict({"sort": "popularity"}).sort, "popularity")
+        self.assertEqual(gemini._intent_from_dict({"sort": " Rating "}).sort, "rating")
+        self.assertEqual(gemini._intent_from_dict({"sort": "newest"}).sort, "newest")
+        self.assertEqual(gemini._intent_from_dict({"sort": "cheapest"}).sort, "relevance")
+        self.assertEqual(gemini._intent_from_dict({"sort": None}).sort, "relevance")
+        self.assertEqual(gemini._intent_from_dict({}).sort, "relevance")
+
     def test_bad_weight_raises_gemini_error(self):
         with self.assertRaises(gemini.GeminiError):
             gemini._intent_from_dict({"weight_min": "abc"})

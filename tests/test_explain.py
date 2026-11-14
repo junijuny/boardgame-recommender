@@ -124,8 +124,14 @@ class ExplainTest(unittest.TestCase):
         facts = explain.game_facts(0)
         self.assertEqual(
             set(facts),
-            {"bgg_id", "name", "year", "players", "playtime", "weight", "mechanics", "themes", "description"},
+            {
+                "bgg_id", "name", "year", "players", "playtime", "weight", "mechanics", "themes", "description",
+                "reviews", "rating",
+            },
         )
+        # "가장 유명한/평점 높은" 질의의 설명 근거: BGG 리뷰 수와 평점
+        self.assertIsInstance(facts["reviews"], int)
+        self.assertIsInstance(facts["rating"], float)
         self.assertLessEqual(len(facts["description"]), 600)
         self.assertIsInstance(facts["mechanics"], list)
 

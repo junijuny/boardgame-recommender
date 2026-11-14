@@ -90,6 +90,8 @@ export interface NaturalGame extends FilteredGame {
   Score: number;
   MatchedMechanics: string[];
   MatchedThemes: string[];
+  // 결과를 고른 기준. relevance = 설명과 비슷한 순, 나머지는 리뷰 수·평점·출시 연도 순
+  SortedBy: "relevance" | "popularity" | "rating" | "newest";
 }
 
 // 추천 이유 요청 (POST /explain): "similar" = 기준 게임 이름, "query" = 검색 설명문
