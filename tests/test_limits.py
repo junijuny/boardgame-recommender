@@ -23,6 +23,24 @@ class RateLimiterTests(unittest.TestCase):
         now[0] = 60.1
         self.assertTrue(limiter.allow("a"))
 
+    def test_idle_keys_are_removed_after_window(self):
+        now = [0.0]
+        limiter = RateLimiter(2, 60, clock=lambda: now[0])
+        for key in ("a", "b", "c"):
+            self.assertTrue(limiter.allow(key))
+        self.assertEqual(len(limiter._hits), 3)
+        now[0] = 61.0
+        self.assertTrue(limiter.allow("d"))  # other traffic sweeps expired keys
+        self.assertEqual(set(limiter._hits), {"d"})
+
+    def test_same_key_after_window_keeps_single_entry(self):
+        now = [0.0]
+        limiter = RateLimiter(1, 60, clock=lambda: now[0])
+        self.assertTrue(limiter.allow("a"))
+        now[0] = 100.0
+        self.assertTrue(limiter.allow("a"))
+        self.assertEqual(len(limiter._hits["a"]), 1)
+
 
 class DailyBudgetTests(unittest.TestCase):
     def test_spends_until_limit_and_resets_next_day(self):

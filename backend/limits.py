@@ -26,16 +26,32 @@ class RateLimiter:
         self.window = window_seconds
         self.clock = clock
         self._hits: dict[str, deque[float]] = {}
+        self._last_sweep = clock()
         self._lock = threading.Lock()
+
+    def _sweep(self, now: float) -> None:
+        # 한 번만 쓰인 위조 키가 쌓이지 않게, 창이 한 번 지날 때마다 만료된 키를 모두 제거
+        if now - self._last_sweep < self.window:
+            return
+        self._last_sweep = now
+        for key in [k for k, h in self._hits.items() if not h or now - h[-1] >= self.window]:
+            del self._hits[key]
 
     def allow(self, key: str) -> bool:
         now = self.clock()
         with self._lock:
-            hits = self._hits.setdefault(key, deque())
-            while hits and now - hits[0] >= self.window:
-                hits.popleft()
-            if len(hits) >= self.limit:
+            self._sweep(now)
+            hits = self._hits.get(key)
+            if hits is not None:
+                while hits and now - hits[0] >= self.window:
+                    hits.popleft()
+                if not hits:
+                    del self._hits[key]
+                    hits = None
+            if hits is not None and len(hits) >= self.limit:
                 return False
+            if hits is None:
+                hits = self._hits[key] = deque()
             hits.append(now)
             return True
 

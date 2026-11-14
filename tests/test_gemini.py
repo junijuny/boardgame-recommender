@@ -11,6 +11,18 @@ from backend.limits import DailyBudget
 from tests.gemini_fake import FakeGeminiClient
 
 
+class ExplainParsingTests(unittest.TestCase):
+    def test_non_string_reasons_are_skipped(self):
+        client = gemini.GoogleGeminiClient.__new__(gemini.GoogleGeminiClient)
+        client._generate = lambda *a, **k: {
+            "reasons": [
+                {"bgg_id": 1, "reason": None},
+                {"bgg_id": 2, "reason": "Fine."},
+            ]
+        }
+        self.assertEqual(client.explain("query", "x", None, []), {2: "Fine."})
+
+
 class IntentParsingTest(unittest.TestCase):
     def test_null_and_string_fields_are_coerced(self):
         i = gemini._intent_from_dict({

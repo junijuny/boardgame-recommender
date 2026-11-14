@@ -54,6 +54,8 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=None, help="앞쪽 N개만 처리 (테스트용)")
     parser.add_argument("--out", type=Path, default=features.GEMINI_EMBEDDINGS_PATH)
     args = parser.parse_args()
+    if args.limit and args.out == features.GEMINI_EMBEDDINGS_PATH:
+        parser.error("--limit requires --out so the committed embeddings are not overwritten")
 
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
     if not api_key:

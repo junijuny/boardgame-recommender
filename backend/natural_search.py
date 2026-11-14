@@ -1,6 +1,7 @@
 """자연어 검색 엔진: Gemini 의도 추출 + 임베딩 유사도 + 태그 일치 + 평점."""
 
 import threading
+import zipfile
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,14 +31,20 @@ class GeminiIndex:
 def load_index(path: Path = features.GEMINI_EMBEDDINGS_PATH) -> GeminiIndex | None:
     if not path.exists():
         return None
-    data = np.load(path, allow_pickle=False)
-    if str(data["model_name"]) != gemini.EMBED_MODEL or int(data["dim"]) != gemini.EMBED_DIM:
+    try:
+        with np.load(path, allow_pickle=False) as data:
+            if str(data["model_name"]) != gemini.EMBED_MODEL or int(data["dim"]) != gemini.EMBED_DIM:
+                return None
+            ids = data["ids"]
+            stored = data["vectors"]
+    except (OSError, KeyError, ValueError, zipfile.BadZipFile) as exc:
+        print(f"Warning: could not load Gemini embeddings from {path}: {exc}")
         return None
-    position = pd.Series(np.arange(len(data["ids"])), index=data["ids"])
+    position = pd.Series(np.arange(len(ids)), index=ids)
     rows = position.reindex(eng.df["BGGId"].to_numpy())
     present = rows.notna().to_numpy()
-    vectors = np.zeros((len(eng.df), data["vectors"].shape[1]), dtype=np.float32)
-    vectors[present] = data["vectors"][rows[present].astype(int).to_numpy()].astype(np.float32)
+    vectors = np.zeros((len(eng.df), stored.shape[1]), dtype=np.float32)
+    vectors[present] = stored[rows[present].astype(int).to_numpy()].astype(np.float32)
     return GeminiIndex(vectors=vectors, present=present)
 
 
@@ -88,9 +95,11 @@ def clear_caches() -> None:
 
 
 def _clean_tags(names, vocab: set[str], drop: set[str] = frozenset()) -> tuple[str, ...]:
+    canonical = {v.lower(): v for v in vocab}
     out: list[str] = []
     for name in names:
-        if name in vocab and name not in drop and name not in out:
+        name = canonical.get(str(name).strip().lower())
+        if name is not None and name not in drop and name not in out:
             out.append(name)
     return tuple(out)
 
@@ -183,7 +192,7 @@ def natural_search(
     if len(cand_idx) == 0:
         return []
 
-    raw = index.vectors[cand_idx] @ query_vec
+    raw = (index.vectors @ query_vec)[cand_idx]
     low, high = np.median(raw), raw.max()
     embedding = np.clip((raw - low) / max(high - low, 1e-6), 0.0, 1.0)
 

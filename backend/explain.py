@@ -13,6 +13,7 @@ except ImportError:
 
 CACHE_SIZE = 1024
 DESCRIPTION_CHARS = 600
+MAX_REASON_CHARS = 300
 _HANGUL = re.compile("[ㄱ-ㆎ가-힣]")
 
 _cache: OrderedDict[tuple[str, str, int], str] = OrderedDict()
@@ -106,7 +107,7 @@ def explain_games(
         if bgg_id not in wanted or not isinstance(text, str):
             continue
         text = text.strip()
-        if not text or _HANGUL.search(text):
+        if not text or len(text) > MAX_REASON_CHARS or _HANGUL.search(text):
             continue
         _cache_put((mode, basis_key, bgg_id), text)
         result[bgg_id] = text

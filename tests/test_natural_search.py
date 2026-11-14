@@ -134,6 +134,22 @@ class NaturalSearchTest(unittest.TestCase):
             self.assertIsNotNone(ns.load_index(path))
             self.assertIsNone(ns.load_index(Path(d) / "missing.npz"))
 
+    def test_corrupt_index_file_returns_none(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "bad.npz"
+            path.write_bytes(b"not an npz file at all")
+            self.assertIsNone(ns.load_index(path))
+            np.savez(path, other=np.zeros(1))  # foreign npz without our keys
+            self.assertIsNone(ns.load_index(path))
+
+    def test_sanitize_maps_tag_names_case_insensitively(self):
+        s = sanitize_intent(
+            QueryIntent("x", include_mechanics=(" cooperative game ",), include_themes=("ECONOMIC",)),
+            "q",
+        )
+        self.assertEqual(s.include_mechanics, ("Cooperative Game",))
+        self.assertEqual(s.include_themes, ("Economic",))
+
 
 if __name__ == "__main__":
     unittest.main()

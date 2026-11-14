@@ -61,6 +61,11 @@ class ExplainTest(unittest.TestCase):
         r = post(self.req([A, B, C]))
         self.assertEqual(r.json()["reasons"], {str(C): "Fine sentence."})
 
+    def test_drops_overlong_reason(self):
+        self.fake.reasons = {A: "x" * 301, B: "y" * 300}
+        r = post(self.req([A, B]))
+        self.assertEqual(r.json()["reasons"], {str(B): "y" * 300})
+
     def test_cache_avoids_second_call(self):
         self.fake.reasons = {A: "One."}
         post(self.req([A]))
