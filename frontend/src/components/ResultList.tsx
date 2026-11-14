@@ -65,7 +65,7 @@ export function ResultList({ items, reasons, reasonsLoading, onSelect }: ResultL
                   </span>
                 </span>
                 {reason ? (
-                  <p className="text-[15px] leading-snug text-ink/85">{reason}</p>
+                  <span className="block text-[15px] leading-snug text-ink/85">{reason}</span>
                 ) : reasonsLoading ? (
                   <Skeleton className="h-3.5 w-4/5 rounded-md" />
                 ) : (
