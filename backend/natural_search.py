@@ -11,11 +11,12 @@ import numpy as np
 import pandas as pd
 
 try:
-    from backend import features, gemini, recommend_engine as eng
+    from backend import features, gemini, recommend_engine as eng, series
 except ImportError:
     import features
     import gemini
     import recommend_engine as eng
+    import series
 
 MIN_RATING = 5.5
 # 리뷰가 적은 무명 게임은 설명글이 짧고 일반적이라("우주를 탐험하는 게임입니다") 짧은 질의와
@@ -110,6 +111,8 @@ _vector_cache = _LRU()
 def clear_caches() -> None:
     _intent_cache.clear()
     _vector_cache.clear()
+    global _text_lower
+    _text_lower = None
 
 
 def _clean_tags(names, vocab: set[str], drop: set[str] = frozenset()) -> tuple[str, ...]:
@@ -281,13 +284,13 @@ def natural_search(
     if len(cand_idx) == 0:
         return []
 
+    tag_hits = np.zeros(len(cand_idx))
     include_total = (
         len(intent.include_mechanics) + len(intent.include_themes) + len(intent.categories) + len(intent.keywords)
     )
     matched: dict[str, np.ndarray] = {}
     tag_ratio = None
     if include_total:
-        tag_hits = np.zeros(len(cand_idx))
         for key, feats, names in (
             ("mech", eng.mechanics, intent.include_mechanics),
             ("theme", eng.themes, intent.include_themes),
@@ -327,7 +330,9 @@ def natural_search(
         similarity = np.zeros(len(cand_idx))
 
     if sort_column:
-        picked = _sorted_positions(cand_idx, similarity, sort_column, top_n, narrow=embedding is not None)
+        picked = _sorted_positions(
+            cand_idx, similarity, sort_column, top_n, narrow=embedding is not None, tag_hits=tag_hits
+        )
         # 정렬 질의의 Score는 순위 (1.0, 0.8, ... 1위가 가장 높음)
         score = np.zeros(len(cand_idx))
         score[picked] = 1.0 - np.arange(len(picked)) / max(len(picked), 1)
@@ -337,7 +342,9 @@ def natural_search(
             + RATING_WEIGHT * eng.rating_score(cand_idx)
             + SOFT_WEIGHT * _soft_score(cand_idx, players, intent.low_text)
         )
-        picked = eng.diversify(cand_idx, score, top_n)
+        # 같은 시리즈(확장·버전·외전)는 한 게임만 남기고 다양화한다
+        reps = group_series(cand_idx, score, tag_hits, "NumUserRatings")
+        picked = reps[eng.diversify(cand_idx[reps], score[reps], top_n)]
 
     results = []
     for pos in picked:
@@ -355,8 +362,28 @@ def natural_search(
     return results
 
 
+def group_series(
+    cand_idx: np.ndarray, score: np.ndarray, tag_hits: np.ndarray, prefer_col: str
+) -> np.ndarray:
+    """시리즈마다 대표 한 게임의 cand_idx 안 위치를 반환 (시리즈 최고 점수 내림차순).
+    대표 = 태그 일치가 가장 많은 구성원 중 prefer_col 이 큰 것 (같으면 리뷰 수가 많은 것)."""
+    if len(cand_idx) == 0:
+        return np.zeros(0, dtype=int)
+    codes, _ = pd.factorize(series.KEYS[cand_idx])
+    df = eng.df
+    prefer = df[prefer_col].to_numpy(dtype=float)[cand_idx]
+    reviews = df["NumUserRatings"].to_numpy(dtype=float)[cand_idx]
+    order = np.lexsort((-reviews, -prefer, -np.asarray(tag_hits, dtype=float)))  # 마지막 키가 1순위
+    _, first = np.unique(codes[order], return_index=True)
+    reps = order[first]
+    best = np.full(codes.max() + 1, -np.inf)
+    np.maximum.at(best, codes, score)
+    return reps[np.argsort(-best[codes[reps]], kind="stable")]
+
+
 def _sorted_positions(
-    cand_idx: np.ndarray, similarity: np.ndarray, column: str, top_n: int, narrow: bool
+    cand_idx: np.ndarray, similarity: np.ndarray, column: str, top_n: int, narrow: bool,
+    tag_hits: np.ndarray | None = None,
 ) -> np.ndarray:
     """정렬 질의: (장르 묘사가 있으면 유사도 상위 SORT_POOL개 안에서) column 값이 큰 순, 같으면 리뷰 수 순.
     반환값은 cand_idx 안에서의 위치 배열."""
@@ -367,4 +394,8 @@ def _sorted_positions(
     values = df[column].to_numpy(dtype=float)[cand_idx[pos]]
     reviews = df["NumUserRatings"].to_numpy(dtype=float)[cand_idx[pos]]
     order = np.lexsort((-reviews, -values))  # 마지막 키가 1순위
-    return pos[order][:top_n]
+    pos = pos[order]
+    # 같은 시리즈는 한 게임만: 정렬 순위를 점수로 삼아 시리즈별 대표를 고른다
+    hits = np.zeros(len(cand_idx)) if tag_hits is None else tag_hits
+    rank_score = 1.0 - np.arange(len(pos)) / max(len(pos), 1)
+    return pos[group_series(cand_idx[pos], rank_score, hits[pos], column)][:top_n]

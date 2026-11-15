@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest import mock
 
 import numpy as np
+import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -268,12 +269,14 @@ class AudienceSignalTest(unittest.TestCase):
 
     def test_word_match_off_without_tfidf(self):
         self.fake.intent = QueryIntent("something", terms=("zombies",))
-        saved = eng.tfidf
-        eng.tfidf = None
-        try:
+        # _word_score 가 _get_tfidf_matrix() 로 tfidf 를 다시 채울 수 있으니 함께 막아 끈 경로를 실제로 탄다
+        with mock.patch.object(eng, "tfidf", None), mock.patch.object(
+            eng, "_get_tfidf_matrix", return_value=None
+        ), mock.patch.object(ns, "_word_score", wraps=ns._word_score) as word:
             self.assertEqual(len(natural_search("q", 4, 120)), 5)
-        finally:
-            eng.tfidf = saved
+            self.assertTrue(word.called)
+        with mock.patch.object(eng, "tfidf", None), mock.patch.object(eng, "_get_tfidf_matrix", return_value=None):
+            self.assertIsNone(ns._word_score(np.arange(5), ("zombies",)))
 
 
 class SortedSearchTest(unittest.TestCase):
@@ -301,6 +304,8 @@ class SortedSearchTest(unittest.TestCase):
             col = int(np.flatnonzero(eng.mechanics.names == tag)[0])
             mask &= np.asarray(eng.mechanics.binary[:, col].toarray()).ravel() > 0
         top = df[mask].sort_values([column, "NumUserRatings"], ascending=False, kind="stable")
+        # 같은 시리즈는 정렬 기준이 가장 높은 게임 하나만
+        top = top[~pd.Series(ns.series.KEYS[top.index], index=top.index).duplicated()]
         return [int(i) for i in top["BGGId"].head(5)]
 
     def test_popularity_without_genre_sorts_by_reviews_and_skips_embedding(self):
@@ -350,6 +355,55 @@ class SortedSearchTest(unittest.TestCase):
         second = natural_search("가장 유명한 게임", 4, 120, exclude_ids=[g["BGGId"] for g in first])
         self.assertTrue(second)
         self.assertFalse({g["BGGId"] for g in first} & {g["BGGId"] for g in second})
+
+
+class SeriesGroupingTest(unittest.TestCase):
+    def setUp(self):
+        self._client = gemini._client
+        self._index = ns._index
+        ns.clear_caches()
+        e0 = np.zeros(8, dtype=np.float32)
+        e0[0] = 1.0
+        self.fake = FakeGeminiClient(intent=QueryIntent("co-op"), query_vector=e0)
+        set_client(self.fake)
+        ns.set_index(make_index(idx_of("Pandemic")))
+
+    def tearDown(self):
+        gemini._client = self._client
+        ns._index = self._index
+        ns.clear_caches()
+
+    def group(self, names, score, hits, col="NumUserRatings"):
+        cand = np.array([idx_of(n) for n in names])
+        return [names[i] for i in ns.group_series(cand, np.array(score, dtype=float), np.array(hits, dtype=float), col)]
+
+    def test_group_series_keeps_most_reviewed(self):
+        got = self.group(["Pandemic", "Pandemic Legacy: Season 1", "Catan"], [0.5, 0.9, 0.4], [0, 0, 0])
+        self.assertEqual(got, ["Pandemic", "Catan"])
+
+    def test_group_series_prefers_tag_match(self):
+        got = self.group(["Carcassonne", "Carcassonne: Star Wars"], [0.5, 0.6], [0, 1])
+        self.assertEqual(got, ["Carcassonne: Star Wars"])
+
+    def test_group_series_ranking_uses_sort_column(self):
+        got = self.group(["Pandemic", "Pandemic Legacy: Season 1"], [0.9, 0.5], [0, 0], "BayesAvgRating")
+        self.assertEqual(got, ["Pandemic Legacy: Season 1"])
+
+    def assert_one_per_series(self, games):
+        idx = [int(eng.df.index[eng.df["BGGId"] == g["BGGId"]][0]) for g in games]
+        keys = [ns.series.KEYS[i] for i in idx]
+        self.assertEqual(len(keys), len(set(keys)))
+
+    def test_search_results_have_one_per_series(self):
+        games = natural_search("co-op", 4, 120, top_n=10)
+        self.assertEqual(len(games), 10)
+        self.assert_one_per_series(games)
+
+    def test_ranking_results_have_one_per_series(self):
+        self.fake.intent = QueryIntent("", sort="popularity")
+        games = natural_search("가장 유명한 게임", 4, 120, top_n=10)
+        self.assertEqual(len(games), 10)
+        self.assert_one_per_series(games)
 
 
 if __name__ == "__main__":
