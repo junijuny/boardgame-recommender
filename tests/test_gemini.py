@@ -136,5 +136,22 @@ class ProfilesParsingTest(unittest.TestCase):
         self.assertEqual(out[1].franchise, ())
 
 
+class RerankParsingTest(unittest.TestCase):
+    def _client(self, data):
+        client = gemini.GoogleGeminiClient.__new__(gemini.GoogleGeminiClient)
+        client._generate = lambda *a, **k: data
+        return client
+
+    def test_rerank_result_parsing(self):
+        out = self._client(
+            {"interpretation": "Read as: x", "ranked_ids": [3, "4"], "weak_match": True}
+        ).rerank("q", [])
+        self.assertEqual(out, gemini.RerankResult("Read as: x", (3, 4), True))
+
+    def test_missing_ids_raises(self):
+        with self.assertRaises(gemini.GeminiError):
+            self._client({"interpretation": "Read as: x", "weak_match": False}).rerank("q", [])
+
+
 if __name__ == "__main__":
     unittest.main()

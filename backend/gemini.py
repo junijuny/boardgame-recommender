@@ -30,6 +30,9 @@ EXTRACT_MAX_TOKENS = 512
 EXPLAIN_MAX_TOKENS = 1024
 PROFILE_MODEL = "gemini-3.5-flash-lite"
 PROFILE_MAX_TOKENS = 4096  # 게임 10개 x (약 120단어 + 목록)
+RERANK_MODEL = "gemini-3.5-flash-lite"
+RERANK_TIMEOUT_SECONDS = 10  # brief said 5, but the API rejects deadlines under 10s (400)
+RERANK_MAX_TOKENS = 1024
 
 
 class GeminiError(Exception):
@@ -68,6 +71,13 @@ class GameProfile:
     designer_countries: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class RerankResult:
+    interpretation: str
+    ranked_ids: tuple[int, ...]
+    weak_match: bool
+
+
 CATEGORY_NAMES = ("Thematic", "Strategy", "War", "Family", "CGS", "Abstract", "Party", "Childrens")
 SORT_OPTIONS = ("relevance", "popularity", "rating", "newest")
 
@@ -98,6 +108,8 @@ class GeminiClient(Protocol):
     ) -> dict[int, str]: ...
 
     def write_profiles(self, games: Sequence[dict]) -> list[GameProfile]: ...
+
+    def rerank(self, query: str, games: Sequence[dict]) -> RerankResult: ...
 
 
 EXTRACT_PROMPT = """\
@@ -160,6 +172,19 @@ Always write in English. For each game return:
 - designer_countries: the countries the designers are from; empty if you are not sure, and always
   empty when include_designers is false.
 Leave a field empty rather than guessing. Return one entry per game, keyed by its bgg_id.
+Games: {games}
+"""
+
+RERANK_PROMPT = """You re-rank candidate board games for a search request (any language, often Korean).
+Rules:
+- ranked_ids: bgg_ids of the games that fit the request, best fit first. Omit poor fits. At most 20 ids.
+- interpretation: one English sentence starting with "Read as:" saying how you understood the request.
+  Do not mention any game names.
+- weak_match: true when fewer than 3 of the games fit the request well, else false.
+- Judge only from the facts given for each game; do not rely on outside knowledge of the games.
+- web_mentioned, when present, only means the game was mentioned on the web for this request; it is a
+  weak hint, not proof of fit.
+Request: {query}
 Games: {games}
 """
 
@@ -237,11 +262,18 @@ class GoogleGeminiClient:
         self._client = genai.Client(api_key=api_key)
         self.usage = {"calls": 0, "prompt_tokens": 0, "output_tokens": 0}  # 오프라인 작업 비용 집계용
 
-    def _http_options(self):
+    def _http_options(self, timeout_seconds: int = TIMEOUT_SECONDS):
         # HttpOptions.timeout 단위는 밀리초
-        return self._types.HttpOptions(timeout=TIMEOUT_SECONDS * 1000)
+        return self._types.HttpOptions(timeout=timeout_seconds * 1000)
 
-    def _generate(self, model: str, prompt: str, schema: dict, max_output_tokens: int) -> dict:
+    def _generate(
+        self,
+        model: str,
+        prompt: str,
+        schema: dict,
+        max_output_tokens: int,
+        timeout_seconds: int = TIMEOUT_SECONDS,
+    ) -> dict:
         t = self._types
         try:
             resp = self._client.models.generate_content(
@@ -252,7 +284,7 @@ class GoogleGeminiClient:
                     response_schema=schema,
                     max_output_tokens=max_output_tokens,
                     thinking_config=t.ThinkingConfig(thinking_level=t.ThinkingLevel.MINIMAL),
-                    http_options=self._http_options(),
+                    http_options=self._http_options(timeout_seconds),
                 ),
             )
             meta = getattr(resp, "usage_metadata", None)
@@ -384,6 +416,33 @@ class GoogleGeminiClient:
             return [p for p in out if p is not None]
         except (KeyError, TypeError, ValueError, AttributeError) as exc:
             raise GeminiError(f"Unexpected profile response: {exc}") from exc
+
+    def rerank(self, query, games) -> RerankResult:
+        # 검색 도구는 쓰지 않는다
+        schema = {
+            "type": "OBJECT",
+            "properties": {
+                "interpretation": {"type": "STRING"},
+                "ranked_ids": {"type": "ARRAY", "items": {"type": "INTEGER"}},
+                "weak_match": {"type": "BOOLEAN"},
+            },
+            "required": ["interpretation", "ranked_ids", "weak_match"],
+        }
+        prompt = RERANK_PROMPT.format(
+            query=query, games=json.dumps(list(games), ensure_ascii=False)
+        )
+        data = self._generate(
+            RERANK_MODEL, prompt, schema, RERANK_MAX_TOKENS, RERANK_TIMEOUT_SECONDS
+        )
+        try:
+            interpretation = data["interpretation"]
+            return RerankResult(
+                interpretation="" if interpretation is None else str(interpretation),
+                ranked_ids=tuple(int(i) for i in data["ranked_ids"]),
+                weak_match=bool(data.get("weak_match")),
+            )
+        except (KeyError, TypeError, ValueError, AttributeError) as exc:
+            raise GeminiError(f"Unexpected rerank response: {exc}") from exc
 
 
 def _profile_from_dict(r: dict) -> GameProfile | None:

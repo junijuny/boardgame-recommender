@@ -3,9 +3,9 @@
 import numpy as np
 
 try:
-    from backend.gemini import EMBED_DIM, GameProfile, QueryIntent
+    from backend.gemini import EMBED_DIM, GameProfile, QueryIntent, RerankResult
 except ImportError:
-    from gemini import EMBED_DIM, GameProfile, QueryIntent
+    from gemini import EMBED_DIM, GameProfile, QueryIntent, RerankResult
 
 
 class FakeGeminiClient:
@@ -16,7 +16,11 @@ class FakeGeminiClient:
         reasons: dict[int, str] | None = None,
         error: Exception | None = None,
         extra_profiles: list[GameProfile] | None = None,
+        rerank_result: RerankResult | None = None,
+        rerank_error: Exception | None = None,
     ):
+        self.rerank_result = rerank_result
+        self.rerank_error = rerank_error
         self.extra_profiles = extra_profiles or []
         self.intent = intent
         self.query_vector = query_vector
@@ -65,3 +69,11 @@ class FakeGeminiClient:
             for g in games
         ]
         return out + list(self.extra_profiles)
+
+    def rerank(self, query, games):
+        self._record("rerank", query, games)
+        if self.rerank_error is not None:
+            raise self.rerank_error
+        if self.rerank_result is not None:
+            return self.rerank_result
+        return RerankResult("Read as: fake.", tuple(int(g["bgg_id"]) for g in games), False)
