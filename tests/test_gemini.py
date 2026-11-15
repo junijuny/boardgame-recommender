@@ -23,6 +23,14 @@ class ExplainParsingTests(unittest.TestCase):
         self.assertEqual(client.explain("query", "x", None, []), {2: "Fine."})
 
 
+class ExtractPromptTest(unittest.TestCase):
+    def test_player_count_game_type_stays_in_search_text(self):
+        text = gemini.EXTRACT_PROMPT
+        self.assertIn("two-player game", text)
+        self.assertIn("IS a gameplay aspect", text)
+        self.assertIn("even when sort is popularity", text)
+
+
 class IntentParsingTest(unittest.TestCase):
     def test_null_and_string_fields_are_coerced(self):
         i = gemini._intent_from_dict({

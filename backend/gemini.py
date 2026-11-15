@@ -95,6 +95,9 @@ Rules:
   Do not add requirements the request does not imply. Translate Korean meaning into English.
   If the request has no genre or gameplay aspect at all (only "famous", "best rated", "newest" etc.),
   set search_text to an empty string.
+  A game type defined by player count ("two-player game", "head-to-head", "solo game", 2인용, 혼자 하는)
+  IS a gameplay aspect: keep it in search_text (e.g. "a game designed for exactly two players, head-to-head")
+  even when sort is popularity, rating or newest.
 - sort: how to rank the results.
   "popularity" for famous / popular / well-known / classic / everyone plays it (e.g. 유명한, 인기 있는, 국민 게임).
   "rating" for best rated / highest rated / masterpiece / best ever (e.g. 평점 높은, 명작). This means the BGG
@@ -107,7 +110,7 @@ Rules:
 - keywords: proper nouns (franchise, designer, publisher, country) in their official English form
   (스타워즈 -> "Star Wars", 한국 -> "Korea"); still never put them in search_text.
 - terms: up to 3 concrete subject nouns in English (e.g. "animals", "zombies", "trains"), not mechanics.
-- Ignore player counts and play time; the UI supplies them.
+- Ignore plain player counts and play time (e.g. "for 4 players", "30 minutes"); the UI supplies them.
 - Weight is BGG complexity on a 1-5 scale. Map "light/easy" (e.g. 가벼운) to a low range such as 1.0-2.5,
   and "heavy/complex" to a high range such as 3.5-5.0. Leave weight_min/weight_max null if not implied.
 - include_*/exclude_*: only tags clearly implied by the request. "No dice" means exclude Dice Rolling.
