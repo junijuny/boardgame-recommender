@@ -164,6 +164,7 @@ uv run python -m unittest discover -s tests -v
   uv run --env-file .env uvicorn backend.main:app --reload --port 8000
   ```
   키가 없어도 앱은 정상 동작하며, "By description" 탭이 숨겨지고 결과 설명은 공통 메커니즘 칩으로 대체됩니다. 키는 프론트엔드에 넣지 않습니다.
+- 자연어 검색의 웹 검색(Google Search 근거)은 `NATURAL_WEB_SEARCH=0` 환경변수로 서버에서 끌 수 있습니다(기본 켜짐). 근거 검색 결과는 약관상 저장·평가에 쓸 수 없어, 평가 스크립트는 환경변수와 무관하게 항상 웹 검색을 끄고 실행합니다. 일일 웹 호출 한도는 `WEB_SEARCH_DAILY_LIMIT`(기본 100).
 - `data/gemini_embeddings.npz`는 git에 포함되어 있습니다. 게임 데이터를 바꿨다면 다시 만들어 커밋합니다 (약 7분, 약 $1.7, 키 필요):
   ```bash
   uv run --env-file .env python -m backend.build_gemini_embeddings

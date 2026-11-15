@@ -58,14 +58,14 @@ def _summary(text: str) -> str:
 
 def lookup(query: str) -> tuple[frozenset[int], dict] | None:
     client = gemini.get_client()
-    if client is None or web_budget.remaining() < 1:
+    if client is None or not web_budget.try_spend(1):
         return None
     try:
         gemini.charge()  # a web call is also a Gemini generate call: charge the general budget once
         answer = client.web_search(query)
     except gemini.GeminiError:
         return None
-    web_budget.try_spend(min(max(1, answer.search_count), web_budget.remaining()))
+    web_budget.try_spend(max(0, answer.search_count - 1))  # 처음 1은 호출 전에 썼다
     # The terms require showing search suggestions with grounded results: no HTML means failure.
     if not answer.suggestions_html:
         return None

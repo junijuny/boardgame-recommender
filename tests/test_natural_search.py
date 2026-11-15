@@ -751,6 +751,14 @@ class WebSearchNaturalTest(unittest.TestCase):
         facts = self.calls("rerank")[0][2]
         self.assertTrue(all(g["web_mentioned"] for g in facts))
 
+    def test_many_ids_of_one_series_stay_soft(self):
+        self.fake.web_answer = gemini.WebAnswer("Ticket to Ride\n\nSummary.", "<div>s</div>", 1)
+        pool = ns.web_search.match_names("Ticket to Ride")
+        self.assertGreater(len(pool), 5)
+        r = search_full("co-op", 4, 60)
+        self.assertEqual(len(r.games), 5)
+        self.assertIsNotNone(r.web)
+
     def test_web_ids_soft_when_fewer(self):
         self.answer(self.short_names[10:12])
         r = search_full("co-op", 4, 60)

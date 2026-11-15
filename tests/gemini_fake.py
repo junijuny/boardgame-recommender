@@ -88,4 +88,4 @@ class FakeGeminiClient:
             raise self.web_error
         if self.web_answer is not None:
             return self.web_answer
-        return WebAnswer("Catan" + chr(92) + "n" + chr(92) + "nFake summary.", "<div>fake suggestions</div>", 1)
+        return WebAnswer("Catan\n\nFake summary.", "<div>fake suggestions</div>", 1)

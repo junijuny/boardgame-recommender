@@ -57,12 +57,39 @@ class MetricsTest(unittest.TestCase):
         rows = [{"BGGId": gid, "Name": "Pandemic"}, {"BGGId": 1, "Name": "Other"}]
         entry = {"query": "co-op", "type": "genre", "players": 4, "max_time": 120,
                  "good": [gid], "bad": [], "expect_weak_match": False}
-        fake = lambda q, p, t, top_n: ns.NaturalResult(rows, None, False, [gid, 1, 2], None)
+        fake = lambda q, p, t, top_n, allow_web: ns.NaturalResult(rows, None, False, [gid, 1, 2], None)
         result = ev.run([entry], "fake", search=fake)
         self.assertEqual(result["summary"]["hit_at_5"], 1.0)
         self.assertEqual(result["per_query"][0]["names"], ["Pandemic", "Other"])
         self.assertEqual(result["label"], "fake")
         self.assertIn("genre", result["summary"]["by_type"])
+
+    def test_run_never_triggers_web_search(self):
+        from unittest import mock
+
+        from tests.gemini_fake import FakeGeminiClient
+        from tests.test_natural_search import make_index
+
+        gid = bgg_id("Pandemic")
+        fake = FakeGeminiClient(
+            intent=QueryIntent("co-op", include_mechanics=("Cooperative Game",), needs_web=True),
+            query_vector=np.eye(8, dtype=np.float32)[0],
+        )
+        entry = {"query": "co-op", "type": "genre", "players": 4, "max_time": 120,
+                 "good": [gid], "bad": [], "expect_weak_match": False}
+        old_client, old_index = ev.gemini._client, ns._index
+        ev.gemini.set_client(fake)
+        ns.set_index(make_index(int(eng.df.index[eng.df["BGGId"] == gid][0])))
+        ns.clear_caches()
+        try:
+            with mock.patch.object(ns.web_search, "lookup") as lookup:
+                ev.run([entry], "x")
+        finally:
+            ev.gemini._client = old_client
+            ns._index = old_index
+            ns.clear_caches()
+        lookup.assert_not_called()
+        self.assertEqual([c for c in fake.calls if c[0] == "web_search"], [])
 
     def test_recall_uses_shortlist_and_weak_rate_is_numeric(self):
         g1, g2 = bgg_id("Pandemic"), bgg_id("Catan")
@@ -72,7 +99,7 @@ class MetricsTest(unittest.TestCase):
             {**base, "query": "none", "type": "no_answer", "good": [], "expect_weak_match": True},
         ]
 
-        def fake(q, p, t, top_n):
+        def fake(q, p, t, top_n, allow_web):
             rows = [{"BGGId": g1, "Name": "Pandemic"}]
             return ns.NaturalResult(rows, None, q == "none", [g1, g2], None)
 

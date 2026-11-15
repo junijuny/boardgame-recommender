@@ -74,7 +74,8 @@ def run(entries: list[dict], label: str, search=natural_search.natural_search, r
     per_query = []
     for entry in entries:
         good, bad = set(entry["good"]), set(entry["bad"])
-        found = search(entry["query"], entry["players"], entry["max_time"], top_n=K)
+        # 근거 검색 결과는 평가에 쓸 수 없다: 웹 검색은 항상 끈다
+        found = search(entry["query"], entry["players"], entry["max_time"], top_n=K, allow_web=False)
         rows = found.games
         top = [int(r["BGGId"]) for r in rows][:K]
         # 재현율은 재정렬 전 후보 묶음(상위 recall_n)에서 계산한다

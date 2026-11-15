@@ -27,7 +27,7 @@ uv run --locked uvicorn backend.main:app --reload --port 8000
 | `POST /recommend` | JSON `game_name`, `players`, `max_time`, 선택 `exclude_ids` | 조건을 만족하는 최대 5개 추천 게임 |
 | `GET /games/semantic-search` | 쿼리 `query`, 선택 `players`, `max_time` | 자연어(한국어 가능) 설명에 맞는 최대 10개 게임. 임베딩 미준비 시 `503` |
 | `POST /search/natural` | JSON `query`, `players`, `max_time`, 선택 `exclude_ids` | 검색어(한국어·영어)의 장르적 특성에 맞는 최대 5개 게임(리뷰 1,000개 이상, 평점 5.5 이상 중에서). 항목은 게임 필드와 `Similarity`, `Score`, `MatchedMechanics`, `MatchedThemes`, `SortedBy`. "가장 유명한/평점 높은/최신" 같은 순위 질의는 리뷰 수·평점·출시 연도 순. 키·임베딩이 없으면 `503` |
-| `POST /explain` | JSON `mode`(`similar` 또는 `query`), `basis`, `game_ids`, 선택 `weak_match`(기본 `false`) | `{"reasons": {"<BGGId>": "영어 한 문장"}}`. 키가 없으면 `503` |
+| `POST /explain` | JSON `mode`(`similar` 또는 `query`), `basis`, `game_ids`, 선택 `weak_match`(기본 `false`), 선택 `from_web`(기본 `false`; 검색 응답의 `web`이 null이 아니면 `true`로 보낸다. 웹 근거 검색으로 고른 게임이므로 설명 캐시를 읽지도 쓰지도 않는다) | `{"reasons": {"<BGGId>": "영어 한 문장"}}`. 키가 없으면 `503` |
 | `GET /games/{bgg_id}` | 경로의 게임 ID(`BGGId`) | 게임 한 개의 상세 정보(설명, 난이도, 인원, 시간, 평점) |
 | `GET /genres` | 없음 | 장르 8개와 장르별 대표 게임 최대 6개 |
 | `GET /genres/{key}/games` | 경로의 장르 `key`, 선택 쿼리 `players`, `max_time`, `exclude_ids` | 조건(최소 평점 5.5, 인원·시간)에 맞는 장르 게임 최대 6개. 리뷰 1,000개 이상 게임 우선, 그 안에서 평점순. `exclude_ids`의 게임은 제외(`?exclude_ids=13&exclude_ids=822`처럼 여러 번 붙임). 없으면 빈 목록 |

@@ -73,6 +73,15 @@ class ExplainTest(unittest.TestCase):
         self.assertEqual(r.json()["reasons"], {str(A): "One."})
         self.assertEqual(len(explain_calls(self.fake)), 1)
 
+    def test_from_web_never_cached(self):
+        self.fake.reasons = {A: "One."}
+        body = {**self.req([A]), "from_web": True}
+        post(body)
+        r = post(body)
+        self.assertEqual(r.json()["reasons"], {str(A): "One."})
+        self.assertEqual(len(explain_calls(self.fake)), 2)
+        self.assertEqual(len(explain._cache), 0)
+
     def test_only_uncached_ids_sent_in_order(self):
         self.fake.reasons = {A: "One.", B: "Two.", C: "Three."}
         post(self.req([A]))

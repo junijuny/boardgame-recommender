@@ -342,6 +342,7 @@ def natural_search(
     max_time: int,
     exclude_ids: list[int] | None = None,
     top_n: int = 5,
+    allow_web: bool = True,
 ) -> NaturalResult:
     client = gemini.get_client()
     index = _index
@@ -351,7 +352,7 @@ def natural_search(
     intent = _get_intent(client, query)
     sort_column = SORT_COLUMNS.get(intent.sort)
     # 웹 근거 결과는 이 응답에만 쓰고 캐시·로그에 남기지 않는다 (Gemini API 추가 약관)
-    use_web = bool(intent.needs_web) and web_search_enabled()
+    use_web = bool(intent.needs_web) and allow_web and web_search_enabled()
     web_ids: frozenset[int] = frozenset()
     web_info: dict | None = None
     if use_web:
@@ -395,7 +396,8 @@ def natural_search(
     web_tag = None
     if web_ids:
         in_web = np.isin(df["BGGId"].to_numpy()[cand_idx], list(web_ids))
-        if int(in_web.sum()) >= WEB_HARD_MIN:
+        # 결과는 시리즈당 1개라, 같은 시리즈 id 여럿(콜론 규칙)은 하나로 센다
+        if len(set(series.KEYS[cand_idx[in_web]])) >= WEB_HARD_MIN:
             cand_idx = cand_idx[in_web]
         else:
             web_tag = in_web
@@ -513,7 +515,7 @@ def _web_lookup(query: str):
     future = _web_pool.submit(web_search.lookup, query)
     try:
         return future.result(timeout=WEB_WALL_SECONDS)
-    except concurrent.futures.TimeoutError:
+    except Exception:  # 시간 초과 포함: 웹 검색 실패는 건너뛴다
         future.cancel()
         return None
 
