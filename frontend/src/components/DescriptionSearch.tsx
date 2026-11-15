@@ -36,10 +36,11 @@ export default function DescriptionSearch({ onShowDetail }: DescriptionSearchPro
   const slow = useIsSlow(loading);
   // 한 문장 추천 이유: 서버가 켜 둔 경우에만, 검색이 성공한 뒤에 요청한다.
   const explanationsOn = useServerInfo().data?.explanations === true;
-  const results = search.data;
+  const results = search.data?.games;
   const explanations = useExplanations(
     explanationsOn && results && search.variables
-      ? { mode: "query", basis: search.variables.query, game_ids: results.map((g) => g.BGGId) }
+      ? { mode: "query", basis: search.variables.query, game_ids: results.map((g) => g.BGGId),
+          weak_match: search.data?.weak_match }
       : null,
   );
 
@@ -54,7 +55,7 @@ export default function DescriptionSearch({ onShowDetail }: DescriptionSearchPro
     const body = request ?? { query: query.trim(), players, max_time: maxTime, exclude_ids: exclude };
     if (!body.query || loading) return;
     search.mutate(body, {
-      onSuccess: (games) => setShownIds([...exclude, ...games.map((g) => g.BGGId)]),
+      onSuccess: ({ games }) => setShownIds([...exclude, ...games.map((g) => g.BGGId)]),
     });
   }
 
@@ -129,6 +130,7 @@ export default function DescriptionSearch({ onShowDetail }: DescriptionSearchPro
           <div className="flex min-w-0 flex-col gap-1.5">
             <h2 id="description-result-title" className="font-display text-[26px] font-extrabold tracking-[-0.01em]">Results</h2>
             {search.variables && <p className="break-words text-[15px] text-ink/70">{summarize(search.variables)}</p>}
+            {search.data?.interpretation && <p className="break-words text-[15px] text-ink/70">{search.data.interpretation}</p>}
           </div>
           {search.isSuccess && (
             <button
@@ -156,14 +158,19 @@ export default function DescriptionSearch({ onShowDetail }: DescriptionSearchPro
           />
         )}
         {/* "최신 게임" 검색: 데이터셋이 2021년 출시작까지라 그보다 새 게임은 나올 수 없음을 알린다 */}
-        {search.isSuccess && search.data[0]?.SortedBy === "newest" && (
+        {search.isSuccess && search.data.games[0]?.SortedBy === "newest" && (
           <p className="rounded-xl border border-line bg-card px-4 py-3 text-[15px] text-ink/80">
             Our game data covers releases up to {DATA_LAST_YEAR}, so these are the newest games in it.
           </p>
         )}
+        {search.isSuccess && search.data.weak_match && (
+          <p className="rounded-xl border border-line bg-card px-4 py-3 text-[15px] text-ink/80">
+            We couldn't find a close match. These are the nearest games.
+          </p>
+        )}
         {search.isSuccess && (
           <ResultList
-            items={search.data.map((g) => ({ game: g, chips: [...g.MatchedMechanics, ...g.MatchedThemes].slice(0, 3) }))}
+            items={search.data.games.map((g) => ({ game: g, chips: [...g.MatchedMechanics, ...g.MatchedThemes].slice(0, 3) }))}
             reasons={explanations.data?.reasons}
             reasonsLoading={explanations.isFetching}
             onSelect={onShowDetail}

@@ -46,8 +46,8 @@ flowchart LR
    (`ALLOWED_ORIGINS`가 쉼표로 여러 주소를 받으므로, gcloud의 대체 구분자 `^@^`를 써서 변수끼리 `@`로 구분합니다.)
 3. `--set-env-vars`는 기존 환경 변수를 **모두 덮어씁니다**. Cloud Run 콘솔에서 손으로 넣은 값은 다음 배포 때 사라지므로, 필요한 값은 워크플로에 넣습니다.
 4. 키는 Cloud Run 서비스에 **일반 환경 변수로 보입니다** (콘솔에서 서비스 편집 권한이 있는 사람이 볼 수 있음). 키는 백엔드에만 두고 Vercel/프론트엔드에는 절대 넣지 않습니다.
-5. 선택: `GEMINI_DAILY_CALL_LIMIT`(기본 2000, UTC 자정 초기화)을 바꾸려면 워크플로의 `--set-env-vars`에 `@GEMINI_DAILY_CALL_LIMIT=...` 형태로 함께 추가합니다. 이 카운터는 **인스턴스 메모리에만** 있어서 인스턴스가 새로 시작될 때(scale-to-zero 후 재시작, 배포, 크래시)마다 0으로 돌아갑니다. 따라서 하루 전체의 엄격한 상한이 아니라 **느슨한 안전장치**입니다.
-6. **공개하기 전에 Google 쪽에 하드 한도를 설정합니다.** 진짜 최종 방어선은 Google 쪽입니다. Gemini API 키가 속한 프로젝트에 하루 요청 수(requests per day) 쿼터를 걸고, 결제 계정에는 예산 알림(billing budget alert)을 설정합니다 (Google AI Studio / Google Cloud Console에서 설정, 메뉴 위치는 화면 구성이 바뀔 수 있어 생략).
+5. `GEMINI_DAILY_CALL_LIMIT`(코드 기본 2000, UTC 자정 초기화)은 워크플로의 `--set-env-vars`에 `@GEMINI_DAILY_CALL_LIMIT=300`으로 이미 들어 있습니다(검색 1회가 Gemini를 여러 번 부르므로 비용 보호용). 값을 바꾸려면 그 부분을 고칩니다. 이 카운터는 **인스턴스 메모리에만** 있어서 인스턴스가 새로 시작될 때(scale-to-zero 후 재시작, 배포, 크래시)마다 0으로 돌아갑니다. 따라서 하루 전체의 엄격한 상한이 아니라 **느슨한 안전장치**입니다.
+6. **공개하기 전에 Google 쪽에 하드 한도를 설정합니다.** 진짜 최종 방어선은 Google 쪽입니다. Gemini API 키가 속한 프로젝트에 하루 요청 수(requests per day) 쿼터를 걸고, 결제 계정에는 예산 알림(billing budget alert)을 설정합니다 (Google AI Studio / Google Cloud Console에서 설정. 재순위 호출이 추가되어 검색당 호출이 늘었으니 예산 알림은 꼭 켜 두세요, 메뉴 위치는 화면 구성이 바뀔 수 있어 생략).
 7. IP별 요청 제한(60초에 30회)은 `X-Forwarded-For`의 가장 왼쪽 값을 클라이언트 IP로 씁니다. 운영 환경의 실제 헤더 형식에서 이 값이 의도한 IP인지 확인해 두세요.
 8. `data/gemini_embeddings.npz`는 이미지에 포함되어 배포됩니다. 파일이 없으면 자연어 검색은 `503`입니다.
 

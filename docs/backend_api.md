@@ -86,7 +86,7 @@ curl -X POST 'http://localhost:8000/search/natural' \
 ```
 
 - Gemini(`gemini-3.5-flash-lite`)가 검색어를 조건(포함·제외 메커니즘/테마, 난이도 범위, 영어 검색 문장)으로 바꾸고, `gemini-embedding-2`(768차원)로 만든 `data/gemini_embeddings.npz`와 비교함. 인원·시간은 요청 값만 사용함
-- 응답은 추천과 같은 게임 필드에 `Similarity`, `Score`, `MatchedMechanics`, `MatchedThemes`(검색어에서 뽑은 태그 중 게임이 가진 것), `SortedBy`(`relevance`·`popularity`·`rating`·`newest` 중 결과를 고른 기준)를 더한 5개. 순위 질의일 때 `Score`는 순위(1위 1.0, 2위 0.8, …). `exclude_ids`로 이미 본 게임을 빼고 다시 받을 수 있음
+- 응답은 추천과 같은 게임 필드에 `Similarity`, `Score`, `MatchedMechanics`, `MatchedThemes`(검색어에서 뽑은 태그 중 게임이 가진 것), `SortedBy`(`relevance`·`popularity`·`rating`·`newest` 중 결과를 고른 기준)를 더한 5개. 순위 질의일 때 `Score`는 순위 목록 전체에 걸쳐 고르게 줄어드는 값(`1.0 - i/목록 길이`, 1위 1.0). `exclude_ids`로 이미 본 게임을 빼고 다시 받을 수 있음
 - 응답 본문은 `{"games": [...], "interpretation": "Read as: ...", "weak_match": false, "web": null}`. `interpretation`은 검색어를 어떻게 이해했는지 한 문장(없으면 `null`), `weak_match`는 일치하는 게임이 3개 미만이라 가장 가까운 결과만 보여 준다는 뜻, `web`은 5단계용으로 예약된 필드이며 지금은 항상 `null`
 - 검색어는 300자 이하. IP당 60초에 10회까지
 

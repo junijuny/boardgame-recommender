@@ -88,7 +88,7 @@ export function useNaturalSearch() {
 // 같은 요청은 다시 보내지 않는다 (staleTime: Infinity). 실패해도 재시도 없이 조용히 넘어간다.
 export function useExplanations(req: ExplainRequest | null) {
   return useQuery({
-    queryKey: ["explain", req?.mode, req?.basis, ...(req?.game_ids ?? [])],
+    queryKey: ["explain", req?.mode, req?.basis, req?.weak_match ?? false, ...(req?.game_ids ?? [])],
     queryFn: () => explain(req!),
     enabled: req != null,
     staleTime: Infinity,
