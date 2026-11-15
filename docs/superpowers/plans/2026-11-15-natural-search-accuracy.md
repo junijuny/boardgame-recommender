@@ -1,41 +1,44 @@
-# Natural Search Accuracy (Stages 1–3) Implementation Plan
+# Natural Search Accuracy Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make natural-language search return results that fit the meaning of most human queries, and measure the improvement: an evaluation set (stage 1), unused audience data and proper-noun keywords (stage 2), and Gemini re-ranking with a shown interpretation plus one-per-series results (stage 3).
+**Goal:** Make natural-language search return results that fit the meaning of most human queries, and measure it: evaluation set (stage 1), unused data + keywords + word match + one-per-series (stage 2), Gemini-written game profiles re-embedded (stage 3), Gemini re-ranking with a shown interpretation (stage 4), and live web search only for questions that need outside facts (stage 5).
 
-**Architecture:** The current pipeline (Gemini intent → hard filter → embedding + tag score) becomes the *retriever*. Its scored candidates are collapsed to one game per series, the top 40 go to a Gemini re-rank call that returns an ordered id list, a one-line interpretation and a weak-match flag, and the server pages through that order. Ranking queries (`sort != relevance`) skip re-ranking. Any re-rank failure falls back to today's ordering. A new offline script scores every change against a fixed query set.
+**Architecture:** The current pipeline (Gemini intent → hard filter → embedding + tag score) stays as the retriever and gains more signals. Offline, Gemini writes a short English play-experience profile plus franchise / base game / designers / designer countries for the 2,906 candidate games; profiles are embedded into a second vector file and used for retrieval and re-ranking only. Online, scored candidates collapse to one per series; the top 25 go to a Gemini re-rank call returning order, interpretation and weak-match. Queries the intent step flags `needs_web` first run a Google-grounded Gemini call whose plain-text answer is matched to our games, shown to the user with Google's search-suggestion widget, and never cached.
 
-**Tech Stack:** Python 3.12, FastAPI, numpy/pandas, `google-genai`, unittest; React 19 + TypeScript + TanStack Query + Tailwind 4.
+**Tech Stack:** Python 3.12, FastAPI, numpy/pandas, scikit-learn TF-IDF (existing), `google-genai`, unittest; React 19 + TypeScript + TanStack Query + Tailwind 4.
 
 **Spec:** `docs/superpowers/specs/2026-11-15-natural-search-accuracy-design.md` (builds on `docs/superpowers/specs/2026-11-14-natural-language-search-design.md`)
 
-**Out of this plan:** Spec stage 4 (BGG XML API metadata, `OtherVersions` in the detail popup, franchise/designer hard filters, BGG-based series keys). It gets its own plan once the user has a BGG API token and the real XML has been inspected — the family-prefix rules depend on that data. Task 1's `series_keys` is the temporary grouping the spec calls for until then.
-
 ## Global Constraints
 
-- Ship as three PRs: stage 1 = Tasks 1–2, stage 2 = Task 3, stage 3 = Tasks 4–9. Branch each stage from the previous stage's branch (stage 1 from `feat/natural-search-sort`, which holds the spec commit).
+- Five PRs: stage 1 = Tasks 1–2, stage 2 = Tasks 3–4, stage 3 = Tasks 5–6, stage 4 = Tasks 7–10, stage 5 = Tasks 11–12. Each stage branches from the previous stage's branch (stage 1 from `feat/natural-search-sort`).
 - Candidate pool unchanged: `_condition_mask(players, max_time, 5.5)` and `NumUserRatings >= MIN_REVIEWS` (1000).
-- Re-rank model constant `RERANK_MODEL = "gemini-3.5-flash-lite"`, own timeout `RERANK_TIMEOUT_SECONDS = 5`. Shortlist size `SHORTLIST_SIZE = 40`, re-rank returns at most `RERANK_MAX_IDS = 20` ids. Each re-rank call goes through `gemini.charge()`.
-- Ranking queries (`sort` in popularity/rating/newest) never call re-rank; their interpretation is fixed copy: popularity `"Ranked by number of BGG reviews."`, rating `"Ranked by BGG rating."`, newest `"Ranked by release year."`
-- Re-rank failure (any `gemini.GeminiError`, including `BudgetExceeded`, timeout, bad JSON) → today's ordering, `interpretation = None`, never 503. Intent-extraction and embedding failures stay 503 as today.
-- Results always fill to 5 when candidates exist; no candidates → `404 "No games match the selected conditions"`.
-- One game per series in every result page (series = Task 1 `series_keys`).
-- All user-visible text English. Interpretation and reasons containing Hangul are dropped.
-- Weak-match copy (frontend): `"We couldn't find a close match. These are the nearest games."`
-- Tests: `uv run python -m unittest discover -s tests -v`; CI has no keys, no test calls Gemini. Frontend checks: `cd frontend && npm run typecheck && npm run lint`.
+- Gemini budget about 6,000 KRW total. Every real-key step states its expected cost; stop and tell the user if a step would exceed it. Evaluation uses 40 queries and the intent/vector disk cache.
+- Series = whole series, sequels and spin-offs included (Pandemic + Pandemic Legacy, Codenames + Codenames: Duet). One game per series on every result page.
+- Profiles are built from Gemini's own knowledge and our data only — **no web search** when building them. Profiles and their metadata feed retrieval and re-rank only; never shown on screen.
+- Web search (Grounding with Google Search): plain-text responses only (no JSON schema); grounded text, matched ids and the re-rank result of a `needs_web` query are **never cached, stored, logged, or evaluated**; the grounded summary is always shown with the unmodified search-suggestion HTML; web search is skipped (never 503) on failure, timeout, or when `WEB_SEARCH_DAILY_LIMIT` (default 100) is spent.
+- Model constants (all start at `"gemini-3.5-flash-lite"`): `PROFILE_MODEL`, `RERANK_MODEL`, `WEB_MODEL`. Timeouts: re-rank `RERANK_TIMEOUT_SECONDS = 5`, web `WEB_TIMEOUT_SECONDS = 8`. `SHORTLIST_SIZE = 25`, `RERANK_MAX_IDS = 20`.
+- Ranking queries (`sort` in popularity/rating/newest) never call re-rank; fixed interpretation copy: popularity `"Ranked by number of BGG reviews."`, rating `"Ranked by BGG rating."`, newest `"Ranked by release year."`
+- Re-rank failure → today's ordering, `interpretation = None`, never 503. Intent-extraction and embedding failures stay 503.
+- Results fill to 5 when candidates exist; none → `404 "No games match the selected conditions"`.
+- All user-visible text English; interpretation/reasons containing Hangul are dropped.
+- Weak-match copy: `"We couldn't find a close match. These are the nearest games."` Web box heading: `"From the web"`.
+- Tests: `uv run python -m unittest discover -s tests -v` (CI has no key; no test calls Gemini). Frontend: `cd frontend && npm run typecheck && npm run lint`.
 - Real-key commands: `uv run --env-file .env <command>`. Never print or commit the key.
 - Backend modules keep the dual import pattern (`try: from backend import x` / `except ImportError: import x`).
 
 ## Review Focus
 
-1. **Gemini returns Hangul or junk in `keywords`** (e.g. `["스타워즈"]`, `[""]`, a 200-char string) → dropped by sanitize, search still works. Test in Task 3.
-2. **A ranking query whose keyword matches nothing under the chosen players/time** ("가장 유명한 스타워즈 게임", 6 players, 30 min) → empty result → 404, not unrelated popular games. Test in Task 3.
-3. **Re-rank returns duplicate ids, ids outside the shortlist, or two games of the same series** → deduped and filtered; page still has 5 distinct-series games. Test in Task 6.
-4. **Refresh after every candidate has been shown** → 404 as today (no infinite padding, no repeats). Test in Task 6.
-5. **Games with missing `GoodPlayers` / `ComAgeRec` / `LanguageEase`** → treated as unknown (no fit bonus, pass the age filter, neutral text score), never a crash. Test in Task 3.
+1. **Gemini returns Hangul or junk in `keywords`/`terms`** (`["스타워즈"]`, `[""]`, a 200-char string) → dropped by sanitize, search still works. Test in Task 3.
+2. **A ranking query whose keyword matches nothing under the chosen players/time** ("가장 유명한 스타워즈 게임", 6 players, 30 min) → 404, not unrelated popular games. Test in Task 3.
+3. **Re-rank returns duplicate ids, ids outside the shortlist, or two games of one series** → page still has 5 distinct-series games. Test in Task 8.
+4. **A `needs_web` query followed by Refresh** → the second request runs web search again and nothing from the first web response is reused from any cache. Test in Task 11.
+5. **Games missing `GoodPlayers` / `ComAgeRec` / `LanguageEase` / a profile** → treated as unknown (no bonus, pass age filter, old vector), never a crash. Tests in Tasks 3 and 6.
 
 ---
+
+## Stage 1 — Evaluation
 
 ### Task 1: Temporary series keys
 
@@ -44,124 +47,232 @@
 - Test: `tests/test_series.py`
 
 **Interfaces:**
-- Produces: `series_keys(df: pd.DataFrame, min_reviews: int) -> np.ndarray` (dtype object, one key string per row, rows in `df` order); module-level `KEYS: np.ndarray = series_keys(eng.df, MIN_REVIEWS)` computed at import from `recommend_engine.df` with `MIN_REVIEWS = 1000`.
+- Produces: `series_keys(df: pd.DataFrame, min_reviews: int, base_games: dict[int, str] | None = None) -> np.ndarray` (object dtype, one key per row, `df` order); module-level `KEYS` computed at import from `recommend_engine.df` with `MIN_REVIEWS = 1000` and no base games; `set_keys(keys: np.ndarray) -> None` (Task 6 replaces `KEYS` after profiles load). `base_games` maps BGGId → base game name (used from Task 6).
 
-- [ ] **Step 1: Write the failing tests** in `tests/test_series.py` (unittest, real `eng.df`, helper `key(name)` = `series.KEYS[idx_of(name)]`):
+- [ ] **Step 1: Write the failing tests** in `tests/test_series.py` (unittest on real `eng.df`; helper `key(name)` = `series.KEYS[idx_of(name)]`):
   - `test_family_groups_versions`: `key("Carcassonne") == key("Carcassonne: Hunters and Gatherers") == key("New World: A Carcassonne Game") == key("Carcassonne: Star Wars")`; `key("Ticket to Ride") == key("Ticket to Ride: Europe")`; `key("Pandemic") == key("Pandemic Legacy: Season 1")`.
-  - `test_publisher_line_family_does_not_group`: games whose `Family` is `"Two-player games (Kosmos)"` do not all share one key (pick two members with different name stems; assert keys differ). Same for `"Harvest (Uwe Rosenberg)"`.
-  - `test_name_prefix_joins_base_game`: synthetic `df` (3 rows: `"Foo"` 2000 reviews no family, `"Foo: Big Box"` 1500 no family, `"Star Wars: Bar"` 1500 no family) → first two share a key; the third's key differs from both and is not `"star wars"` grouping anything else.
+  - `test_publisher_line_family_does_not_group`: two members of `Family == "Two-player games (Kosmos)"` with different name stems have different keys; same for `"Harvest (Uwe Rosenberg)"`.
+  - `test_name_prefix_joins_base_game`: synthetic df (`"Foo"` 2000 reviews, `"Foo: Big Box"` 1500, `"Star Wars: Bar"` 1500, all without family) → first two share a key, third differs.
+  - `test_base_games_join_series`: synthetic df (`"Alpha"`, `"Zeta Quest"`) with `base_games={id_of_zeta: "Alpha"}` → same key.
   - `test_unrelated_games_have_distinct_keys`: `key("Catan") != key("Pandemic")`.
 
-- [ ] **Step 2: Run** `uv run python -m unittest tests.test_series -v` → FAIL (`No module named 'backend.series'`).
+- [ ] **Step 2: Run** `uv run python -m unittest tests.test_series -v` → FAIL (module missing).
 
-- [ ] **Step 3: Implement `series_keys`** in `backend/series.py`:
+- [ ] **Step 3: Implement `series_keys`:**
 
 ```text
 norm(s)  = lowercase, keep letters/digits/spaces, collapse spaces
 label(f) = norm(text before " (" in Family f)
-pass 1, each row:
-  if Family f non-empty and f" {label(f)}" in f" {norm(Name)}"
-      (label starts at a word boundary; prefix match so truncated labels like "carcassonn" still hit)
-      → key = "f:" + label(f)
-  else key = None
-pass 2, rows with key None:
-  base = norm(Name before first ":")
-  if ":" in Name and some row with NumUserRatings >= min_reviews has norm(Name) == base → key = that row's key (or "n:" + base if it has none)
-  else key = "n:" + norm(Name)
+pass 1: Family f non-empty and f" {label(f)}" in f" {norm(Name)}"   → key "f:" + label(f)
+pass 2 (rows still without key):
+   base = norm(base_games[id]) if base_games has id, else norm(Name before first ":") if ":" in Name
+   if base equals norm(Name) of a row with NumUserRatings >= min_reviews → that row's key
+       (computing it first; a base row without a key gets "n:" + norm(its Name))
+   else key "n:" + norm(Name)
 ```
 
 - [ ] **Step 4: Run** `uv run python -m unittest tests.test_series -v` → PASS.
 
 - [ ] **Step 5: Commit** `git add backend/series.py tests/test_series.py && git commit -m "feat(search): add temporary series keys for grouping game versions"`
 
----
-
 ### Task 2: Evaluation set, metrics script, baseline
 
 **Files:**
 - Create: `data/natural_eval_queries.json`, `backend/evaluate_natural.py`, `data/natural_eval_results/baseline.json` (generated)
+- Modify: `.gitignore` (add `data/natural_eval_cache.json`), `docs/setup.md`
 - Test: `tests/test_evaluate_natural.py`
-- Modify: `docs/setup.md` (how to run the evaluation)
 
 **Interfaces:**
-- Consumes: `series.KEYS` (Task 1); `natural_search.natural_search(query, players, max_time, exclude_ids=None, top_n=5) -> list[dict]` (today's signature).
+- Consumes: `series.KEYS`; `natural_search.natural_search(query, players, max_time, exclude_ids=None, top_n=5)` (today returns `list[dict]`; Task 8 changes it to `NaturalResult`).
 - Produces:
-  - Query file format — a JSON array of `{"query": str, "type": "audience"|"mood"|"genre"|"ranking"|"external"|"no_answer"|"series", "players": int, "max_time": int, "good": [int], "bad": [int], "expect_weak_match": bool}`.
-  - `hit_at_k(ids: list[int], good: set[int], k: int) -> bool`, `precision_at_k(ids, good, k) -> float`, `has_series_duplicate(ids: list[int]) -> bool`, `unreachable(entry: dict) -> list[int]` (good ids that fail the candidate pool for that entry's players/time), `run(entries, label: str, search=natural_search) -> dict` (summary + per-query rows; `search` is injectable for tests).
-  - CLI: `uv run --env-file .env python -m backend.evaluate_natural --label <name>` writes `data/natural_eval_results/<name>.json` and prints Hit@5, Precision@5, Recall@40, duplicate rate, bad count, weak-match rate on `no_answer` — overall and per `type`.
+  - Query entry: `{"query": str, "type": "audience"|"mood"|"genre"|"ranking"|"external"|"no_answer"|"series", "players": int, "max_time": int, "good": [int], "bad": [int], "expect_weak_match": bool}`.
+  - `hit_at_k(ids: list[int], good: set[int], k: int) -> bool`, `precision_at_k(ids, good, k) -> float`, `has_series_duplicate(ids: list[int]) -> bool`, `unreachable(entry: dict) -> list[int]`, `run(entries: list[dict], label: str, search=natural_search, recall_n: int = 25) -> dict` (`{"label", "summary": {...overall + "by_type"}, "per_query": [...]}`).
+  - `DiskCache(path: Path)` used by the CLI to pre-fill `natural_search._intent_cache` / `_vector_cache` from `data/natural_eval_cache.json` and save new entries after the run; `--fresh-intents` ignores stored intents (use after a prompt change).
+  - CLI `uv run --env-file .env python -m backend.evaluate_natural --label <name> [--fresh-intents]` → writes `data/natural_eval_results/<name>.json`, prints the metric table.
 
-- [ ] **Step 1: Write the failing tests** in `tests/test_evaluate_natural.py`:
-  - `test_hit_and_precision`: `hit_at_k([1,2,3], {3}, 5) is True`; `hit_at_k([1,2], {9}, 5) is False`; `precision_at_k([1,2,3,4,5], {1,2}, 5) == 0.4`.
-  - `test_series_duplicate`: ids of `"Pandemic"` and `"Pandemic Legacy: Season 1"` → `True`; `"Pandemic"` and `"Catan"` → `False`.
-  - `test_unreachable_flags_games_outside_pool`: a 1–2 player game in `good` with `players=5` is returned by `unreachable`.
-  - `test_run_with_fake_search`: `run([...one entry...], "t", search=lambda q, p, t, top_n: rows)` returns `summary["hit_at_5"] == 1.0` when rows contain a good id; `per_query[0]["names"]` lists names.
-  - `test_query_file_is_valid`: every entry in `data/natural_eval_queries.json` has the keys above, a known `type`, 40 ≤ entries ≤ 60, every type present at least 4 times, both Hangul and Latin queries present, and `unreachable(entry) == []` for all entries.
+- [ ] **Step 1: Write the failing tests:**
+  - `test_hit_and_precision`: `hit_at_k([1,2,3], {3}, 5)`; not `hit_at_k([1,2], {9}, 5)`; `precision_at_k([1,2,3,4,5], {1,2}, 5) == 0.4`.
+  - `test_series_duplicate`: Pandemic + Pandemic Legacy: Season 1 → `True`; Pandemic + Catan → `False`.
+  - `test_unreachable_flags_games_outside_pool`: a game with `MaxPlayers < 5` in `good` with `players=5` is returned.
+  - `test_run_with_fake_search`: one entry, `search=lambda q, p, t, top_n: rows` containing a good id → `summary["hit_at_5"] == 1.0`; `per_query[0]["names"]` holds names.
+  - `test_disk_cache_round_trip`: save an intent + vector to a temp path, load into fresh caches → `_intent_cache.get(key)` equals the saved `QueryIntent`.
+  - `test_query_file_is_valid`: exactly 40 entries, known types, each type ≥ 4, Hangul and Latin queries both present, all spec §1 example queries present, `unreachable(e) == []` for all.
 
-- [ ] **Step 2: Run** `uv run python -m unittest tests.test_evaluate_natural -v` → FAIL (module missing).
+- [ ] **Step 2: Run** `uv run python -m unittest tests.test_evaluate_natural -v` → FAIL.
 
-- [ ] **Step 3: Implement the metric functions, `run` and the CLI** in `backend/evaluate_natural.py`. Recall@40 for this stage: call `search(query, players, max_time, top_n=40)` (intent and vector are cached, so no extra Gemini calls) and check `good` against those ids. `no_answer` weak-match rate is reported as `null` while results carry no `weak_match`.
+- [ ] **Step 3: Implement** metrics, `run`, `DiskCache` (JSON: intent dataclass fields; vectors as float lists keyed by `search_text`), CLI. Recall@N for now = ids of `search(..., top_n=recall_n)`. Weak-match rate is `null` while results have no `weak_match`.
 
-- [ ] **Step 4: Draft `data/natural_eval_queries.json`**: 40–60 queries, Korean and English mixed, each type ≥ 4, including the spec's examples ("할머니, 할아버지와 함께하기 좋은 게임", "동물들도 이해하기 쉬운 게임", "스타워즈 테마의 보드게임", "한국인이 만든 보드게임", "가장 유명한 게임", a co-op disease query for the series type). `good` lists 3–15 BGG ids that are in the pool for that entry's players/time. `external` entries for Korean-made games may have `good` drawn from what the data supports today (likely few). `no_answer` entries set `expect_weak_match: true` and may have empty `good`.
+- [ ] **Step 4: Draft `data/natural_eval_queries.json`** (40 entries, Korean/English mixed, spec §1 examples included, `good` 3–15 pool ids; `no_answer` entries `expect_weak_match: true`, `good` may be empty).
 
 - [ ] **Step 5: Run** `uv run python -m unittest tests.test_evaluate_natural -v` → PASS.
 
-- [ ] **Step 6: Stop for user review of the query set.** Show the user the queries with `good` game names (not ids) per entry and wait for their corrections. Apply them and re-run Step 5.
+- [ ] **Step 6: Stop for user review of the query set** — show each query with `good` game *names*; apply corrections; re-run Step 5.
 
-- [ ] **Step 7: Record the baseline**: `uv run --env-file .env python -m backend.evaluate_natural --label baseline` → writes `data/natural_eval_results/baseline.json`, prints the metric table without errors.
+- [ ] **Step 7: Baseline** (≈ 200–300 KRW): `uv run --env-file .env python -m backend.evaluate_natural --label baseline` → writes `baseline.json`, prints the table.
 
-- [ ] **Step 8: Add a "Natural search evaluation" section to `docs/setup.md`** (command, needs `GEMINI_API_KEY`, about 4 Gemini calls per query, results folder).
+- [ ] **Step 8: Docs** — "Natural search evaluation" section in `docs/setup.md` (command, key needed, cache file, `--fresh-intents`, cost per run).
 
-- [ ] **Step 9: Commit** `git add backend/evaluate_natural.py tests/test_evaluate_natural.py data/natural_eval_queries.json data/natural_eval_results/baseline.json docs/setup.md && git commit -m "feat(search): add natural search evaluation set and baseline"`
+- [ ] **Step 9: Commit** `git add backend/evaluate_natural.py tests/test_evaluate_natural.py data/natural_eval_queries.json data/natural_eval_results/baseline.json .gitignore docs/setup.md && git commit -m "feat(search): add natural search evaluation set and baseline"`
 
 ---
 
-### Task 3: Audience data, categories and keywords (stage 2)
+## Stage 2 — Data we already have
+
+### Task 3: Audience data, categories, keywords, word match
 
 **Files:**
-- Modify: `backend/features.py` (`load_games`), `backend/gemini.py` (`QueryIntent`, `EXTRACT_PROMPT`, extract schema, `_intent_from_dict`), `backend/natural_search.py` (`sanitize_intent`, `natural_search` scoring)
+- Modify: `backend/features.py` (`load_games`), `backend/gemini.py` (`QueryIntent`, extract schema, `EXTRACT_PROMPT`, `_intent_from_dict`), `backend/natural_search.py`
 - Test: `tests/test_natural_search.py`, `tests/test_gemini.py`
-- Create: `data/natural_eval_results/stage2.json` (generated)
 
 **Interfaces:**
 - Produces:
-  - `load_games()` also adds `ComAgeRec: float` (missing → 0.0 = unknown), `LanguageEase: float` (missing → NaN = unknown), `GoodPlayers: tuple[int, ...]` (parsed from strings like `"['2', '3']"`; unparseable/missing → `()`).
-  - `QueryIntent` new fields: `age_max: float | None = None`, `categories: tuple[str, ...] = ()` (values from `CATEGORY_NAMES = ("Thematic", "Strategy", "War", "Family", "CGS", "Abstract", "Party", "Childrens")`, column `f"Cat:{name}"`), `low_text: bool = False`, `keywords: tuple[str, ...] = ()`.
-  - Score constants in `natural_search.py`: `SIMILARITY_WEIGHT = 0.65`, `RATING_WEIGHT = 0.2`, `SOFT_WEIGHT = 0.15` (starting values; tune with the evaluation).
+  - `load_games()` adds `ComAgeRec: float` (missing → 0.0 = unknown), `LanguageEase: float` (missing → NaN), `GoodPlayers: tuple[int, ...]` (parsed from `"['2', '3']"`; bad/missing → `()`).
+  - `QueryIntent` new fields: `age_max: float | None = None`, `categories: tuple[str, ...] = ()` (from `CATEGORY_NAMES = ("Thematic", "Strategy", "War", "Family", "CGS", "Abstract", "Party", "Childrens")` → column `f"Cat:{name}"`), `low_text: bool = False`, `keywords: tuple[str, ...] = ()`, `terms: tuple[str, ...] = ()`.
+  - `natural_search.keyword_hits(cand_idx: np.ndarray, keywords: tuple[str, ...]) -> np.ndarray` (bool, `len(cand_idx) × len(keywords)`; whole-word, case-insensitive on `Name + " " + Description`; Task 6 extends it to profile metadata).
+  - Weights: `EMBEDDING_WEIGHT = 0.7`, `TAG_WEIGHT = 0.15`, `WORD_WEIGHT = 0.15` (inside similarity); `SIMILARITY_WEIGHT = 0.65`, `RATING_WEIGHT = 0.2`, `SOFT_WEIGHT = 0.15` (final). Starting values.
 
-- [ ] **Step 1: Write the failing tests**:
-  - `tests/test_gemini.py::test_intent_from_dict_reads_new_fields`: `_intent_from_dict({"search_text": "x", "age_max": 8, "categories": ["Family"], "low_text": True, "keywords": ["Star Wars"]})` has those values; missing fields → defaults.
-  - `tests/test_natural_search.py`:
-    - `test_sanitize_keywords`: `keywords=("Star Wars", "스타워즈", "", "x"*200, "star wars", "A", "B", "C")` → `("Star Wars", "A", "B")` (Hangul/empty/over-40-char dropped, case-insensitive dedupe, max 3).
+- [ ] **Step 1: Write the failing tests:**
+  - `test_gemini.py::test_intent_from_dict_reads_new_fields`: all five new fields parsed; missing → defaults.
+  - `test_natural_search.py`:
+    - `test_sanitize_keywords_and_terms`: `keywords=("Star Wars", "스타워즈", "", "x"*200, "star wars", "A", "B", "C")` → `("Star Wars", "A", "B")`; same rules for `terms` (max 3, ≤ 40 chars, no Hangul, case-insensitive dedupe).
     - `test_sanitize_age_and_categories`: `age_max=40` → `18.0`; `age_max=0` → `2.0`; `categories=("family", "Nope")` → `("Family",)`.
-    - `test_age_max_filters_known_ages`: intent `age_max=8` → every result has `ComAgeRec == 0 or ComAgeRec <= 8`.
-    - `test_keyword_matches_name_or_description`: intent `QueryIntent("space war", keywords=("Star Wars",), sort="popularity")`, players 2, time 180 → every result's Name or Description contains "star wars" (case-insensitive, whole words), first result has the most reviews among them.
+    - `test_age_max_filters_known_ages`: `age_max=8` → every result has `ComAgeRec == 0 or <= 8`.
+    - `test_keyword_ranking_query`: `QueryIntent("", keywords=("Star Wars",), sort="popularity")`, 2 players, 180 min → every result has "star wars" as whole words in Name or Description; sorted by reviews.
     - `test_ranking_keyword_with_no_match_is_empty`: `QueryIntent("", keywords=("Zzyzx Qwerty",), sort="popularity")` → `[]`.
-    - `test_category_counts_as_include_tag`: intent `categories=("Party",)` → top result has `Cat:Party == 1`.
-    - `test_missing_audience_data_is_safe`: set one candidate's `GoodPlayers=()`, `ComAgeRec=0`, `LanguageEase=NaN` on a copy of `eng.df` patched for the test, intent `low_text=True, age_max=10` → search returns results without error and that game is not excluded by the age filter.
-  - Keep all existing tests passing (update expected orders only where the new weights legitimately change them, and say so in the commit message).
+    - `test_category_counts_as_include_tag`: `categories=("Party",)` → top result has `Cat:Party == 1`.
+    - `test_terms_word_match_raises_score`: two candidates with equal embedding, one with "zombies" in its description; `terms=("zombies",)` → that one ranks higher.
+    - `test_missing_audience_data_is_safe`: patch a candidate to `GoodPlayers=()`, `ComAgeRec=0`, `LanguageEase=NaN`; intent `low_text=True, age_max=10` → no error, that game not excluded by age.
+    - `test_word_match_off_without_tfidf`: with `eng.tfidf = None` patched → search still returns 5.
+  - Existing tests stay green (adjust expected orders only where new weights legitimately change them; say so in the commit).
 
 - [ ] **Step 2: Run** `uv run python -m unittest tests.test_natural_search tests.test_gemini -v` → new tests FAIL.
 
-- [ ] **Step 3: Extend `load_games`** to merge the three raw columns (same `raw` read, add to `usecols`) and parse `GoodPlayers` with `ast.literal_eval` inside a try.
+- [ ] **Step 3: Extend `load_games`** (same raw read, add the three columns; `ast.literal_eval` in a try for `GoodPlayers`).
 
-- [ ] **Step 4: Extend `QueryIntent`, the extract schema (`age_max` nullable NUMBER, `categories`/`keywords` STRING arrays, `low_text` BOOLEAN) and `EXTRACT_PROMPT`.** Prompt rules to add, one line each: `age_max` only when children or an age is mentioned; `categories` only from the listed names; `low_text` for "no reading / language-independent"; `keywords` = proper nouns in the request (franchise, designer, publisher, country) in their official English form (e.g. 스타워즈 → "Star Wars", 한국 → "Korea"), still never in `search_text`.
+- [ ] **Step 4: Extend `QueryIntent`, schema and `EXTRACT_PROMPT`** (`age_max` nullable NUMBER, `low_text` BOOLEAN, three STRING arrays). Prompt rules, one line each: `age_max` only when children or an age is mentioned; `categories` only from the listed names; `low_text` for "no reading / language-independent"; `keywords` = proper nouns (franchise, designer, publisher, country) in official English form (스타워즈 → "Star Wars", 한국 → "Korea"), still never in `search_text`; `terms` = up to 3 concrete subject nouns in English ("animals", "zombies", "trains"), not mechanics.
 
-- [ ] **Step 5: Implement in `natural_search.py`**:
-  - `sanitize_intent`: rules from the tests (`age_max` clamped to 2–18, categories canonicalised, keywords cleaned with the existing `_HANGUL`-style regex, ≤ 40 chars, ≤ 3).
-  - Hard filter: `age_max` → `~(ComAgeRec > 0) | (ComAgeRec <= age_max)`.
-  - Include tags: categories (`Cat:X > 0`) and keywords (regex `\b{re.escape(kw)}\b`, case-insensitive, on `Name + " " + Description`) count toward `include_total` and `tag_hits` exactly like mechanics/themes, including the ranking-query "must have a tag" restriction.
-  - Soft score in [0, 1], the mean of the active signals: player fit (`players in GoodPlayers` → 1, else 0, `()` → 0), always active; `low_text` → `1 − percentile rank of LanguageEase among candidates` (NaN → 0.5).
-  - `score = SIMILARITY_WEIGHT·similarity + RATING_WEIGHT·rating_score + SOFT_WEIGHT·soft` for relevance queries; ranking queries unchanged.
+- [ ] **Step 5: Implement in `natural_search.py`:**
+  - `sanitize_intent` per the tests.
+  - Age hard filter: `~(ComAgeRec > 0) | (ComAgeRec <= age_max)`.
+  - Categories and keywords count as include tags (in `include_total`, `tag_hits`, and the ranking-query "must have a tag" restriction), keywords via `keyword_hits`.
+  - Word score: `eng.tfidf.transform([" ".join(terms)])` · `eng._get_tfidf_matrix()[cand_idx].T`, rescaled to [0, 1] by its max over candidates; skipped (weight folded into embedding) when `terms` is empty or `eng.tfidf is None`.
+  - Soft score = mean of active signals: player fit (`players in GoodPlayers`) always; `low_text` → `1 − percentile(LanguageEase)` over candidates (NaN → 0.5).
+  - Relevance: `similarity = 0.7·embedding + 0.15·tag + 0.15·word` (renormalize over the parts present), `score = 0.65·similarity + 0.2·rating_score + 0.15·soft`. Ranking queries unchanged.
 
-- [ ] **Step 6: Run** the full suite `uv run python -m unittest discover -s tests -v` → PASS.
+- [ ] **Step 6: Run** `uv run python -m unittest discover -s tests -v` → PASS.
 
-- [ ] **Step 7: Evaluate**: `uv run --env-file .env python -m backend.evaluate_natural --label stage2`. Compare to `baseline.json`. If Hit@5 drops overall, adjust the three weights and re-run (at most a few rounds); record the final weights.
+- [ ] **Step 7: Commit** `git add backend/features.py backend/gemini.py backend/natural_search.py tests/ && git commit -m "feat(search): use age, language, player-fit, category, keyword and word-match signals"`
 
-- [ ] **Step 8: Commit** `git add backend/features.py backend/gemini.py backend/natural_search.py tests/ data/natural_eval_results/stage2.json && git commit -m "feat(search): use age, language, player-fit, category and keyword signals"`
+### Task 4: One game per series in results + stage 2 evaluation
+
+**Files:**
+- Modify: `backend/natural_search.py`
+- Test: `tests/test_natural_search.py`
+- Create: `data/natural_eval_results/stage2.json` (generated)
+
+**Interfaces:**
+- Consumes: `series.KEYS` (Task 1), `tag_hits` from Task 3.
+- Produces: `group_series(cand_idx: np.ndarray, score: np.ndarray, tag_hits: np.ndarray, prefer_col: str) -> np.ndarray` — positions into `cand_idx`, one per series, ordered by the series' best `score` descending; representative = among members with max `tag_hits`, the largest `df[prefer_col]` (ties → more reviews). `prefer_col` = `"NumUserRatings"` (relevance) or the sort column (ranking).
+
+- [ ] **Step 1: Write the failing tests:**
+  - `test_group_series_keeps_most_reviewed`: Pandemic, Pandemic Legacy S1 (highest score), Catan, equal `tag_hits` → [Pandemic, Catan], Pandemic first.
+  - `test_group_series_prefers_tag_match`: Carcassonne vs Carcassonne: Star Wars with only the latter `tag_hits = 1` → Star Wars kept.
+  - `test_group_series_ranking_uses_sort_column`: `prefer_col="BayesAvgRating"` over Pandemic members → highest-rated kept.
+  - `test_search_results_have_one_per_series` (relevance, `make_index(idx_of("Pandemic"))`) and `test_ranking_results_have_one_per_series` (`sort="popularity"`): no two results share a key.
+
+- [ ] **Step 2: Run** `uv run python -m unittest tests.test_natural_search -v` → FAIL.
+
+- [ ] **Step 3: Implement `group_series`;** apply before `diversify` (relevance) and in `_sorted_positions` before `top_n` (ranking). Read `series.KEYS` through the module at call time (Task 6 swaps it with `set_keys`).
+
+- [ ] **Step 4: Run** `uv run python -m unittest discover -s tests -v` → PASS.
+
+- [ ] **Step 5: Evaluate** (≈ 200–300 KRW, `--fresh-intents` because the prompt changed): `uv run --env-file .env python -m backend.evaluate_natural --label stage2 --fresh-intents`. Compare with baseline; if overall Hit@5 dropped, adjust the Task 3 weights (re-runs reuse cached intents, ≈ 0 KRW for extraction) and record the final values in the commit message.
+
+- [ ] **Step 6: Commit** `git add backend/natural_search.py tests/test_natural_search.py data/natural_eval_results/stage2.json && git commit -m "feat(search): show one game per series in natural search"`
 
 ---
 
-### Task 4: Gemini re-rank call
+## Stage 3 — Game profiles
+
+### Task 5: Profile builder (pilot, then full run)
+
+**Files:**
+- Modify: `backend/gemini.py`, `tests/gemini_fake.py`
+- Create: `backend/build_game_profiles.py`, `data/game_profiles.json` (generated)
+- Test: `tests/test_game_profiles.py`
+
+**Interfaces:**
+- Produces:
+  - `gemini.GameProfile` frozen dataclass: `bgg_id: int`, `profile: str`, `franchise: tuple[str, ...]`, `base_game: str | None`, `designers: tuple[str, ...]`, `designer_countries: tuple[str, ...]`.
+  - `GeminiClient.write_profiles(self, games: Sequence[dict]) -> list[GameProfile]` (Protocol, Google client with `PROFILE_MODEL`, structured JSON, no tools); fake returns a deterministic profile per input.
+  - `build_game_profiles.profile_input(idx: int) -> dict` (name, year, mechanics, themes, categories, weight, age, players, playtime, description first 800 chars); `clean_profile(p: GameProfile) -> GameProfile | None` (drop if profile < 40 or > 200 words or has Hangul; trim lists to 5 items, ≤ 60 chars each; `base_game` equal to own name → None); `build(ids: list[int], out: Path, batch: int = 10, limit: int | None = None)` resumable (skips ids already in `out`, saves after each batch, retries ×5 with backoff).
+  - File format: `{"model": str, "created": str, "profiles": {"<BGGId>": {profile fields}}}`.
+  - CLI: `uv run --env-file .env python -m backend.build_game_profiles [--limit N] [--sample]` — games with ≥ 1000 reviews, most reviewed first; `--sample` picks the pilot set (25 most-reviewed + 25 from the 1,000–3,000-review band, fixed seed).
+
+- [ ] **Step 1: Write the failing tests** (`tests/test_game_profiles.py`, fake client):
+  - `test_profile_input_fields`: keys present, description ≤ 800 chars.
+  - `test_clean_profile_rules`: Hangul profile → `None`; 10-word profile → `None`; 8 designers → 5; `base_game == own name` → `None` base.
+  - `test_build_resumes`: build 3 ids with `limit=2` → file has 2; build again → 3, fake called only for the missing one.
+  - `test_build_skips_bad_batch_items`: fake returns one profile with an unknown `bgg_id` → ignored.
+  - `test_gemini.py::test_profiles_parsing`: response dict → `list[GameProfile]`; missing `profile` → item skipped.
+
+- [ ] **Step 2: Run** `uv run python -m unittest tests.test_game_profiles tests.test_gemini -v` → FAIL.
+
+- [ ] **Step 3: Implement** `GameProfile`, `write_profiles` (prompt rules: English; 60–120-word profile covering who it suits — ages, families, couples, parties, experienced players — occasions, mood, interaction, learning curve and how a session feels; never contradict the given data; leave a field empty when not sure; `base_game` only when this game is a version/sequel/spin-off of another game), the fake, and the builder.
+
+- [ ] **Step 4: Run** `uv run python -m unittest discover -s tests -v` → PASS.
+
+- [ ] **Step 5: Pilot** (≈ 30 KRW): `uv run --env-file .env python -m backend.build_game_profiles --sample --limit 50`. Print 20 of them (name + profile + franchise + base_game + designers + countries) for the user.
+
+- [ ] **Step 6: Stop for user review of the pilot.** If the user finds many wrong facts, switch `PROFILE_MODEL` to a larger model only after telling the user its price, regenerate the pilot, and review again.
+
+- [ ] **Step 7: Full run** (≈ 900–2,000 KRW; tell the user the estimate first): `uv run --env-file .env python -m backend.build_game_profiles` → ~2,906 profiles; report how many were dropped by `clean_profile`.
+
+- [ ] **Step 8: Commit** `git add backend/gemini.py backend/build_game_profiles.py tests/ data/game_profiles.json && git commit -m "feat(search): generate play-experience profiles for candidate games"`
+
+### Task 6: Profile embeddings and metadata in search + stage 3 evaluation
+
+**Files:**
+- Create: `backend/build_profile_embeddings.py`, `data/profile_embeddings.npz` (generated), `backend/profiles.py`
+- Modify: `backend/natural_search.py`, `backend/series.py` (call `set_keys` at load), `docs/setup.md`
+- Test: `tests/test_profiles.py`, `tests/test_natural_search.py`
+- Create: `data/natural_eval_results/stage3.json` (generated)
+
+**Interfaces:**
+- Consumes: `GameProfile` file (Task 5), `series_keys(..., base_games)` (Task 1), `keyword_hits` (Task 3).
+- Produces:
+  - `profiles.load(path=DATA_DIR / "game_profiles.json") -> dict[int, dict]` (empty dict when missing/broken); `profiles.PROFILES`.
+  - `build_profile_embeddings` writes `data/profile_embeddings.npz` with `ids`, `vectors` (float16), `model_name`, `dim`, `doc_version = 1`; document = `gemini.document_text(name, f"{profile} Mechanics: … Themes: … {description[:600]}")`; same retry/partial-save pattern as `build_gemini_embeddings.py`.
+  - `natural_search.load_index` merges: rows with a profile vector use it, others keep the old vector (`GeminiIndex` unchanged in shape). Constant `USE_PROFILE_VECTORS = True`.
+  - `keyword_hits` also matches `franchise`, `designers`, `designer_countries` (whole words, so "Korea" hits "South Korea"). A keyword that hits metadata for ≥ 1 candidate becomes a **hard filter** (metadata or name/description hit required); otherwise stays a tag.
+  - At import, `series.set_keys(series_keys(eng.df, MIN_REVIEWS, base_games={id: p["base_game"] for p if base_game}))`.
+
+- [ ] **Step 1: Write the failing tests:**
+  - `test_profiles.py::test_load_missing_file_is_empty`, `test_load_reads_profiles`.
+  - `test_natural_search.py::test_profile_vector_preferred`: index built from a temp profile npz where one game's profile vector equals the query vector → that game first; with the file missing → old behavior.
+  - `test_metadata_keyword_is_hard_filter`: patch `profiles.PROFILES` so two pool games have `designer_countries=("South Korea",)`; `keywords=("Korea",)` → every result is one of them or has "Korea" in name/description.
+  - `test_metadata_keyword_without_hits_is_soft`: `keywords=("Nowhereland",)` relevance query → still 5 results.
+  - `test_base_game_joins_series` (via `series.set_keys` with a patched base game) → those two never appear together.
+
+- [ ] **Step 2: Run** `uv run python -m unittest tests.test_profiles tests.test_natural_search -v` → FAIL.
+
+- [ ] **Step 3: Implement** `profiles.py`, the embedding builder, the index merge, metadata keyword matching, and series refresh.
+
+- [ ] **Step 4: Run** `uv run python -m unittest discover -s tests -v` → PASS.
+
+- [ ] **Step 5: Build embeddings** (≈ 400 KRW): `uv run --env-file .env python -m backend.build_profile_embeddings` → file has one vector per profile.
+
+- [ ] **Step 6: Evaluate** (cached intents; ≈ 50 KRW for new query vectors only if `search_text` changed): `--label stage3`. If overall Hit@5 or Recall@25 is below stage 2, set `USE_PROFILE_VECTORS = False`, re-run, and keep the better (metadata keywords stay on either way). Record the choice in the commit.
+
+- [ ] **Step 7: Docs** — `docs/setup.md`: building profiles and profile embeddings, costs, pilot review.
+
+- [ ] **Step 8: Commit** `git add backend/profiles.py backend/build_profile_embeddings.py backend/natural_search.py backend/series.py tests/ data/profile_embeddings.npz data/natural_eval_results/stage3.json docs/setup.md && git commit -m "feat(search): search with game profiles and their franchise/designer metadata"`
+
+---
+
+## Stage 4 — Re-ranking
+
+### Task 7: Gemini re-rank call
 
 **Files:**
 - Modify: `backend/gemini.py`, `tests/gemini_fake.py`
@@ -170,165 +281,127 @@ pass 2, rows with key None:
 
 **Interfaces:**
 - Produces:
-  - `gemini.RerankResult` frozen dataclass: `interpretation: str`, `ranked_ids: tuple[int, ...]`, `weak_match: bool`.
-  - `GeminiClient.rerank(self, query: str, games: Sequence[dict]) -> RerankResult` (Protocol + `GoogleGeminiClient`); `GoogleGeminiClient._generate` gains `timeout_seconds: int = TIMEOUT_SECONDS`, re-rank passes `RERANK_TIMEOUT_SECONDS`.
-  - `FakeGeminiClient(rerank_result: RerankResult | None = None, rerank_error: Exception | None = None)`; `rerank` records `("rerank", query, games)` and returns `rerank_result` or `RerankResult("Read as: fake.", tuple(g["bgg_id"] for g in games), False)`.
-  - `rerank.rerank_facts(idx: int) -> dict`: keys `bgg_id, name, year, mechanics, themes, categories, weight, age, players, good_players, playtime, reviews, rating, description` (description first 300 chars).
-  - Constants in `rerank.py`: `RERANK_MAX_IDS = 20`, `DESCRIPTION_CHARS = 300`, `MAX_INTERPRETATION_CHARS = 200`. `RERANK_MODEL`, `RERANK_TIMEOUT_SECONDS`, `RERANK_MAX_TOKENS` live in `gemini.py`; `SHORTLIST_SIZE = 40` in `natural_search.py`.
-  - `rerank.rerank(query: str, cand_rows: list[int]) -> gemini.RerankResult`: charges the budget, calls the client, returns a cleaned result — ids filtered to the given rows' BGG ids, deduped, ≤ `RERANK_MAX_IDS`; interpretation stripped, `"Read as: "` prefixed if missing, set to `""` when it contains Hangul or exceeds 200 chars. Raises `gemini.GeminiError` on client failure.
+  - `gemini.RerankResult(interpretation: str, ranked_ids: tuple[int, ...], weak_match: bool)` frozen dataclass; `GeminiClient.rerank(self, query: str, games: Sequence[dict]) -> RerankResult`; `GoogleGeminiClient._generate(..., timeout_seconds: int = TIMEOUT_SECONDS)`; constants `RERANK_MODEL`, `RERANK_TIMEOUT_SECONDS = 5`, `RERANK_MAX_TOKENS = 1024`.
+  - `FakeGeminiClient(rerank_result=None, rerank_error=None)`; records `("rerank", query, games)`; default result ranks the given games in order, `"Read as: fake."`, `weak_match=False`.
+  - `rerank.rerank_facts(idx: int, web_ids: frozenset[int] = frozenset()) -> dict`: `bgg_id, name, year, mechanics, themes, categories, weight, age, players, good_players, playtime, reviews, rating, profile` (profile text, or description first 150 chars when no profile), plus `web_mentioned: bool` when `web_ids` is non-empty.
+  - `rerank.rerank(query: str, cand_rows: list[int], web_ids: frozenset[int] = frozenset()) -> RerankResult`: `gemini.charge()`, call, clean (ids filtered to the rows' BGG ids, deduped, ≤ `RERANK_MAX_IDS = 20`; interpretation stripped, `"Read as: "` prefixed if missing, `""` if Hangul or > 200 chars). Raises `GeminiError` on failure.
 
-- [ ] **Step 1: Write the failing tests**:
-  - `tests/test_gemini.py::test_rerank_result_parsing`: the dict→`RerankResult` helper turns `{"interpretation": "Read as: x", "ranked_ids": [3, "4"], "weak_match": true}` into `RerankResult("Read as: x", (3, 4), True)`; missing `ranked_ids` → `GeminiError`.
-  - `tests/test_rerank.py`:
-    - `test_facts_fields`: `rerank_facts(idx_of("Pandemic"))` has all listed keys, `len(description) <= 300`.
-    - `test_filters_unknown_and_duplicate_ids`: fake returns `ranked_ids=(id_a, 999999, id_a, id_b)` → `(id_a, id_b)`.
-    - `test_caps_at_max_ids`: fake returns 30 valid ids → 20.
-    - `test_interpretation_cleaned`: Hangul interpretation → `""`; `"Simple rules."` → `"Read as: Simple rules."`.
-    - `test_charges_budget_and_propagates_errors`: exhausted `gemini.budget` → `BudgetExceeded`; fake `rerank_error=GeminiError("x")` → raises `GeminiError`.
+- [ ] **Step 1: Write the failing tests:** `test_gemini.py::test_rerank_result_parsing` (`{"interpretation": "Read as: x", "ranked_ids": [3, "4"], "weak_match": true}` → `RerankResult("Read as: x", (3, 4), True)`; missing ids → `GeminiError`); `test_rerank.py`: `test_facts_fields` (profile used when present, 150-char description otherwise), `test_filters_unknown_and_duplicate_ids`, `test_caps_at_max_ids` (30 → 20), `test_interpretation_cleaned`, `test_charges_budget_and_propagates_errors`.
 
 - [ ] **Step 2: Run** `uv run python -m unittest tests.test_rerank tests.test_gemini -v` → FAIL.
 
-- [ ] **Step 3: Implement** `RerankResult`, the parsing helper, `GoogleGeminiClient.rerank` (schema: `interpretation` STRING, `ranked_ids` INTEGER array, `weak_match` BOOLEAN; `RERANK_MAX_TOKENS = 1024`; prompt rules: order games by how well they fit the request, omit poor fits, at most 20 ids; one English sentence starting "Read as:" saying how the request was understood, no game names; `weak_match` true when fewer than 3 games fit well; judge only from the given facts), the fake, and `backend/rerank.py`.
+- [ ] **Step 3: Implement** (prompt rules: order by fit to the request, omit poor fits, ≤ 20 ids; one English sentence starting "Read as:" on how the request was understood, no game names; `weak_match` true when fewer than 3 games fit well; judge only from the given facts).
 
 - [ ] **Step 4: Run** `uv run python -m unittest discover -s tests -v` → PASS.
 
-- [ ] **Step 5: Smoke check with the real key** (not committed): a short script calling `rerank.rerank("할머니, 할아버지와 함께하기 좋은 게임", <first 40 candidate rows>)` returns ≥ 5 ids, an English interpretation, within 5 s.
+- [ ] **Step 5: Smoke check** (≈ 5 KRW, not committed): `rerank.rerank("할머니, 할아버지와 함께하기 좋은 게임", <25 candidate rows>)` → ≥ 5 ids, English interpretation, < 5 s.
 
-- [ ] **Step 6: Commit** `git add backend/gemini.py backend/rerank.py tests/gemini_fake.py tests/test_rerank.py tests/test_gemini.py && git commit -m "feat(search): add Gemini re-rank call"`
+- [ ] **Step 6: Commit** `git add backend/gemini.py backend/rerank.py tests/ && git commit -m "feat(search): add Gemini re-rank call"`
 
----
-
-### Task 5: One game per series in the retriever
+### Task 8: Re-ranked search, interpretation, weak match, API shape
 
 **Files:**
-- Modify: `backend/natural_search.py`
-- Test: `tests/test_natural_search.py`
+- Modify: `backend/natural_search.py`, `backend/evaluate_natural.py`, `backend/main.py` (`search_natural`)
+- Test: `tests/test_natural_search.py`, `tests/test_evaluate_natural.py`, `tests/test_natural_api.py`
 
 **Interfaces:**
-- Consumes: `series.KEYS` (Task 1).
-- Produces: `group_series(cand_idx: np.ndarray, score: np.ndarray, tag_hits: np.ndarray, prefer_col: str) -> np.ndarray` — positions into `cand_idx`, one per series, ordered by the series' best `score` descending. Representative: among the series' members with the maximum `tag_hits`, the one with the largest `df[prefer_col]` (ties → more reviews). `prefer_col` is `"NumUserRatings"` for relevance queries and the sort column for ranking queries.
-
-- [ ] **Step 1: Write the failing tests**:
-  - `test_group_series_keeps_most_reviewed`: candidates = Pandemic, Pandemic Legacy S1, Catan with Legacy scoring highest, equal `tag_hits` → returns [Pandemic, Catan] positions, Pandemic first.
-  - `test_group_series_prefers_tag_match`: Carcassonne and Carcassonne: Star Wars, only Star Wars has `tag_hits = 1` → Star Wars kept.
-  - `test_group_series_ranking_uses_sort_column`: `prefer_col="BayesAvgRating"` over Pandemic family members → the highest-rated member kept.
-  - `test_search_results_have_one_per_series`: a co-op query whose embedding favors Pandemic (`make_index(idx_of("Pandemic"))`) → no two results share `series.KEYS`.
-  - `test_ranking_results_have_one_per_series`: `QueryIntent("", sort="popularity")` → no two results share a series key.
-
-- [ ] **Step 2: Run** `uv run python -m unittest tests.test_natural_search -v` → new tests FAIL.
-
-- [ ] **Step 3: Implement `group_series`** and apply it in `natural_search` before `diversify` (relevance) and inside `_sorted_positions` before taking `top_n` (ranking). `tag_hits` is the per-candidate include-tag hit count already computed (zeros when no include tags).
-
-- [ ] **Step 4: Run** `uv run python -m unittest discover -s tests -v` → PASS.
-
-- [ ] **Step 5: Commit** `git add backend/natural_search.py tests/test_natural_search.py && git commit -m "feat(search): show one game per series in natural search"`
-
----
-
-### Task 6: Re-ranked search with interpretation and weak match
-
-**Files:**
-- Modify: `backend/natural_search.py`, `backend/evaluate_natural.py`, `backend/main.py` (`search_natural` only: return the object shape below)
-- Test: `tests/test_natural_search.py`, `tests/test_evaluate_natural.py`, `tests/test_natural_api.py` (existing tests read `body["games"]`)
-
-**Interfaces:**
-- Consumes: `rerank.rerank` (Task 4), `group_series` (Task 5).
+- Consumes: `rerank.rerank` (Task 7), `group_series` (Task 4).
 - Produces:
-  - `NaturalResult` dataclass: `games: list[dict]`, `interpretation: str | None`, `weak_match: bool`, `shortlist_ids: list[int]`.
-  - `natural_search(query, players, max_time, exclude_ids=None, top_n=5) -> NaturalResult` (return type changes; callers updated in Tasks 6–7).
-  - Re-rank cache `_rerank_cache = _LRU()` keyed `(query.strip().lower(), players, max_time)`, cleared by `clear_caches()`.
+  - `NaturalResult` dataclass: `games: list[dict]`, `interpretation: str | None`, `weak_match: bool`, `shortlist_ids: list[int]`, `web: dict | None` (always `None` until Task 11).
+  - `natural_search(...) -> NaturalResult`.
+  - `_rerank_cache = _LRU()` keyed `(query.strip().lower(), players, max_time)`, cleared by `clear_caches()`.
+  - `POST /search/natural` → `{"games", "interpretation", "weak_match", "web"}`; empty `games` → 404.
 
-- [ ] **Step 1: Write the failing tests** (fake client):
-  - `test_rerank_order_is_used`: fake `rerank_result` ranks the 3rd-scored shortlist game first → `games[0]` is that game; `interpretation == "Read as: …"` from the fake.
-  - `test_pads_to_five_and_flags_weak`: fake ranks 2 ids, `weak_match=False` → 5 games, first two are the ranked ones, `weak_match is True`.
-  - `test_model_weak_flag_passes_through`: fake ranks 10 ids with `weak_match=True` → `weak_match is True`.
-  - `test_dedupes_series_in_rerank_output`: fake ranks Pandemic and another member of its series → at most one of them in `games`. (Shortlist is already one-per-series; also assert re-rank never sees two same-series games in `games` arg.)
-  - `test_refresh_uses_cache`: first call, then call with `exclude_ids` = first page → second page is ranked ids 6–10, `rerank` called once in total.
-  - `test_refresh_cache_miss_calls_again_without_storing`: clear caches, call with `exclude_ids` → `rerank` called; a following call without `exclude_ids` calls `rerank` again.
-  - `test_rerank_failure_falls_back`: fake `rerank_error=GeminiError("x")` → 5 games, `interpretation is None`, `weak_match is False`, no exception.
-  - `test_ranking_query_skips_rerank`: `sort="popularity"` → no `rerank` call, `interpretation == "Ranked by number of BGG reviews."`.
-  - `test_exhausted_candidates_returns_empty`: keep calling with growing `exclude_ids` until `games == []`; no id appears twice across pages.
-  - Update existing tests to read `.games`.
-  - `tests/test_evaluate_natural.py`: fake search returning `NaturalResult` → Recall@40 uses `shortlist_ids`; `no_answer` weak-match rate is a number.
+- [ ] **Step 1: Write the failing tests** (fake client): `test_rerank_order_is_used`; `test_pads_to_five_and_flags_weak` (2 ranked → 5 games, `weak_match`); `test_model_weak_flag_passes_through`; `test_dedupes_series_in_rerank_output`; `test_refresh_uses_cache` (page 2 = ranked 6–10, one `rerank` call total); `test_refresh_cache_miss_calls_again_without_storing`; `test_rerank_failure_falls_back` (`interpretation is None`, `weak_match is False`); `test_ranking_query_skips_rerank` (fixed copy); `test_exhausted_candidates_returns_empty` (no id twice across pages); `test_natural_api.py::test_search_returns_object` and existing API tests read `body["games"]`; `test_evaluate_natural.py`: Recall uses `shortlist_ids`, weak-match rate numeric.
 
-- [ ] **Step 2: Run** `uv run python -m unittest tests.test_natural_search tests.test_evaluate_natural -v` → FAIL.
+- [ ] **Step 2: Run** the three test modules → FAIL.
 
-- [ ] **Step 3: Implement** in `natural_search`:
-  - Relevance path: score → `group_series` → `ordered` (all one-per-series positions by score) → `shortlist = ordered[:SHORTLIST_SIZE]`.
-  - Cache lookup; on miss call `rerank.rerank(query, [cand_idx[p] for p in shortlist])`; store only when `exclude_ids` is empty. On `GeminiError` → fallback: `diversify` over the `ordered` candidates, `interpretation=None`, `weak_match=False`.
-  - Page order = ranked ids still among candidates (in ranked order) + remaining `ordered` positions; take `top_n`. `weak_match = result.weak_match or any picked game came from the padding`.
-  - Ranking path unchanged apart from Task 5, plus the fixed interpretation copy.
-  - `shortlist_ids` = BGG ids of `shortlist` (ranking path: the sorted pool's first 40).
-  - Update `evaluate_natural.run` to use `NaturalResult`.
-  - `main.search_natural` returns `{"games": result.games, "interpretation": result.interpretation, "weak_match": result.weak_match}`; empty `games` → 404 as today. Existing API tests switch to `body["games"]`.
+- [ ] **Step 3: Implement** — relevance: score → `group_series` → `ordered` → `shortlist = ordered[:SHORTLIST_SIZE]` → cache or `rerank.rerank` (store only when `exclude_ids` is empty) → page = ranked ids still among candidates + remaining `ordered`, `top_n`; `weak_match = result.weak_match or any padded game on the page`; on `GeminiError` → `diversify` over `ordered`, `interpretation=None`. Ranking path: Task 4 behavior + fixed copy; `shortlist_ids` = first 25 sorted. Update `evaluate_natural.run` and `main.search_natural`.
 
 - [ ] **Step 4: Run** `uv run python -m unittest discover -s tests -v` → PASS.
 
 - [ ] **Step 5: Commit** `git add backend/natural_search.py backend/evaluate_natural.py backend/main.py tests/ && git commit -m "feat(search): re-rank natural search with Gemini and report interpretation"`
 
----
-
-### Task 7: API shape and weak-match-aware reasons
+### Task 9: Weak-match-aware reasons
 
 **Files:**
-- Modify: `backend/main.py` (`ExplainRequest`, `explain`), `backend/explain.py` (`explain_games`), `backend/gemini.py` (`explain`, `MODE_RULES`), `tests/gemini_fake.py`, `docs/backend_api.md`
-- Test: `tests/test_natural_api.py`, `tests/test_explain.py`
+- Modify: `backend/main.py` (`ExplainRequest`, `explain`), `backend/explain.py`, `backend/gemini.py` (`explain`, `MODE_RULES`), `tests/gemini_fake.py`, `docs/backend_api.md`
+- Test: `tests/test_explain.py`, `tests/test_natural_api.py`
 
 **Interfaces:**
-- Consumes: `NaturalResult` (Task 6).
+- Produces: `ExplainRequest.weak_match: bool = False`; `explain_games(mode, basis, game_ids, weak_match: bool = False)`; cache key `(mode, basis_key, weak_match, bgg_id)`; `GeminiClient.explain(..., weak_match: bool = False)`; when true the prompt adds "These games are only the nearest matches; do not claim they fully deliver the request. Say which aspect comes closest."
+
+- [ ] **Step 1: Write the failing tests:** `test_weak_match_reaches_client_and_cache` (true reaches fake; a false call afterwards calls the client again); `POST /explain` with `"weak_match": true` → 200.
+- [ ] **Step 2: Run** `uv run python -m unittest tests.test_explain tests.test_natural_api -v` → FAIL.
+- [ ] **Step 3: Implement**; document both endpoint changes (search object shape incl. `web`, explain `weak_match`) in `docs/backend_api.md`.
+- [ ] **Step 4: Run** `uv run python -m unittest discover -s tests -v` → PASS.
+- [ ] **Step 5: Commit** `git add backend/ tests/ docs/backend_api.md && git commit -m "feat(api): soften reasons for weak matches"`
+
+### Task 10: Frontend interpretation and weak-match notice + stage 4 evaluation
+
+**Files:**
+- Modify: `frontend/src/types.ts`, `frontend/src/api.ts`, `frontend/src/components/DescriptionSearch.tsx`, `.github/workflows/deploy-backend.yml`, `docs/recommendation_pipeline.md`, `docs/deploy.md`
+- Create: `data/natural_eval_results/stage4.json` (generated)
+
+**Interfaces:**
+- Produces: `NaturalSearchResponse { games: NaturalGame[]; interpretation: string | null; weak_match: boolean; web: WebResult | null }`, `WebResult { summary: string; suggestions_html: string }` (rendered in Task 12); `ExplainRequest.weak_match?: boolean`; `naturalSearch(...) -> Promise<NaturalSearchResponse>`.
+
+- [ ] **Step 1: Types and API** updated.
+- [ ] **Step 2: `DescriptionSearch`**: read `search.data.games` everywhere results were used (list, `shownIds`, explain ids, "newest" note); pass `weak_match` to explain; render `interpretation` under the summary line (`text-[15px] text-ink/70`); render the weak-match notice (same box classes as the "newest" note) above results.
+- [ ] **Step 3: Run** `cd frontend && npm run typecheck && npm run lint` → clean.
+- [ ] **Step 4: Deploy limit** — add `GEMINI_DAILY_CALL_LIMIT=300` to the `--set-env-vars` list in `deploy-backend.yml` (keep existing vars); note it and Google budget alerts in `docs/deploy.md`.
+- [ ] **Step 5: Evaluate** (≈ 300 KRW): `--label stage4`. Overall Hit@5 ≥ stage 3 and duplicate rate 0; if not, try `SHORTLIST_SIZE` 15 or 40 once and keep the better. Record in `docs/recommendation_pipeline.md` (pipeline stages, weights, table baseline/stage2/stage3/stage4 per type).
+- [ ] **Step 6: Check in the app** (backend with key + `npm run dev`): grandparents query shows interpretation + 5 cards with reasons; "동물들도 이해하기 쉬운 게임" shows the weak-match notice; "가장 유명한 게임" shows "Ranked by number of BGG reviews."; Refresh gives 5 new, no series repeated on a page.
+- [ ] **Step 7: Commit** `git add frontend/src .github/workflows/deploy-backend.yml docs/ data/natural_eval_results/stage4.json && git commit -m "feat(frontend): show search interpretation and weak-match notice"`
+
+---
+
+## Stage 5 — Live web search for questions that need it
+
+### Task 11: Web search backend
+
+**Files:**
+- Modify: `backend/gemini.py`, `backend/natural_search.py`, `backend/limits.py` (reuse `DailyBudget`), `tests/gemini_fake.py`
+- Create: `backend/web_search.py`
+- Test: `tests/test_web_search.py`, `tests/test_natural_search.py`
+
+**Interfaces:**
 - Produces:
-  - `POST /search/natural` → `{"games": [...], "interpretation": str | null, "weak_match": bool}`; empty `games` → 404 as today.
-  - `ExplainRequest.weak_match: bool = False`; `explain_games(mode, basis, game_ids, weak_match: bool = False)`; cache key `(mode, basis_key, weak_match, bgg_id)`; `GeminiClient.explain(..., weak_match: bool = False)`; when true the prompt adds: "These games are only the nearest matches; do not claim they fully deliver the request. Say which aspect comes closest."
+  - `QueryIntent.needs_web: bool = False` (schema BOOLEAN; prompt: true only when the request depends on facts that game descriptions and general game knowledge don't hold — awards, designer nationality, a specific publisher, popularity in a specific country or community; false for genre, mood, audience and ranking requests).
+  - `gemini.WebAnswer(text: str, suggestions_html: str, search_count: int)`; `GeminiClient.web_search(self, query: str) -> WebAnswer` (`WEB_MODEL`, Google Search tool, **no response schema**, `WEB_TIMEOUT_SECONDS = 8`; prompt asks for official English board game names one per line, at most 15, then a one–two sentence summary; `suggestions_html` from the response's search entry point, `search_count` from its web search queries).
+  - `web_search.web_budget = limits.DailyBudget(int(os.environ.get("WEB_SEARCH_DAILY_LIMIT", "100")))`.
+  - `web_search.match_names(text: str) -> frozenset[int]` (pool BGG ids whose normalized Name, or Name before ":", equals a normalized line of `text`).
+  - `web_search.lookup(query: str) -> tuple[frozenset[int], dict] | None` — `None` when the budget is spent or on `GeminiError`; else `(ids, {"summary": <summary part of text>, "suggestions_html": ...})`; spends `max(1, search_count)` from `web_budget`. Holds nothing after returning.
+  - In `natural_search`: when `intent.needs_web`, call `lookup`; web ids count as an include tag; if ≥ 5 web ids pass the filters they are a hard filter, else a tag; pass `web_ids` to `rerank.rerank`; **skip `_rerank_cache` read and write** for this query; `NaturalResult.web` = the dict or `None`.
 
-- [ ] **Step 1: Write the failing tests**:
-  - `test_natural_api.py::test_search_returns_object`: 200 body has `games` (len 5), `interpretation`, `weak_match`.
-  - `test_natural_api.py::test_rerank_failure_still_200`: fake with `rerank_error` → 200, `interpretation is None`.
-  - `test_explain.py::test_weak_match_reaches_client_and_cache`: `explain_games("query", "q", [id], weak_match=True)` → fake recorded `weak_match=True`; a second call with `weak_match=False` calls the client again (separate cache entry).
-  - `test_natural_api.py`: `POST /explain` with `"weak_match": true` → 200.
+- [ ] **Step 1: Write the failing tests:**
+  - `test_web_search.py`: `test_match_names` ("Catan\nPandemic Legacy: Season 1\nNot A Game" → their ids); `test_budget_spent_returns_none`; `test_error_returns_none`; `test_spends_search_count` (fake `search_count=3` → budget down by 3).
+  - `test_natural_search.py`: `test_no_web_call_without_needs_web`; `test_web_ids_hard_filter_when_five_or_more`; `test_web_ids_soft_when_fewer`; `test_web_result_attached` (`result.web["suggestions_html"]` equals the fake's); `test_web_query_never_cached` (two identical `needs_web` calls → `web_search` and `rerank` each called twice; `_rerank_cache` has no entry for the query); `test_web_failure_falls_back` (`web is None`, 5 games).
+  - `test_gemini.py::test_web_answer_parsing` from a stubbed SDK response object (text, entry-point HTML, query count).
 
-- [ ] **Step 2: Run** `uv run python -m unittest tests.test_natural_api tests.test_explain -v` → FAIL.
+- [ ] **Step 2: Run** `uv run python -m unittest tests.test_web_search tests.test_natural_search tests.test_gemini -v` → FAIL.
 
-- [ ] **Step 3: Implement** the endpoint changes and `weak_match` plumbing; update `docs/backend_api.md` for both endpoints.
+- [ ] **Step 3: Implement.** No logging of web text or ids anywhere.
 
 - [ ] **Step 4: Run** `uv run python -m unittest discover -s tests -v` → PASS.
 
-- [ ] **Step 5: Commit** `git add backend/main.py backend/explain.py backend/gemini.py tests/ docs/backend_api.md && git commit -m "feat(api): return interpretation and weak match, soften reasons for weak matches"`
+- [ ] **Step 5: Smoke check** (free tier, not committed, nothing saved): `web_search.lookup("Spiel des Jahres winners")` → some matched ids, non-empty `suggestions_html`, < 8 s. If `WEB_MODEL` rejects the search tool, tell the user and propose the cheapest model that accepts it.
 
----
+- [ ] **Step 6: Commit** `git add backend/ tests/ && git commit -m "feat(search): live web search for questions that need outside facts"`
 
-### Task 8: Frontend — interpretation line and weak-match notice
+### Task 12: Web box in the frontend + docs
 
 **Files:**
-- Modify: `frontend/src/types.ts`, `frontend/src/api.ts`, `frontend/src/components/DescriptionSearch.tsx`
+- Create: `frontend/src/components/WebResultBox.tsx`
+- Modify: `frontend/src/components/DescriptionSearch.tsx`, `docs/recommendation_pipeline.md`, `docs/backend_api.md`, `docs/setup.md`, `docs/deploy.md`, `.github/workflows/deploy-backend.yml`
 
 **Interfaces:**
-- Consumes: the Task 7 response shape.
-- Produces: `NaturalSearchResponse { games: NaturalGame[]; interpretation: string | null; weak_match: boolean }`; `ExplainRequest.weak_match?: boolean`; `naturalSearch(...) -> Promise<NaturalSearchResponse>`.
+- Consumes: `WebResult` (Task 10 types).
+- Produces: `WebResultBox({ web }: { web: WebResult })` — heading "From the web", `web.summary` as text, then `<iframe sandbox="allow-popups allow-popups-to-escape-sandbox" srcDoc={web.suggestions_html} title="Google search suggestions">` sized to fit (no edits to the HTML).
 
-- [ ] **Step 1: Update types and `naturalSearch`.**
-
-- [ ] **Step 2: Update `DescriptionSearch`**: results come from `search.data.games` (results list, `shownIds`, explain `game_ids`, the "newest" note check); explain request passes `weak_match: search.data.weak_match`; under the `summarize(...)` line render `search.data.interpretation` when non-null, same `text-[15px] text-ink/70` style; when `weak_match` render the notice box (same classes as the existing "newest" note) with the Global Constraints copy, above the results.
-
-- [ ] **Step 3: Run** `cd frontend && npm run typecheck && npm run lint` → no errors.
-
-- [ ] **Step 4: Check in the running app** (backend with key + `npm run dev`): "할머니, 할아버지와 함께하기 좋은 게임" shows an interpretation line and 5 cards with reasons; "동물들도 이해하기 쉬운 게임" shows the weak-match notice; "가장 유명한 게임" shows "Ranked by number of BGG reviews."; Refresh gives 5 new games with no duplicates of a series already shown on that page.
-
-- [ ] **Step 5: Commit** `git add frontend/src && git commit -m "feat(frontend): show search interpretation and weak-match notice"`
-
----
-
-### Task 9: Stage 3 evaluation and pipeline docs
-
-**Files:**
-- Create: `data/natural_eval_results/stage3.json` (generated)
-- Modify: `docs/recommendation_pipeline.md`
-
-- [ ] **Step 1: Evaluate**: `uv run --env-file .env python -m backend.evaluate_natural --label stage3` → completes; Hit@5 overall ≥ `stage2.json`, duplicate rate 0.
-
-- [ ] **Step 2: If Hit@5 fell or a type regressed**, inspect that type's per-query rows, adjust the re-rank prompt or `SHORTLIST_SIZE` once, re-run, and keep the better of the two.
-
-- [ ] **Step 3: Update `docs/recommendation_pipeline.md`**: retriever → series grouping → re-rank → paging/fallback, new signals and weights, and a table of baseline / stage2 / stage3 metrics per type. Note which types remain weak (expected: `external` Korean-made → stage 4, BGG data).
-
-- [ ] **Step 4: Run** `uv run python -m unittest discover -s tests -v` and `cd frontend && npm run typecheck && npm run lint` → all pass.
-
-- [ ] **Step 5: Commit** `git add data/natural_eval_results/stage3.json docs/recommendation_pipeline.md && git commit -m "docs(search): record re-ranking evaluation results"`
+- [ ] **Step 1: Implement `WebResultBox`** (card styling from existing tokens) and render it in `DescriptionSearch` above the results when `search.data.web` is non-null.
+- [ ] **Step 2: Run** `cd frontend && npm run typecheck && npm run lint` → clean.
+- [ ] **Step 3: Docs and deploy** — `WEB_SEARCH_DAILY_LIMIT=100` in `deploy-backend.yml`; `docs/deploy.md`: the terms summary (no caching/storing, show suggestions, Google keeps 30 days) and "read the full terms before deploying"; `docs/setup.md`: env var; `docs/backend_api.md`: `web` field; `docs/recommendation_pipeline.md`: stage 5 flow and why it is not in the automated evaluation.
+- [ ] **Step 4: Stop for the user** — ask them to read the [Gemini API Additional Terms](https://ai.google.dev/gemini-api/terms) grounding section and confirm before this stage is merged/deployed.
+- [ ] **Step 5: Manual check in the app** (free tier): "Spiel des Jahres winners" and "한국인이 만든 보드게임" show the web box with suggestions and matching cards; Refresh on such a query works; "전쟁 게임" shows no web box. Nothing about these results is written to files.
+- [ ] **Step 6: Commit** `git add frontend/src docs/ .github/workflows/deploy-backend.yml && git commit -m "feat(frontend): show web search summary with Google search suggestions"`
