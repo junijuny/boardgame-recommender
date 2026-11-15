@@ -10,7 +10,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from backend import gemini, natural_search as ns, recommend_engine as eng
+from backend import gemini, natural_search as ns, profiles, recommend_engine as eng, series
 from backend.gemini import QueryIntent, set_client
 from tests.gemini_fake import FakeGeminiClient
 
@@ -404,6 +404,98 @@ class SeriesGroupingTest(unittest.TestCase):
         games = natural_search("가장 유명한 게임", 4, 120, top_n=10)
         self.assertEqual(len(games), 10)
         self.assert_one_per_series(games)
+
+
+class ProfileSearchTest(unittest.TestCase):
+    def setUp(self):
+        self._client = gemini._client
+        self._index = ns._index
+        self._profiles = profiles.PROFILES
+        self._keys = series.KEYS
+        ns.clear_caches()
+        e0 = np.zeros(8, dtype=np.float32)
+        e0[0] = 1.0
+        self.fake = FakeGeminiClient(intent=QueryIntent("anything"), query_vector=e0)
+        set_client(self.fake)
+        ns.set_index(make_index(idx_of("Pandemic")))
+
+    def tearDown(self):
+        gemini._client = self._client
+        ns._index = self._index
+        profiles.PROFILES = self._profiles
+        series.set_keys(self._keys)
+        ns.clear_caches()
+
+    def write_npz(self, path, ids, vectors):
+        np.savez(path, ids=np.asarray(ids), vectors=vectors.astype(np.float16),
+                 model_name=gemini.EMBED_MODEL, dim=np.int32(vectors.shape[1]), doc_version=np.int32(1))
+
+    def test_profile_vector_preferred(self):
+        n, dim = len(eng.df), gemini.EMBED_DIM
+        rng = np.random.default_rng(1)
+        base = rng.normal(size=(n, dim)).astype(np.float32)
+        base[:, 0] = 0.0
+        base /= np.linalg.norm(base, axis=1, keepdims=True)
+        target = idx_of("Catan")
+        pv = np.zeros((1, dim), dtype=np.float32)
+        pv[0, 0] = 1.0
+        ids = eng.df["BGGId"].to_numpy()
+        with tempfile.TemporaryDirectory() as d:
+            base_path, prof_path = Path(d) / "g.npz", Path(d) / "p.npz"
+            self.write_npz(base_path, ids, base)
+            self.write_npz(prof_path, ids[[target]], pv)
+            with mock.patch.object(ns, "USE_PROFILE_VECTORS", True):
+                with_profile = ns.load_index(base_path, prof_path)
+                without = ns.load_index(base_path, Path(d) / "missing.npz")
+            self.assertTrue(np.allclose(with_profile.vectors[target], pv[0]))
+            self.assertTrue(np.allclose(without.vectors[target], base[target], atol=1e-3))
+            self.assertTrue(np.array_equal(with_profile.present, without.present))
+            off = ns.load_index(base_path, prof_path)  # default: USE_PROFILE_VECTORS is False
+            self.assertFalse(ns.USE_PROFILE_VECTORS)
+            self.assertTrue(np.allclose(off.vectors[target], base[target], atol=1e-3))
+            self.fake.query_vector = pv[0].copy()
+            ns.set_index(with_profile)
+            self.assertEqual(natural_search("q", 4, 120)[0]["Name"], "Catan")
+            ns.clear_caches()
+            ns.set_index(without)
+            self.assertNotEqual(natural_search("q", 4, 120)[0]["Name"], "Catan")
+
+    def pool_ids(self, n=2):
+        mask = eng._condition_mask(4, 120, ns.MIN_RATING).to_numpy() & (
+            eng.df["NumUserRatings"].to_numpy() >= ns.MIN_REVIEWS)
+        return [int(i) for i in eng.df["BGGId"].to_numpy()[np.flatnonzero(mask)[:n]]]
+
+    def test_metadata_keyword_is_hard_filter(self):
+        a, b = self.pool_ids()
+        profiles.PROFILES = {a: {"designer_countries": ["South Korea"]}, b: {"designer_countries": ["South Korea"]}}
+        self.fake.intent = QueryIntent("anything", keywords=("Korea",))
+        games = natural_search("q", 4, 120, top_n=10)
+        self.assertTrue(games)
+        for g in games:
+            desc = eng.df.loc[eng.df["BGGId"] == g["BGGId"], "Description"].iloc[0]
+            self.assertTrue(g["BGGId"] in (a, b) or "korea" in f"{g['Name']} {desc}".lower(), g["Name"])
+
+    def test_metadata_keyword_without_hits_is_soft(self):
+        profiles.PROFILES = {}
+        self.fake.intent = QueryIntent("anything", keywords=("Nowhereland",))
+        self.assertEqual(len(natural_search("q", 4, 120)), 5)
+
+    def test_keyword_hits_matches_metadata(self):
+        a, _ = self.pool_ids()
+        profiles.PROFILES = {a: {"designers": ["Zzyzx Qwerty"], "franchise": [], "designer_countries": []}}
+        i = int(eng.df.index[eng.df["BGGId"] == a][0])
+        self.assertTrue(ns.keyword_hits(np.array([i]), ("Qwerty",))[0, 0])
+        self.assertFalse(ns.keyword_hits(np.array([i]), ("Qwert",))[0, 0])
+
+    def test_base_game_joins_series(self):
+        a, b = idx_of("Catan"), idx_of("Lost Cities")
+        base = {int(eng.df.loc[b, "BGGId"]): "Catan"}
+        self.assertNotEqual(series.KEYS[a], series.KEYS[b])
+        series.set_keys(series.series_keys(eng.df, series.MIN_REVIEWS, base_games=base))
+        self.assertEqual(series.KEYS[a], series.KEYS[b])
+        self.fake.intent = QueryIntent("co-op")
+        names = {g["Name"] for g in natural_search("q", 4, 120, top_n=20)}
+        self.assertFalse({"Catan", "Lost Cities"} <= names)
 
 
 if __name__ == "__main__":

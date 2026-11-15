@@ -168,6 +168,16 @@ uv run python -m unittest discover -s tests -v
   ```bash
   uv run --env-file .env python -m backend.build_gemini_embeddings
   ```
+- 게임 프로필(Gemini가 쓴 플레이 경험 설명 + franchise·base_game·제작자 정보)은 `data/game_profiles.json`, 프로필 임베딩은 `data/profile_embeddings.npz`이며 둘 다 git에 포함되어 있다. 리뷰 1,000개 이상 게임(약 2,900개)이 대상이고, 제작자·국가는 리뷰 3,000개 이상 게임만 채운다. 프로필 정보는 검색에만 쓰이고 화면에는 보이지 않는다.
+  ```bash
+  # 시범 (약 50개, 결과를 직접 검토): 
+  uv run --env-file .env python -m backend.build_game_profiles --sample
+  # 전체 프로필 생성 (중단 후 다시 실행하면 이어서 진행)
+  uv run --env-file .env python -m backend.build_game_profiles
+  # 프로필 임베딩 (약 1분, 약 400원)
+  uv run --env-file .env python -m backend.build_profile_embeddings
+  ```
+  `natural_search.USE_PROFILE_VECTORS`로 프로필 임베딩 사용 여부를 정한다 (평가 결과 `stage3.json` 대 `stage3_profilevec.json` 참고). franchise·제작자·국가는 키워드 일치와 시리즈 묶기에 쓰인다.
 - 임베딩·협업 필터링 재생성과 성능 평가 방법은 [recommendation_pipeline.md](recommendation_pipeline.md)를 참고하세요.
 - API 명세와 오류 응답은 [backend_api.md](backend_api.md)를 참고하세요.
 

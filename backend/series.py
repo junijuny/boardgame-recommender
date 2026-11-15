@@ -5,8 +5,9 @@ import numpy as np
 import pandas as pd
 
 try:
-    from backend import recommend_engine as eng
+    from backend import profiles, recommend_engine as eng
 except ImportError:  # Docker image runs from backend/
+    import profiles
     import recommend_engine as eng
 
 MIN_REVIEWS = 1000
@@ -60,7 +61,18 @@ def series_keys(
     return keys
 
 
-KEYS = series_keys(eng.df, MIN_REVIEWS)
+def profile_base_games(df: pd.DataFrame, game_profiles: dict[int, dict]) -> dict[int, str]:
+    """프로필의 base_game (자기 이름과 같은 값은 제외)"""
+    names = dict(zip(df["BGGId"].tolist(), df["Name"].tolist()))
+    out = {}
+    for bgg_id, p in game_profiles.items():
+        base = p.get("base_game")
+        if base and bgg_id in names and _norm(base) != _norm(names[bgg_id]):
+            out[bgg_id] = base
+    return out
+
+
+KEYS = series_keys(eng.df, MIN_REVIEWS, base_games=profile_base_games(eng.df, profiles.PROFILES))
 
 
 def set_keys(keys: np.ndarray) -> None:

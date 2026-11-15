@@ -11,10 +11,11 @@ import numpy as np
 import pandas as pd
 
 try:
-    from backend import features, gemini, recommend_engine as eng, series
+    from backend import features, gemini, profiles, recommend_engine as eng, series
 except ImportError:
     import features
     import gemini
+    import profiles
     import recommend_engine as eng
     import series
 
@@ -39,6 +40,9 @@ MAX_WORD_CHARS = 40
 AGE_RANGE = (2.0, 18.0)
 _HANGUL = re.compile("[ㄱ-ㆎ가-힣]")
 CACHE_SIZE = 256
+# 프로필 임베딩이 있는 게임은 원문 임베딩 대신 프로필 임베딩을 쓸지 (평가: stage3_profilevec.json 은 hit@5 0.85, 끄면 0.88 이라 꺼 둠)
+USE_PROFILE_VECTORS = False
+PROFILE_DOC_VERSION = 1
 
 
 @dataclass
@@ -47,23 +51,44 @@ class GeminiIndex:
     present: np.ndarray  # bool (len(df),)
 
 
-def load_index(path: Path = features.GEMINI_EMBEDDINGS_PATH) -> GeminiIndex | None:
+def _read_npz(path: Path, label: str):
+    """(ids, vectors) 또는 None. 모델·차원이 다르면 None"""
     if not path.exists():
         return None
     try:
         with np.load(path, allow_pickle=False) as data:
             if str(data["model_name"]) != gemini.EMBED_MODEL or int(data["dim"]) != gemini.EMBED_DIM:
                 return None
-            ids = data["ids"]
-            stored = data["vectors"]
+            if label == "profile" and int(data["doc_version"]) != PROFILE_DOC_VERSION:
+                return None
+            return data["ids"], data["vectors"]
     except (OSError, KeyError, ValueError, zipfile.BadZipFile) as exc:
-        print(f"Warning: could not load Gemini embeddings from {path}: {exc}")
+        print(f"Warning: could not load Gemini {"" if label == "document" else label + " "}embeddings from {path}: {exc}")
         return None
+
+
+def _place(ids: np.ndarray, stored: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """저장된 벡터를 eng.df 행 순서로 배치 -> (present, vectors)"""
     position = pd.Series(np.arange(len(ids)), index=ids)
     rows = position.reindex(eng.df["BGGId"].to_numpy())
     present = rows.notna().to_numpy()
     vectors = np.zeros((len(eng.df), stored.shape[1]), dtype=np.float32)
     vectors[present] = stored[rows[present].astype(int).to_numpy()].astype(np.float32)
+    return present, vectors
+
+
+def load_index(
+    path: Path = features.GEMINI_EMBEDDINGS_PATH, profile_path: Path = features.PROFILE_EMBEDDINGS_PATH
+) -> GeminiIndex | None:
+    base = _read_npz(path, "document")
+    if base is None:
+        return None
+    present, vectors = _place(*base)
+    if USE_PROFILE_VECTORS:
+        prof = _read_npz(profile_path, "profile")
+        if prof is not None and prof[1].shape[1] == vectors.shape[1]:
+            has, pvecs = _place(*prof)
+            vectors[has] = pvecs[has]
     return GeminiIndex(vectors=vectors, present=present)
 
 
@@ -206,17 +231,41 @@ def _tag_columns(features_, names: tuple[str, ...]) -> np.ndarray:
 _text_lower: pd.Series | None = None
 
 
-def keyword_hits(cand_idx: np.ndarray, keywords: tuple[str, ...]) -> np.ndarray:
-    """후보 x 키워드 bool 행렬: 이름+설명에 키워드가 통단어로(대소문자 무시) 들어 있는가"""
+def _whole_word(text: pd.Series, word: str) -> np.ndarray:
+    return text.str.contains(r"(?<!\w)" + re.escape(word.lower()) + r"(?!\w)", regex=True).to_numpy()
+
+
+def _metadata_text(cand_idx: np.ndarray) -> pd.Series:
+    """후보마다 프로필의 franchise, designers, designer_countries 를 이어 붙인 소문자 문자열"""
+    ids = eng.df["BGGId"].to_numpy()[cand_idx]
+    rows = []
+    for bgg_id in ids:
+        p = profiles.PROFILES.get(int(bgg_id), {})
+        rows.append(" | ".join(
+            str(v) for key in ("franchise", "designers", "designer_countries") for v in p.get(key) or ()
+        ).lower())
+    return pd.Series(rows, dtype=object)
+
+
+def keyword_matches(cand_idx: np.ndarray, keywords: tuple[str, ...]) -> tuple[np.ndarray, np.ndarray]:
+    """(이름+설명 일치, 프로필 메타데이터 일치) 후보 x 키워드 bool 행렬. 모두 통단어, 대소문자 무시"""
     global _text_lower
     if _text_lower is None:
         _text_lower = (eng.df["Name"].fillna("") + " " + eng.df["Description"]).str.lower()
     text = _text_lower.iloc[cand_idx]
-    out = np.zeros((len(cand_idx), len(keywords)), dtype=bool)
+    meta_text = _metadata_text(cand_idx)
+    text_hit = np.zeros((len(cand_idx), len(keywords)), dtype=bool)
+    meta_hit = np.zeros_like(text_hit)
     for j, word in enumerate(keywords):
-        pattern = r"(?<!\w)" + re.escape(word.lower()) + r"(?!\w)"
-        out[:, j] = text.str.contains(pattern, regex=True).to_numpy()
-    return out
+        text_hit[:, j] = _whole_word(text, word)
+        meta_hit[:, j] = _whole_word(meta_text, word)
+    return text_hit, meta_hit
+
+
+def keyword_hits(cand_idx: np.ndarray, keywords: tuple[str, ...]) -> np.ndarray:
+    """후보 x 키워드 bool 행렬: 이름+설명 또는 프로필 메타데이터에 키워드가 통단어로 들어 있는가"""
+    text_hit, meta_hit = keyword_matches(cand_idx, keywords)
+    return text_hit | meta_hit
 
 
 def _word_score(cand_idx: np.ndarray, terms: tuple[str, ...]) -> np.ndarray | None:
@@ -283,6 +332,16 @@ def natural_search(
     cand_idx = np.flatnonzero(mask)
     if len(cand_idx) == 0:
         return []
+
+    # 키워드가 프로필 메타데이터(시리즈·제작자·국가)에 걸리는 후보가 하나라도 있으면 필수 조건으로 쓴다
+    if intent.keywords:
+        text_hit, meta_hit = keyword_matches(cand_idx, intent.keywords)
+        hard = meta_hit.any(axis=0)
+        if hard.any():
+            keep = (text_hit | meta_hit)[:, hard].all(axis=1)
+            cand_idx = cand_idx[keep]
+            if len(cand_idx) == 0:
+                return []
 
     tag_hits = np.zeros(len(cand_idx))
     include_total = (
