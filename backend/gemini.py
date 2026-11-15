@@ -105,6 +105,7 @@ class GeminiClient(Protocol):
         basis: str,
         basis_facts: dict | None,
         games: Sequence[dict],
+        weak_match: bool = False,
     ) -> dict[int, str]: ...
 
     def write_profiles(self, games: Sequence[dict]) -> list[GameProfile]: ...
@@ -153,7 +154,7 @@ Write exactly one English sentence (at most 25 words) per game, using only the f
 Never mention facts that are not in the input.
 Never restate the player count, play time or difficulty; the game card already shows them.
 {mode_rule}
-Return one entry per game, keyed by its bgg_id.
+{weak_rule}Return one entry per game, keyed by its bgg_id.
 Basis: {basis}
 Basis facts: {basis_facts}
 Games: {games}
@@ -201,6 +202,16 @@ MODE_RULES = {
         "Round review counts in words (e.g. 'over 100,000 BGG reviews', 'about 45,000 reviews')."
     ),
 }
+
+
+WEAK_MATCH_RULE = (
+    "These games are only the nearest matches; do not claim they fully deliver the request. "
+    "Say which aspect comes closest.\n"
+)
+
+
+def weak_match_rule(weak_match: bool = True) -> str:
+    return WEAK_MATCH_RULE if weak_match else ""
 
 
 def _normalize_rows(arr: np.ndarray) -> np.ndarray:
@@ -351,7 +362,7 @@ class GoogleGeminiClient:
             return np.zeros((0, EMBED_DIM), dtype=np.float32)
         return self._embed([document_text(title, body) for title, body in docs])
 
-    def explain(self, mode, basis, basis_facts, games) -> dict[int, str]:
+    def explain(self, mode, basis, basis_facts, games, weak_match=False) -> dict[int, str]:
         schema = {
             "type": "OBJECT",
             "properties": {
@@ -371,6 +382,7 @@ class GoogleGeminiClient:
         }
         prompt = EXPLAIN_PROMPT.format(
             mode_rule=MODE_RULES[mode],
+            weak_rule=weak_match_rule(weak_match),
             basis=basis,
             basis_facts=json.dumps(basis_facts, ensure_ascii=False),
             games=json.dumps(list(games), ensure_ascii=False),

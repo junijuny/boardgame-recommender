@@ -51,8 +51,8 @@ class FakeGeminiClient:
         out[:, 0] = 1.0
         return out
 
-    def explain(self, mode, basis, basis_facts, games):
-        self._record("explain", mode, basis, basis_facts, games)
+    def explain(self, mode, basis, basis_facts, games, weak_match=False):
+        self._record("explain", mode, basis, basis_facts, games, weak_match)
         return self.reasons if self.reasons is not None else {}
 
     def write_profiles(self, games):

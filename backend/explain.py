@@ -16,7 +16,7 @@ DESCRIPTION_CHARS = 600
 MAX_REASON_CHARS = 300
 _HANGUL = re.compile("[ㄱ-ㆎ가-힣]")
 
-_cache: OrderedDict[tuple[str, str, int], str] = OrderedDict()
+_cache: OrderedDict[tuple[str, str, bool, int], str] = OrderedDict()
 _lock = threading.Lock()
 
 
@@ -73,7 +73,7 @@ def _cache_put(key, value: str) -> None:
 
 
 def explain_games(
-    mode: Literal["similar", "query"], basis: str, game_ids: list[int]
+    mode: Literal["similar", "query"], basis: str, game_ids: list[int], weak_match: bool = False
 ) -> dict[int, str]:
     basis_facts = None
     if mode == "similar":
@@ -89,7 +89,7 @@ def explain_games(
     result: dict[int, str] = {}
     missing: list[int] = []
     for bgg_id in ids:
-        cached = _cache_get((mode, basis_key, bgg_id))
+        cached = _cache_get((mode, basis_key, weak_match, bgg_id))
         if cached is None:
             missing.append(bgg_id)
         else:
@@ -102,7 +102,7 @@ def explain_games(
         raise gemini.GeminiError("Gemini client is not configured")
     gemini.charge()
     raw = client.explain(
-        mode, basis, basis_facts, [game_facts(id_to_idx[i]) for i in missing]
+        mode, basis, basis_facts, [game_facts(id_to_idx[i]) for i in missing], weak_match
     )
 
     wanted = set(missing)
@@ -112,6 +112,6 @@ def explain_games(
         text = text.strip()
         if not text or len(text) > MAX_REASON_CHARS or _HANGUL.search(text):
             continue
-        _cache_put((mode, basis_key, bgg_id), text)
+        _cache_put((mode, basis_key, weak_match, bgg_id), text)
         result[bgg_id] = text
     return result

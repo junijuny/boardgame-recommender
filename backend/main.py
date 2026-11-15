@@ -110,6 +110,7 @@ class ExplainRequest(BaseModel):
     mode: Literal["similar", "query"]
     basis: str
     game_ids: list[int]
+    weak_match: bool = False
 
 
 MAX_EXPLAIN_BASIS_LENGTH = 300
@@ -345,7 +346,7 @@ def explain(body: ExplainRequest, request: Request):
         )
 
     try:
-        reasons = explain_games(body.mode, basis, body.game_ids)
+        reasons = explain_games(body.mode, basis, body.game_ids, body.weak_match)
     except LookupError:
         raise HTTPException(
             status_code=404,

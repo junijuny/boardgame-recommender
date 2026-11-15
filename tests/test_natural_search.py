@@ -595,10 +595,15 @@ class RerankSearchTest(unittest.TestCase):
         ids = [int(eng.df.loc[a, "BGGId"]), int(eng.df.loc[b, "BGGId"])]
         self.assertEqual(series.KEYS[a], series.KEYS[b])
         short = self.shortlist()
-        self.fake.rerank_result = gemini.RerankResult("Read as: x.", tuple(ids + short[:6]), False)
-        games = search_full("co-op", 4, 60).games
-        self.assertEqual(len(games), 5)
-        keys = [series.KEYS[int(eng.df.index[eng.df["BGGId"] == g["BGGId"]][0])] for g in games]
+        others = [i for i in short if i not in ids][:6]
+        # re-rank 출력에 같은 시리즈 두 개가 직접 들어와도 페이지 구성 단계에서 하나만 남아야 한다
+        result = gemini.RerankResult("Read as: x.", tuple(ids + others), False)
+        with mock.patch.object(ns.rerank, "rerank", return_value=result):
+            games = search_full("co-op", 4, 60).games
+        got = [g["BGGId"] for g in games]
+        self.assertEqual(len(got), 5)
+        self.assertEqual(sum(1 for i in ids if i in got), 1)
+        keys = [series.KEYS[int(eng.df.index[eng.df["BGGId"] == g][0])] for g in got]
         self.assertEqual(len(set(keys)), 5)
 
     def test_refresh_uses_cache(self):
@@ -626,10 +631,19 @@ class RerankSearchTest(unittest.TestCase):
         self.assertIsNotNone(ns._rerank_cache.get(("co-op", 4, 60)))
 
     def test_rerank_failure_falls_back(self):
+        short = self.shortlist()
+        want = tuple(reversed(short[:8]))
+        self.fake.rerank_result = gemini.RerankResult("Read as: x.", want, False)
+        reranked = [g["BGGId"] for g in search_full("co-op", 4, 60).games]
+        ns.clear_caches()
+        self.fake.rerank_result = None
         self.fake.rerank_error = gemini.GeminiError("boom")
         r = search_full("co-op", 4, 60)
-        self.assertEqual(len(r.games), 5)
-        self.assertEqual([g["BGGId"] for g in r.games], [g["BGGId"] for g in search_full("co-op", 4, 60).games])
+        got = [g["BGGId"] for g in r.games]
+        self.assertEqual(len(got), 5)
+        self.assertNotEqual(got, reranked)  # 재정렬 순서를 쓰지 않는다
+        self.assertEqual(reranked, list(want[:5]))
+        self.assertTrue(set(got) <= set(short))
         self.assertIsNone(r.interpretation)
         self.assertIs(r.weak_match, False)
         self.assertIsNone(ns._rerank_cache.get(("co-op", 4, 60)))

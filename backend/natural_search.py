@@ -432,7 +432,8 @@ def natural_search(
         picked = ranked[:top_n]
         shortlist = ranked[:SHORTLIST_SIZE]
         interpretation = RANKING_COPY[intent.sort]
-        # 정렬 질의의 Score는 순위 (1.0, 0.8, ... 1위가 가장 높음)
+        # 정렬 질의의 Score는 순위 목록(ranked, 최대 max(top_n, SHORTLIST_SIZE)개) 전체에 걸쳐
+        # 1.0에서 0에 가까워지도록 고르게 퍼진다 (1위가 가장 높음)
         score = np.zeros(len(cand_idx))
         score[ranked] = 1.0 - np.arange(len(ranked)) / max(len(ranked), 1)
     else:

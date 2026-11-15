@@ -46,6 +46,12 @@ class NaturalApiTest(unittest.TestCase):
         self.assertIsInstance(body["explanations"], bool)
         self.assertTrue(body["explanations"])
 
+    def test_explain_accepts_weak_match(self):
+        r = client.post(
+            "/explain", json={"mode": "query", "basis": "co-op", "game_ids": [1], "weak_match": True}
+        )
+        self.assertEqual(r.status_code, 200)
+
     def test_search_returns_five(self):
         r = client.post("/search/natural", json=BODY)
         self.assertEqual(r.status_code, 200)
