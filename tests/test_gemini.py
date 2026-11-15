@@ -43,6 +43,19 @@ class IntentParsingTest(unittest.TestCase):
         self.assertEqual(gemini._intent_from_dict({"sort": None}).sort, "relevance")
         self.assertEqual(gemini._intent_from_dict({}).sort, "relevance")
 
+    def test_intent_from_dict_reads_new_fields(self):
+        i = gemini._intent_from_dict({
+            "age_max": 8, "categories": ["Family", "Party"], "low_text": True,
+            "keywords": ["Star Wars"], "terms": ["zombies", "trains"],
+        })
+        self.assertEqual(i.age_max, 8.0)
+        self.assertEqual(i.categories, ("Family", "Party"))
+        self.assertIs(i.low_text, True)
+        self.assertEqual(i.keywords, ("Star Wars",))
+        self.assertEqual(i.terms, ("zombies", "trains"))
+        d = gemini._intent_from_dict({})
+        self.assertEqual((d.age_max, d.categories, d.low_text, d.keywords, d.terms), (None, (), False, (), ()))
+
     def test_bad_weight_raises_gemini_error(self):
         with self.assertRaises(gemini.GeminiError):
             gemini._intent_from_dict({"weight_min": "abc"})

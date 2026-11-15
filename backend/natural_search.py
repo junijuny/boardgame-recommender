@@ -1,5 +1,6 @@
 """자연어 검색 엔진: Gemini 의도 추출 + 임베딩 유사도 + 태그 일치 + 평점."""
 
+import re
 import threading
 import zipfile
 from collections import OrderedDict
@@ -24,8 +25,18 @@ MIN_REVIEWS = 1000
 SORT_COLUMNS = {"popularity": "NumUserRatings", "rating": "BayesAvgRating", "newest": "YearPublished"}
 # 순위 질의에 장르 묘사도 있으면("가장 유명한 우주 게임") 임베딩 상위 이 개수 안에서만 정렬
 SORT_POOL = 50
-EMBEDDING_WEIGHT = 0.8   # 유사도 중 임베딩 비중 (나머지는 태그 일치)
-SIMILARITY_WEIGHT = 0.75  # 최종 점수 중 유사도 비중 (나머지는 평점)
+# 유사도 = 임베딩 + 태그 일치 + 단어 일치 (없는 신호는 빼고 나머지 비중으로 다시 맞춘다)
+EMBEDDING_WEIGHT = 0.7
+TAG_WEIGHT = 0.15
+WORD_WEIGHT = 0.15
+# 최종 점수 = 유사도 + 평점 + 보조 신호(추천 인원 적합도, 언어 의존도)
+SIMILARITY_WEIGHT = 0.65
+RATING_WEIGHT = 0.2
+SOFT_WEIGHT = 0.15
+MAX_WORDS = 3
+MAX_WORD_CHARS = 40
+AGE_RANGE = (2.0, 18.0)
+_HANGUL = re.compile("[ㄱ-ㆎ가-힣]")
 CACHE_SIZE = 256
 
 
@@ -111,6 +122,18 @@ def _clean_tags(names, vocab: set[str], drop: set[str] = frozenset()) -> tuple[s
     return tuple(out)
 
 
+def _clean_words(words) -> tuple[str, ...]:
+    """영어 단어만 (한글 제외), 40자 이하, 대소문자 무시 중복 제거, 최대 3개"""
+    out: list[str] = []
+    for word in words:
+        word = str(word).strip()
+        if not word or len(word) > MAX_WORD_CHARS or _HANGUL.search(word):
+            continue
+        if word.lower() not in (w.lower() for w in out):
+            out.append(word)
+    return tuple(out[:MAX_WORDS])
+
+
 def sanitize_intent(intent: gemini.QueryIntent, raw_query: str) -> gemini.QueryIntent:
     mech_vocab = {str(n) for n in eng.mechanics.names}
     theme_vocab = {str(n) for n in eng.themes.names}
@@ -138,6 +161,11 @@ def sanitize_intent(intent: gemini.QueryIntent, raw_query: str) -> gemini.QueryI
         weight_min=low,
         weight_max=high,
         sort=sort,
+        age_max=None if intent.age_max is None else min(max(float(intent.age_max), AGE_RANGE[0]), AGE_RANGE[1]),
+        categories=_clean_tags(intent.categories, set(gemini.CATEGORY_NAMES)),
+        low_text=bool(intent.low_text),
+        keywords=_clean_words(intent.keywords),
+        terms=_clean_words(intent.terms),
     )
 
 
@@ -172,6 +200,49 @@ def _tag_columns(features_, names: tuple[str, ...]) -> np.ndarray:
     return np.array([lookup[n] for n in names], dtype=int)
 
 
+_text_lower: pd.Series | None = None
+
+
+def keyword_hits(cand_idx: np.ndarray, keywords: tuple[str, ...]) -> np.ndarray:
+    """후보 x 키워드 bool 행렬: 이름+설명에 키워드가 통단어로(대소문자 무시) 들어 있는가"""
+    global _text_lower
+    if _text_lower is None:
+        _text_lower = (eng.df["Name"].fillna("") + " " + eng.df["Description"]).str.lower()
+    text = _text_lower.iloc[cand_idx]
+    out = np.zeros((len(cand_idx), len(keywords)), dtype=bool)
+    for j, word in enumerate(keywords):
+        pattern = r"(?<!\w)" + re.escape(word.lower()) + r"(?!\w)"
+        out[:, j] = text.str.contains(pattern, regex=True).to_numpy()
+    return out
+
+
+def _word_score(cand_idx: np.ndarray, terms: tuple[str, ...]) -> np.ndarray | None:
+    """설명글 TF-IDF 와 terms 의 코사인, 후보 안 최댓값 기준 0~1. 쓸 수 없으면 None"""
+    if not terms:
+        return None
+    try:
+        matrix = eng._get_tfidf_matrix()  # 임베딩이 있으면 지연 로드되므로 먼저 불러온다
+    except ImportError:  # scikit-learn 이 없으면 단어 일치 신호는 끈다
+        return None
+    if eng.tfidf is None:
+        return None
+    query = eng.tfidf.transform([" ".join(terms)])
+    raw = np.asarray((matrix[cand_idx] @ query.T).todense()).ravel()
+    top = raw.max()
+    return raw / top if top > 0 else np.zeros(len(cand_idx))
+
+
+def _soft_score(cand_idx: np.ndarray, players: int, low_text: bool) -> np.ndarray:
+    """보조 신호 평균: 추천 인원 적합도, (요청 시) 언어 의존도가 낮은 정도"""
+    df = eng.df
+    good = df["GoodPlayers"].to_numpy()[cand_idx]
+    signals = [np.array([players in g for g in good], dtype=float)]
+    if low_text:
+        pct = pd.Series(df["LanguageEase"].to_numpy(dtype=float)[cand_idx]).rank(pct=True).to_numpy()
+        signals.append(np.where(np.isnan(pct), 0.5, 1.0 - pct))
+    return np.mean(signals, axis=0)
+
+
 def natural_search(
     query: str,
     players: int,
@@ -198,32 +269,21 @@ def natural_search(
         mask &= ~known | (weight >= intent.weight_min)
     if intent.weight_max is not None:
         mask &= ~known | (weight <= intent.weight_max)
+    if intent.age_max is not None:
+        age = df["ComAgeRec"].to_numpy(dtype=float)
+        mask &= ~(age > 0) | (age <= intent.age_max)
     for feats, names in ((eng.mechanics, intent.exclude_mechanics), (eng.themes, intent.exclude_themes)):
         if names:
             hit = feats.binary[:, _tag_columns(feats, names)].sum(axis=1)
             mask &= np.asarray(hit).ravel() == 0
 
-    include_total = len(intent.include_mechanics) + len(intent.include_themes)
-    if sort_column and include_total:
-        # "가장 유명한 협력 게임": 장르 태그가 있는 게임 안에서만 순위를 매긴다
-        has_tag = np.zeros(len(df), dtype=bool)
-        for feats, names in ((eng.mechanics, intent.include_mechanics), (eng.themes, intent.include_themes)):
-            if names:
-                has_tag |= np.asarray(feats.binary[:, _tag_columns(feats, names)].sum(axis=1)).ravel() > 0
-        mask &= has_tag
-
     cand_idx = np.flatnonzero(mask)
     if len(cand_idx) == 0:
         return []
 
-    # 장르 묘사가 없는 순위 질의("가장 유명한 게임")는 임베딩을 계산하지 않는다 (Gemini 호출도 줄어듦)
-    embedding = None
-    if intent.search_text:
-        query_vec = _get_query_vector(client, intent.search_text, index.vectors.shape[1])
-        raw = (index.vectors @ query_vec)[cand_idx]
-        low, high = np.median(raw), raw.max()
-        embedding = np.clip((raw - low) / max(high - low, 1e-6), 0.0, 1.0)
-
+    include_total = (
+        len(intent.include_mechanics) + len(intent.include_themes) + len(intent.categories) + len(intent.keywords)
+    )
     matched: dict[str, np.ndarray] = {}
     tag_ratio = None
     if include_total:
@@ -236,13 +296,33 @@ def natural_search(
                 sub = feats.binary[cand_idx][:, _tag_columns(feats, names)].toarray() > 0
                 matched[key] = sub
                 tag_hits += sub.sum(axis=1)
+        if intent.categories:
+            cat_cols = [f"Cat:{n}" for n in intent.categories]
+            tag_hits += (df[cat_cols].to_numpy()[cand_idx] > 0).sum(axis=1)
+        if intent.keywords:
+            tag_hits += keyword_hits(cand_idx, intent.keywords).sum(axis=1)
+        if sort_column:
+            # "가장 유명한 협력 게임": 태그가 하나라도 있는 게임 안에서만 순위를 매긴다
+            keep = tag_hits > 0
+            if not keep.any():
+                return []
+            cand_idx, tag_hits = cand_idx[keep], tag_hits[keep]
+            matched = {k: v[keep] for k, v in matched.items()}
         tag_ratio = tag_hits / include_total
-    if embedding is not None and tag_ratio is not None:
-        similarity = EMBEDDING_WEIGHT * embedding + (1 - EMBEDDING_WEIGHT) * tag_ratio
-    elif embedding is not None:
-        similarity = embedding
-    elif tag_ratio is not None:
-        similarity = tag_ratio
+
+    # 장르 묘사가 없는 순위 질의("가장 유명한 게임")는 임베딩을 계산하지 않는다 (Gemini 호출도 줄어듦)
+    embedding = None
+    if intent.search_text:
+        query_vec = _get_query_vector(client, intent.search_text, index.vectors.shape[1])
+        raw = (index.vectors @ query_vec)[cand_idx]
+        low, high = np.median(raw), raw.max()
+        embedding = np.clip((raw - low) / max(high - low, 1e-6), 0.0, 1.0)
+
+    word = _word_score(cand_idx, intent.terms)
+    parts = [(w, v) for w, v in (
+        (EMBEDDING_WEIGHT, embedding), (TAG_WEIGHT, tag_ratio), (WORD_WEIGHT, word)) if v is not None]
+    if parts:
+        similarity = sum(w * v for w, v in parts) / sum(w for w, _ in parts)
     else:
         similarity = np.zeros(len(cand_idx))
 
@@ -252,7 +332,11 @@ def natural_search(
         score = np.zeros(len(cand_idx))
         score[picked] = 1.0 - np.arange(len(picked)) / max(len(picked), 1)
     else:
-        score = SIMILARITY_WEIGHT * similarity + (1 - SIMILARITY_WEIGHT) * eng.rating_score(cand_idx)
+        score = (
+            SIMILARITY_WEIGHT * similarity
+            + RATING_WEIGHT * eng.rating_score(cand_idx)
+            + SOFT_WEIGHT * _soft_score(cand_idx, players, intent.low_text)
+        )
         picked = eng.diversify(cand_idx, score, top_n)
 
     results = []

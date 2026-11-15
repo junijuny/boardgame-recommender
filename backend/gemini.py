@@ -49,8 +49,14 @@ class QueryIntent:
     weight_max: float | None = None
     # 순위 기준. relevance = 설명글 유사도, 나머지는 리뷰 수·평점·출시 연도 순
     sort: str = "relevance"
+    age_max: float | None = None
+    categories: tuple[str, ...] = ()
+    low_text: bool = False
+    keywords: tuple[str, ...] = ()
+    terms: tuple[str, ...] = ()
 
 
+CATEGORY_NAMES = ("Thematic", "Strategy", "War", "Family", "CGS", "Abstract", "Party", "Childrens")
 SORT_OPTIONS = ("relevance", "popularity", "rating", "newest")
 
 
@@ -95,6 +101,12 @@ Rules:
   user rating, NOT scoring points inside a game.
   "newest" for new / recent / latest releases (e.g. 최신, 요즘 나온).
   "relevance" for everything else (default).
+- age_max: the highest minimum age that fits; set only when children or an age is mentioned, else null.
+- categories: only names from the allowed categories that the request clearly implies.
+- low_text: true for "no reading needed / language-independent" requests, else false.
+- keywords: proper nouns (franchise, designer, publisher, country) in their official English form
+  (스타워즈 -> "Star Wars", 한국 -> "Korea"); still never put them in search_text.
+- terms: up to 3 concrete subject nouns in English (e.g. "animals", "zombies", "trains"), not mechanics.
 - Ignore player counts and play time; the UI supplies them.
 - Weight is BGG complexity on a 1-5 scale. Map "light/easy" (e.g. 가벼운) to a low range such as 1.0-2.5,
   and "heavy/complex" to a high range such as 3.5-5.0. Leave weight_min/weight_max null if not implied.
@@ -102,6 +114,7 @@ Rules:
   Use only names from the allowed lists.
 Allowed mechanics: {mechanics}
 Allowed themes: {themes}
+Allowed categories: {categories}
 Request: {query}
 """
 
@@ -173,6 +186,11 @@ def _intent_from_dict(data: dict) -> QueryIntent:
             weight_min=_opt_float(data.get("weight_min")),
             weight_max=_opt_float(data.get("weight_max")),
             sort=_sort(data.get("sort")),
+            age_max=_opt_float(data.get("age_max")),
+            categories=_tags(data.get("categories")),
+            low_text=bool(data.get("low_text")),
+            keywords=_tags(data.get("keywords")),
+            terms=_tags(data.get("terms")),
         )
     except (TypeError, ValueError, AttributeError) as exc:
         raise GeminiError(f"Unexpected intent response: {exc}") from exc
@@ -219,6 +237,11 @@ class GoogleGeminiClient:
                 "weight_min": {"type": "NUMBER", "nullable": True},
                 "weight_max": {"type": "NUMBER", "nullable": True},
                 "sort": {"type": "STRING", "enum": list(SORT_OPTIONS)},
+                "age_max": {"type": "NUMBER", "nullable": True},
+                "categories": _tag_array(),
+                "low_text": {"type": "BOOLEAN"},
+                "keywords": _tag_array(),
+                "terms": _tag_array(),
             },
             "required": ["search_text"],
         }
@@ -226,6 +249,7 @@ class GoogleGeminiClient:
                 query=query,
                 mechanics=json.dumps(list(mechanic_names), ensure_ascii=False),
                 themes=json.dumps(list(theme_names), ensure_ascii=False),
+                categories=json.dumps(list(CATEGORY_NAMES)),
             ), schema, EXTRACT_MAX_TOKENS)
         return _intent_from_dict(data)
 

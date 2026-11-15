@@ -12,6 +12,7 @@ backend/features.py
 모든 행렬의 행 순서는 load_games()가 돌려주는 DataFrame의 행 순서와 같다.
 """
 
+import ast
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -42,6 +43,14 @@ CATEGORY_COLUMNS = [
 EVAL_USER_MODULO = 10
 
 
+def _parse_good_players(value) -> tuple[int, ...]:
+    """"['2', '3']" 형태의 문자열을 (2, 3)으로. 없거나 깨진 값은 빈 튜플"""
+    try:
+        return tuple(int(v) for v in ast.literal_eval(value))
+    except (ValueError, SyntaxError, TypeError):
+        return ()
+
+
 def load_games() -> pd.DataFrame:
     """정제 데이터(clean_games.csv)에 원본(games.csv)의 Family·카테고리 컬럼을 붙여 반환"""
     df = pd.read_csv(CLEAN_GAMES_PATH)
@@ -49,10 +58,16 @@ def load_games() -> pd.DataFrame:
     # 이미지 주소가 없는 게임(15개)이 NaN이면 JSON 변환 실패로 500 오류가 나므로 빈 문자열로 채움
     df["ImagePath"] = df["ImagePath"].fillna("")
 
-    raw = pd.read_csv(RAW_GAMES_PATH, usecols=["BGGId", "Family", *CATEGORY_COLUMNS])
+    raw = pd.read_csv(
+        RAW_GAMES_PATH, usecols=["BGGId", "Family", "ComAgeRec", "LanguageEase", "GoodPlayers", *CATEGORY_COLUMNS],
+    )
     df = df.merge(raw, on="BGGId", how="left")
     df["Family"] = df["Family"].fillna("")
     df[CATEGORY_COLUMNS] = df[CATEGORY_COLUMNS].fillna(0).astype(np.float32)
+    # 추천 연령(없으면 0 = 모름), 언어 의존도(없으면 NaN), 추천 인원 수 목록(없거나 깨지면 빈 튜플)
+    df["ComAgeRec"] = pd.to_numeric(df["ComAgeRec"], errors="coerce").fillna(0.0).astype(float)
+    df["LanguageEase"] = pd.to_numeric(df["LanguageEase"], errors="coerce").astype(float)
+    df["GoodPlayers"] = df["GoodPlayers"].map(_parse_good_players)
     return df.reset_index(drop=True)
 
 

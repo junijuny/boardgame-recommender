@@ -1,7 +1,9 @@
+import re
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import numpy as np
 
@@ -166,6 +168,112 @@ class NaturalSearchTest(unittest.TestCase):
         )
         self.assertEqual(s.include_mechanics, ("Cooperative Game",))
         self.assertEqual(s.include_themes, ("Economic",))
+
+
+class AudienceSignalTest(unittest.TestCase):
+    def setUp(self):
+        self._client = gemini._client
+        self._index = ns._index
+        ns.clear_caches()
+        e0 = np.zeros(8, dtype=np.float32)
+        e0[0] = 1.0
+        self.fake = FakeGeminiClient(query_vector=e0)
+        set_client(self.fake)
+        ns.set_index(make_index(idx_of("Pandemic")))
+
+    def tearDown(self):
+        gemini._client = self._client
+        ns._index = self._index
+        ns.clear_caches()
+
+    def test_sanitize_keywords_and_terms(self):
+        raw = ("Star Wars", "스타워즈", "", "x" * 200, "star wars", "A", "B", "C")
+        s = sanitize_intent(QueryIntent("a", keywords=raw, terms=raw), "q")
+        self.assertEqual(s.keywords, ("Star Wars", "A", "B"))
+        self.assertEqual(s.terms, ("Star Wars", "A", "B"))
+
+    def test_sanitize_age_and_categories(self):
+        self.assertEqual(sanitize_intent(QueryIntent("a", age_max=40), "q").age_max, 18.0)
+        self.assertEqual(sanitize_intent(QueryIntent("a", age_max=0), "q").age_max, 2.0)
+        self.assertIsNone(sanitize_intent(QueryIntent("a"), "q").age_max)
+        s = sanitize_intent(QueryIntent("a", categories=("family", "Nope")), "q")
+        self.assertEqual(s.categories, ("Family",))
+
+    def test_age_max_filters_known_ages(self):
+        self.fake.intent = QueryIntent("family fun", age_max=8)
+        games = natural_search("q", 4, 120)
+        self.assertEqual(len(games), 5)
+        for g in games:
+            age = eng.df.loc[eng.df["BGGId"] == g["BGGId"], "ComAgeRec"].iloc[0]
+            self.assertTrue(age == 0 or age <= 8)
+
+    def test_keyword_ranking_query(self):
+        self.fake.intent = QueryIntent("", keywords=("Star Wars",), sort="popularity")
+        games = natural_search("스타워즈 게임", 2, 180)
+        self.assertTrue(games)
+        pattern = re.compile(r"\bstar wars\b", re.IGNORECASE)
+        for g in games:
+            row = eng.df.loc[eng.df["BGGId"] == g["BGGId"]].iloc[0]
+            self.assertTrue(pattern.search(f"{row['Name']} {row['Description']}"))
+        reviews = [g["NumUserRatings"] for g in games]
+        self.assertEqual(reviews, sorted(reviews, reverse=True))
+
+    def test_ranking_keyword_with_no_match_is_empty(self):
+        self.fake.intent = QueryIntent("", keywords=("Zzyzx Qwerty",), sort="popularity")
+        self.assertEqual(natural_search("q", 2, 180), [])
+
+    def test_category_counts_as_include_tag(self):
+        # 임베딩 점수를 모두 같게 만들어 태그 일치만 순위를 가른다
+        ns.set_index(ns.GeminiIndex(vectors=np.tile(np.eye(1, 8, dtype=np.float32), (len(eng.df), 1)),
+                                    present=np.ones(len(eng.df), dtype=bool)))
+        self.fake.intent = QueryIntent("party game", categories=("Party",))
+        games = natural_search("q", 4, 120)
+        top = eng.df.loc[eng.df["BGGId"] == games[0]["BGGId"]].iloc[0]
+        self.assertEqual(top["Cat:Party"], 1)
+
+    def test_terms_word_match_raises_score(self):
+        players, minutes = 4, 120
+        mask = eng._condition_mask(players, minutes, ns.MIN_RATING).to_numpy().copy()
+        mask &= eng.df["NumUserRatings"].to_numpy() >= ns.MIN_REVIEWS
+        has_word = eng.df["Description"].str.contains(r"\bzombies\b", case=False, regex=True).to_numpy()
+        fits = np.array([players in g for g in eng.df["GoodPlayers"]])
+        a = int(np.flatnonzero(mask & has_word & fits)[0])
+        b = int(np.flatnonzero(mask & ~has_word & fits)[0])
+        keep = {int(eng.df.at[a, "BGGId"]), int(eng.df.at[b, "BGGId"])}
+        exclude = [int(i) for i in eng.df["BGGId"] if int(i) not in keep]
+        ns.set_index(ns.GeminiIndex(vectors=np.tile(np.eye(1, 8, dtype=np.float32), (len(eng.df), 1)),
+                                    present=np.ones(len(eng.df), dtype=bool)))
+        self.fake.intent = QueryIntent("something", terms=("zombies",))
+        with mock.patch.object(eng, "rating_score", lambda idx: np.zeros(len(idx))):
+            games = natural_search("q", players, minutes, exclude_ids=exclude)
+        self.assertEqual(len(games), 2)
+        self.assertEqual(games[0]["BGGId"], int(eng.df.at[a, "BGGId"]))
+        self.assertGreater(games[0]["Score"], games[1]["Score"])
+
+    def test_missing_audience_data_is_safe(self):
+        idx = idx_of("Pandemic")
+        cols = ["ComAgeRec", "LanguageEase", "GoodPlayers"]
+        saved = {c: eng.df.at[idx, c] for c in cols}
+        try:
+            eng.df.at[idx, "ComAgeRec"] = 0.0
+            eng.df.at[idx, "LanguageEase"] = np.nan
+            eng.df.at[idx, "GoodPlayers"] = ()
+            self.fake.intent = QueryIntent("co-op", low_text=True, age_max=10)
+            games = natural_search("q", 4, 120)
+        finally:
+            for c, v in saved.items():
+                eng.df.at[idx, c] = v
+        self.assertEqual(len(games), 5)
+        self.assertEqual(games[0]["Name"], "Pandemic")
+
+    def test_word_match_off_without_tfidf(self):
+        self.fake.intent = QueryIntent("something", terms=("zombies",))
+        saved = eng.tfidf
+        eng.tfidf = None
+        try:
+            self.assertEqual(len(natural_search("q", 4, 120)), 5)
+        finally:
+            eng.tfidf = saved
 
 
 class SortedSearchTest(unittest.TestCase):
