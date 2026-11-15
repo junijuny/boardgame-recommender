@@ -64,6 +64,7 @@ class QueryIntent:
     keywords: tuple[str, ...] = ()
     terms: tuple[str, ...] = ()
     needs_web: bool = False
+    web_query: str = ""
 
 
 @dataclass(frozen=True)
@@ -154,6 +155,8 @@ Rules:
 - needs_web: true only when the request depends on facts that game descriptions and general game
   knowledge do not hold: awards, designer nationality, a specific publisher, popularity in a specific
   country or community. False for genre, mood, audience and ranking requests.
+- web_query: when needs_web is true, a short English web search query for the request (e.g.
+  "board games designed by South Korean designers"); otherwise an empty string.
 - Ignore plain player counts and play time (e.g. "for 4 players", "30 minutes"); the UI supplies them.
 - Weight is BGG complexity on a 1-5 scale. Map "light/easy" (e.g. 가벼운) to a low range such as 1.0-2.5,
   and "heavy/complex" to a high range such as 3.5-5.0. Leave weight_min/weight_max null if not implied.
@@ -206,7 +209,8 @@ Request: {query}
 Games: {games}
 """
 
-WEB_PROMPT = """Use Google Search to answer this board game request: {query}
+WEB_PROMPT = """Answer this board game request: {query}
+You must use Google Search before answering, and answer only from what the search finds, not from memory.
 First list the official English names of the board games that answer it, one per line, with no
 numbering or other text, at most 15 names. Then a blank line, then a one or two sentence English
 summary of what you found.
@@ -284,6 +288,7 @@ def _intent_from_dict(data: dict) -> QueryIntent:
             keywords=_tags(data.get("keywords")),
             terms=_tags(data.get("terms")),
             needs_web=bool(data.get("needs_web")),
+            web_query="" if data.get("web_query") is None else str(data.get("web_query")),
         )
     except (TypeError, ValueError, AttributeError) as exc:
         raise GeminiError(f"Unexpected intent response: {exc}") from exc
@@ -350,6 +355,7 @@ class GoogleGeminiClient:
                 "keywords": _tag_array(),
                 "terms": _tag_array(),
                 "needs_web": {"type": "BOOLEAN"},
+                "web_query": {"type": "STRING"},
             },
             "required": ["search_text"],
         }

@@ -202,6 +202,14 @@ def _clean_words(words) -> tuple[str, ...]:
     return tuple(out[:MAX_WORDS])
 
 
+MAX_WEB_QUERY_CHARS = 120
+
+
+def _clean_web_query(text) -> str:
+    text = str(text or "").strip()
+    return "" if len(text) > MAX_WEB_QUERY_CHARS or _HANGUL.search(text) else text
+
+
 def sanitize_intent(intent: gemini.QueryIntent, raw_query: str) -> gemini.QueryIntent:
     mech_vocab = {str(n) for n in eng.mechanics.names}
     theme_vocab = {str(n) for n in eng.themes.names}
@@ -235,6 +243,7 @@ def sanitize_intent(intent: gemini.QueryIntent, raw_query: str) -> gemini.QueryI
         keywords=_clean_words(intent.keywords),
         terms=_clean_words(intent.terms),
         needs_web=bool(intent.needs_web),
+        web_query=_clean_web_query(intent.web_query),
     )
 
 
@@ -356,7 +365,7 @@ def natural_search(
     web_ids: frozenset[int] = frozenset()
     web_info: dict | None = None
     if use_web:
-        found = _web_lookup(query)
+        found = _web_lookup(intent.web_query or query)
         if found is not None:
             web_ids, web_info = found
 
@@ -383,8 +392,9 @@ def natural_search(
     if len(cand_idx) == 0:
         return _empty_result()
 
-    # 키워드가 프로필 메타데이터(시리즈·제작자·국가)에 걸리는 후보가 하나라도 있으면 필수 조건으로 쓴다
-    if intent.keywords:
+    # 키워드가 프로필 메타데이터(시리즈·제작자·국가)에 걸리는 후보가 하나라도 있으면 필수 조건으로 쓴다.
+    # 웹 검색이 성공했으면 웹 근거가 필수 신호이고 프로필 제작자 정보는 부정확할 수 있어 태그로만 쓴다
+    if intent.keywords and web_info is None:
         text_hit, meta_hit = keyword_matches(cand_idx, intent.keywords)
         hard = meta_hit.any(axis=0)
         if hard.any():

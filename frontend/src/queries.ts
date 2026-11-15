@@ -81,7 +81,8 @@ export function useServerInfo() {
 
 // 자연어 검색 (POST 요청이라 useMutation 사용)
 export function useNaturalSearch() {
-  return useMutation({ mutationFn: naturalSearch });
+  // 결과에 웹 근거 검색 내용이 들어 있을 수 있어 약관상 저장하지 않는다
+  return useMutation({ mutationFn: naturalSearch, gcTime: 0 });
 }
 
 // 결과 게임들의 한 문장 추천 이유. req가 null이면 요청하지 않는다.
@@ -94,6 +95,8 @@ export function useExplanations(req: ExplainRequest | null) {
     // 웹 검색 결과에서 나온 이유는 약관상 저장하지 않으므로 화면을 떠나면 바로 버린다
     staleTime: req?.from_web ? 0 : Infinity,
     gcTime: req?.from_web ? 0 : undefined,
+    refetchOnReconnect: !req?.from_web,
+    refetchOnMount: !req?.from_web,
     refetchOnWindowFocus: false, // staleTime 0이어도 탭 전환만으로 Gemini를 다시 부르지 않는다
     retry: false,
   });

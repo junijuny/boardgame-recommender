@@ -43,6 +43,16 @@ class IntentParsingTest(unittest.TestCase):
         self.assertEqual((i.weight_min, i.weight_max), (None, 2.0))
         self.assertEqual(gemini._intent_from_dict({}).search_text, "")
 
+    def test_web_query_parsed(self):
+        self.assertEqual(gemini._intent_from_dict({"web_query": "South Korean board games"}).web_query,
+                         "South Korean board games")
+        self.assertEqual(gemini._intent_from_dict({"web_query": None}).web_query, "")
+        self.assertEqual(gemini._intent_from_dict({}).web_query, "")
+
+    def test_web_prompt_requires_searching(self):
+        self.assertIn("Google Search before answering", gemini.WEB_PROMPT)
+        self.assertIn("web_query", gemini.EXTRACT_PROMPT)
+
     def test_sort_is_parsed_and_unknown_values_fall_back_to_relevance(self):
         self.assertEqual(gemini._intent_from_dict({"sort": "popularity"}).sort, "popularity")
         self.assertEqual(gemini._intent_from_dict({"sort": " Rating "}).sort, "rating")

@@ -64,6 +64,10 @@ class WebSearchTest(unittest.TestCase):
         self.assertEqual(web_search.web_budget.remaining(), 97)
         self.assertEqual(gemini.budget.remaining(), 99)  # also charged once to the general budget
 
+    def test_lookup_passes_query_through(self):
+        web_search.lookup("my english query")
+        self.assertEqual(self.fake.calls[-1], ("web_search", "my english query"))
+
     def test_spends_at_least_one(self):
         self.fake.web_answer = WebAnswer("Catan", "<div>x</div>", 0)
         web_search.lookup("q")

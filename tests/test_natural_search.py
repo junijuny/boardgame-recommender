@@ -751,6 +751,47 @@ class WebSearchNaturalTest(unittest.TestCase):
         facts = self.calls("rerank")[0][2]
         self.assertTrue(all(g["web_mentioned"] for g in facts))
 
+    def test_web_query_sanitized(self):
+        mk = lambda q: ns.sanitize_intent(QueryIntent("x", needs_web=True, web_query=q), "raw")
+        self.assertEqual(mk("  Korean games  ").web_query, "Korean games")
+        self.assertEqual(mk("한국 게임").web_query, "")
+        self.assertEqual(mk("x" * 121).web_query, "")
+
+    def test_lookup_uses_web_query_else_raw(self):
+        self.answer(self.short_names[:2])
+        self.fake.intent = QueryIntent("co-op", include_mechanics=("Cooperative Game",),
+                                       needs_web=True, web_query="english query")
+        search_full("raw query", 4, 60)
+        self.assertEqual(self.calls("web_search")[-1][1], "english query")
+        ns.clear_caches()
+        self.fake.intent = QueryIntent("co-op", include_mechanics=("Cooperative Game",), needs_web=True)
+        search_full("raw query", 4, 60)
+        self.assertEqual(self.calls("web_search")[-1][1], "raw query")
+
+    def _meta_only_first(self):
+        def fake_matches(cand_idx, keywords):
+            text = np.zeros((len(cand_idx), len(keywords)), dtype=bool)
+            meta = np.zeros_like(text)
+            meta[0, :] = True
+            return text, meta
+        return mock.patch.object(ns, "keyword_matches", fake_matches)
+
+    def test_metadata_keyword_is_soft_when_web_succeeded(self):
+        self.fake.intent = QueryIntent("co-op", keywords=("Zzz",), needs_web=True)
+        self.answer(self.short_names[:2])
+        with self._meta_only_first():
+            r = search_full("co-op", 4, 60)
+        self.assertIsNotNone(r.web)
+        self.assertEqual(len(r.games), 5)
+
+    def test_metadata_keyword_is_hard_when_web_failed(self):
+        self.fake.intent = QueryIntent("co-op", keywords=("Zzz",), needs_web=True)
+        self.fake.web_error = gemini.GeminiError("boom")
+        with self._meta_only_first():
+            r = search_full("co-op", 4, 60)
+        self.assertIsNone(r.web)
+        self.assertEqual(len(r.games), 1)
+
     def test_many_ids_of_one_series_stay_soft(self):
         self.fake.web_answer = gemini.WebAnswer("Ticket to Ride\n\nSummary.", "<div>s</div>", 1)
         pool = ns.web_search.match_names("Ticket to Ride")
