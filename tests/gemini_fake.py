@@ -3,9 +3,9 @@
 import numpy as np
 
 try:
-    from backend.gemini import EMBED_DIM, QueryIntent
+    from backend.gemini import EMBED_DIM, GameProfile, QueryIntent
 except ImportError:
-    from gemini import EMBED_DIM, QueryIntent
+    from gemini import EMBED_DIM, GameProfile, QueryIntent
 
 
 class FakeGeminiClient:
@@ -15,7 +15,9 @@ class FakeGeminiClient:
         query_vector: np.ndarray | None = None,
         reasons: dict[int, str] | None = None,
         error: Exception | None = None,
+        extra_profiles: list[GameProfile] | None = None,
     ):
+        self.extra_profiles = extra_profiles or []
         self.intent = intent
         self.query_vector = query_vector
         self.reasons = reasons
@@ -48,3 +50,18 @@ class FakeGeminiClient:
     def explain(self, mode, basis, basis_facts, games):
         self._record("explain", mode, basis, basis_facts, games)
         return self.reasons if self.reasons is not None else {}
+
+    def write_profiles(self, games):
+        self._record("write_profiles", list(games))
+        out = [
+            GameProfile(
+                bgg_id=int(g["bgg_id"]),
+                profile=" ".join(["calm"] * 60),
+                franchise=("Fake Franchise",),
+                base_game=None,
+                designers=("Fake Designer",),
+                designer_countries=("Germany",),
+            )
+            for g in games
+        ]
+        return out + list(self.extra_profiles)

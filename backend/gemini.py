@@ -28,6 +28,8 @@ EMBED_DIM = 768
 TIMEOUT_SECONDS = 10
 EXTRACT_MAX_TOKENS = 512
 EXPLAIN_MAX_TOKENS = 1024
+PROFILE_MODEL = "gemini-3.5-flash-lite"
+PROFILE_MAX_TOKENS = 4096  # 게임 10개 x (약 120단어 + 목록)
 
 
 class GeminiError(Exception):
@@ -54,6 +56,16 @@ class QueryIntent:
     low_text: bool = False
     keywords: tuple[str, ...] = ()
     terms: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class GameProfile:
+    bgg_id: int
+    profile: str
+    franchise: tuple[str, ...] = ()
+    base_game: str | None = None
+    designers: tuple[str, ...] = ()
+    designer_countries: tuple[str, ...] = ()
 
 
 CATEGORY_NAMES = ("Thematic", "Strategy", "War", "Family", "CGS", "Abstract", "Party", "Childrens")
@@ -84,6 +96,8 @@ class GeminiClient(Protocol):
         basis_facts: dict | None,
         games: Sequence[dict],
     ) -> dict[int, str]: ...
+
+    def write_profiles(self, games: Sequence[dict]) -> list[GameProfile]: ...
 
 
 EXTRACT_PROMPT = """\
@@ -130,6 +144,22 @@ Never restate the player count, play time or difficulty; the game card already s
 Return one entry per game, keyed by its bgg_id.
 Basis: {basis}
 Basis facts: {basis_facts}
+Games: {games}
+"""
+
+PROFILE_PROMPT = """You write short play-experience profiles of board games for a search index.
+Always write in English. For each game return:
+- profile: 60-90 words describing who the game suits (ages, families, couples, parties, experienced
+  players), the occasions it fits, its mood, how players interact, the learning curve and how a session
+  feels. Never contradict the given data (player count, play time, weight, age, mechanics, themes).
+- franchise: franchises, licenses or series the game belongs to (e.g. "Star Wars"); empty if none or unsure.
+- base_game: only when this game is a version, sequel, expansion-like standalone or spin-off of another
+  game, the name of that game; otherwise null.
+- designers: the game's designers; empty if you are not sure, and always empty when the game's
+  include_designers is false.
+- designer_countries: the countries the designers are from; empty if you are not sure, and always
+  empty when include_designers is false.
+Leave a field empty rather than guessing. Return one entry per game, keyed by its bgg_id.
 Games: {games}
 """
 
@@ -205,6 +235,7 @@ class GoogleGeminiClient:
 
         self._types = genai.types
         self._client = genai.Client(api_key=api_key)
+        self.usage = {"calls": 0, "prompt_tokens": 0, "output_tokens": 0}  # 오프라인 작업 비용 집계용
 
     def _http_options(self):
         # HttpOptions.timeout 단위는 밀리초
@@ -223,6 +254,12 @@ class GoogleGeminiClient:
                     thinking_config=t.ThinkingConfig(thinking_level=t.ThinkingLevel.MINIMAL),
                     http_options=self._http_options(),
                 ),
+            )
+            meta = getattr(resp, "usage_metadata", None)
+            self.usage["calls"] += 1
+            self.usage["prompt_tokens"] += getattr(meta, "prompt_token_count", 0) or 0
+            self.usage["output_tokens"] += (getattr(meta, "candidates_token_count", 0) or 0) + (
+                getattr(meta, "thoughts_token_count", 0) or 0
             )
             return json.loads(resp.text)
         except Exception as exc:
@@ -315,6 +352,53 @@ class GoogleGeminiClient:
             }
         except (KeyError, TypeError, ValueError) as exc:
             raise GeminiError(f"Unexpected explanation response: {exc}") from exc
+
+    def write_profiles(self, games) -> list[GameProfile]:
+        # 검색 도구(Google Search 등)는 쓰지 않는다: 약관상 근거 검색 결과를 저장할 수 없음
+        str_array = {"type": "ARRAY", "items": {"type": "STRING"}}
+        schema = {
+            "type": "OBJECT",
+            "properties": {
+                "profiles": {
+                    "type": "ARRAY",
+                    "items": {
+                        "type": "OBJECT",
+                        "properties": {
+                            "bgg_id": {"type": "INTEGER"},
+                            "profile": {"type": "STRING"},
+                            "franchise": str_array,
+                            "base_game": {"type": "STRING", "nullable": True},
+                            "designers": str_array,
+                            "designer_countries": str_array,
+                        },
+                        "required": ["bgg_id", "profile"],
+                    },
+                }
+            },
+            "required": ["profiles"],
+        }
+        prompt = PROFILE_PROMPT.format(games=json.dumps(list(games), ensure_ascii=False))
+        data = self._generate(PROFILE_MODEL, prompt, schema, PROFILE_MAX_TOKENS)
+        try:
+            out = (_profile_from_dict(r) for r in data["profiles"])
+            return [p for p in out if p is not None]
+        except (KeyError, TypeError, ValueError, AttributeError) as exc:
+            raise GeminiError(f"Unexpected profile response: {exc}") from exc
+
+
+def _profile_from_dict(r: dict) -> GameProfile | None:
+    text = r.get("profile")
+    if not isinstance(text, str) or not text.strip():
+        return None
+    base = r.get("base_game")
+    return GameProfile(
+        bgg_id=int(r["bgg_id"]),
+        profile=text.strip(),
+        franchise=_tags(r.get("franchise")),
+        base_game=base.strip() if isinstance(base, str) and base.strip() else None,
+        designers=_tags(r.get("designers")),
+        designer_countries=_tags(r.get("designer_countries")),
+    )
 
 
 _UNSET = object()

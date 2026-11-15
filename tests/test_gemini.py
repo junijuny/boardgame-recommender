@@ -116,5 +116,25 @@ class GeminiModuleTest(unittest.TestCase):
         self.assertEqual(fake.calls, [("embed_query", "x")])
 
 
+class ProfilesParsingTest(unittest.TestCase):
+    def test_profiles_parsing(self):
+        client = gemini.GoogleGeminiClient.__new__(gemini.GoogleGeminiClient)
+        client._generate = lambda *a, **k: {
+            "profiles": [
+                {"bgg_id": 1, "profile": "A calm game.", "franchise": ["Foo"], "base_game": "Bar",
+                 "designers": ["A B"], "designer_countries": ["Germany"]},
+                {"bgg_id": 2, "franchise": [], "designers": []},
+                {"bgg_id": 3, "profile": "Plain.", "base_game": ""},
+            ]
+        }
+        out = client.write_profiles([{"bgg_id": 1}, {"bgg_id": 2}, {"bgg_id": 3}])
+        self.assertEqual([p.bgg_id for p in out], [1, 3])
+        self.assertEqual(out[0], gemini.GameProfile(
+            bgg_id=1, profile="A calm game.", franchise=("Foo",), base_game="Bar",
+            designers=("A B",), designer_countries=("Germany",)))
+        self.assertIsNone(out[1].base_game)
+        self.assertEqual(out[1].franchise, ())
+
+
 if __name__ == "__main__":
     unittest.main()
