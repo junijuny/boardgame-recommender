@@ -1,6 +1,7 @@
 import re
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -829,11 +830,12 @@ class WebSearchNaturalTest(unittest.TestCase):
         self.assertEqual(len(r.games), 5)
 
     def test_web_timeout_falls_back(self):
-        real = ns.web_search.lookup
+        release = threading.Event()
+        self.addCleanup(release.set)
 
-        def slow(query):
-            time.sleep(0.5)
-            return real(query)
+        def slow(query):  # never calls the real lookup; unblocked at teardown
+            release.wait(5)
+            return None
 
         ns.WEB_WALL_SECONDS = 0.05
         try:
@@ -842,6 +844,35 @@ class WebSearchNaturalTest(unittest.TestCase):
         finally:
             ns.WEB_WALL_SECONDS = gemini.WEB_TIMEOUT_SECONDS
         self.assertIsNone(r.web)
+        self.assertEqual(len(r.games), 5)
+
+    def test_low_ranked_web_match_still_reaches_page(self):
+        old = ns.SHORTLIST_SIZE
+        ns.SHORTLIST_SIZE = 60
+        try:
+            deep = search_full("co-op", 4, 60).shortlist_ids
+        finally:
+            ns.SHORTLIST_SIZE = old
+        ns.clear_caches()
+        self.assertGreater(len(deep), 45)
+        name = str(eng.df.loc[eng.df["BGGId"] == deep[40], "Name"].iloc[0])
+        self.assertNotIn(name, self.short_names)
+        self.answer([name])
+        r = search_full("co-op", 4, 60)
+        self.assertIn(name, [g["Name"] for g in r.games])
+        self.assertIn(deep[40], r.shortlist_ids)
+
+    def test_weak_match_when_fewer_than_three_web_games_on_page(self):
+        self.answer(self.short_names[10:12])
+        self.assertTrue(search_full("co-op", 4, 60).weak_match)
+
+    def test_not_weak_with_three_web_games(self):
+        self.answer(self.short_names[10:13])
+        self.assertFalse(search_full("co-op", 4, 60).weak_match)
+
+    def test_rerank_unexpected_error_falls_back(self):
+        self.fake.rerank_error = RuntimeError("boom")
+        r = search_full("co-op", 4, 60)
         self.assertEqual(len(r.games), 5)
 
 

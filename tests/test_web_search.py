@@ -1,6 +1,9 @@
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
+
+import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -72,6 +75,33 @@ class WebSearchTest(unittest.TestCase):
         self.fake.web_answer = WebAnswer("Catan", "<div>x</div>", 0)
         web_search.lookup("q")
         self.assertEqual(web_search.web_budget.remaining(), 99)
+
+    def test_web_norm_strips_accents_and_apostrophes(self):
+        self.assertEqual(web_search._web_norm("Tzolk'in"), web_search._web_norm("Tzolkin"))
+        self.assertEqual(web_search._web_norm("Café"), web_search._web_norm("Cafe"))
+
+    def test_match_names_accent_and_apostrophe_insensitive(self):
+        df = pd.DataFrame({"BGGId": [1, 2], "Name": ["Tzolk'in: The Mayan Calendar", "Café"],
+                           "NumUserRatings": [5000, 5000]})
+        old = web_search._names
+        web_search._names = None
+        try:
+            with mock.patch.object(web_search.eng, "df", df):
+                self.assertEqual(web_search.match_names("Tzolkin"), frozenset({1}))
+                self.assertEqual(web_search.match_names("Cafe"), frozenset({2}))
+        finally:
+            web_search._names = old
+
+    def test_extra_searches_spend_only_remaining(self):
+        web_search.web_budget = limits.DailyBudget(3)
+        self.fake.web_answer = WebAnswer("Catan", "<div>x</div>", 10)
+        self.assertIsNotNone(web_search.lookup("q"))
+        self.assertEqual(web_search.web_budget.remaining(), 0)
+
+    def test_general_budget_exhausted_spends_no_web_budget(self):
+        gemini.budget = limits.DailyBudget(0)
+        self.assertIsNone(web_search.lookup("q"))
+        self.assertEqual(web_search.web_budget.remaining(), 100)
 
 
 if __name__ == "__main__":

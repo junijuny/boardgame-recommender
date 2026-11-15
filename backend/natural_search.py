@@ -55,6 +55,7 @@ RERANK_WALL_SECONDS = 5
 WEB_WALL_SECONDS = gemini.WEB_TIMEOUT_SECONDS
 # 웹 근거 id 가 이 개수 이상 필터를 통과하면 필수 조건, 미만이면 태그 하나로 쓴다
 WEB_HARD_MIN = 5
+WEB_WEAK_MIN = 3  # 웹 검색 성공 시 페이지의 웹 확인 게임이 이보다 적으면 약한 일치
 RANKING_COPY = {
     "popularity": "Ranked by number of BGG reviews.",
     "rating": "Ranked by BGG rating.",
@@ -487,6 +488,10 @@ def natural_search(
         )
         # 같은 시리즈(확장·버전·외전)는 한 게임만 남기고 다양화한다
         ordered = group_series(cand_idx, score, tag_hits, "NumUserRatings")
+        if web_tag is not None and web_tag.any():
+            # 웹이 확인한 게임(시리즈당 대표 1개)은 항상 후보 목록 맨 앞에 둔다: 점수가 낮아도 재정렬에 보인다
+            front = web_tag[ordered]
+            ordered = np.concatenate([ordered[front], ordered[~front]])
         shortlist = ordered[:SHORTLIST_SIZE]
         result = _get_rerank(
             query, players, max_time, cand_idx[shortlist], bool(exclude_ids),
@@ -498,6 +503,12 @@ def natural_search(
             picked, padded = _compose_page(result.ranked_ids, ordered, cand_idx, top_n)
             interpretation = result.interpretation or None
             weak_match = bool(result.weak_match) or padded
+
+    if web_info is not None:
+        # 웹 검색이 성공했는데 이번 페이지에 웹이 확인한 게임이 3개 미만이면 약한 일치로 알린다
+        on_page = np.isin(df["BGGId"].to_numpy()[cand_idx[picked]], list(web_ids)).sum()
+        if on_page < WEB_WEAK_MIN:
+            weak_match = True
 
     results = []
     for pos in picked:
@@ -548,7 +559,7 @@ def _get_rerank(
         future = _rerank_pool.submit(rerank.rerank, query, [int(r) for r in rows])
     try:
         result = future.result(timeout=RERANK_WALL_SECONDS)
-    except (gemini.GeminiError, concurrent.futures.TimeoutError):
+    except Exception:  # GeminiError·시간 초과 포함: 재정렬 실패는 기존 순서로 대체
         future.cancel()
         return None
     if use_cache and not refresh:

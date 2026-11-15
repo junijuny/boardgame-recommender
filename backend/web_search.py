@@ -7,6 +7,7 @@ analyzed, or used for evaluation or training. This module therefore keeps nothin
 
 import os
 import re
+import unicodedata
 
 try:
     from backend import gemini, limits, recommend_engine as eng
@@ -23,13 +24,20 @@ _LIST_MARK = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s*")
 _names: dict[str, set[int]] | None = None  # name index built from our own data, not from web results
 
 
+def _web_norm(s: str) -> str:
+    """웹 이름 매칭 전용 정규화: 악센트 제거, 아포스트로피 제거 (Tzolk'in = Tzolkin, Café = Cafe). series 키는 건드리지 않는다"""
+    text = unicodedata.normalize("NFKD", str(s))
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    return _norm(re.sub(r"['’‘`]", "", text))
+
+
 def _name_index() -> dict[str, set[int]]:
     global _names
     if _names is None:
         index: dict[str, set[int]] = {}
         pool = eng.df[eng.df["NumUserRatings"] >= MIN_REVIEWS]
         for bgg_id, name in zip(pool["BGGId"].tolist(), pool["Name"].tolist()):
-            for form in {_norm(name), _norm(str(name).split(":", 1)[0])}:
+            for form in {_web_norm(name), _web_norm(str(name).split(":", 1)[0])}:
                 if form:
                     index.setdefault(form, set()).add(int(bgg_id))
         _names = index
@@ -44,7 +52,7 @@ def match_names(text: str) -> frozenset[int]:
     index = _name_index()
     ids: set[int] = set()
     for line in _lines(text):
-        ids |= index.get(_norm(line), set())
+        ids |= index.get(_web_norm(line), set())
     return frozenset(ids)
 
 
@@ -58,14 +66,22 @@ def _summary(text: str) -> str:
 
 def lookup(query: str) -> tuple[frozenset[int], dict] | None:
     client = gemini.get_client()
-    if client is None or not web_budget.try_spend(1):
+    if client is None:
         return None
     try:
         gemini.charge()  # a web call is also a Gemini generate call: charge the general budget once
+    except gemini.GeminiError:
+        return None
+    if not web_budget.try_spend(1):
+        return None
+    try:
         answer = client.web_search(query)
     except gemini.GeminiError:
         return None
-    web_budget.try_spend(max(0, answer.search_count - 1))  # 처음 1은 호출 전에 썼다
+    # 처음 1은 호출 전에 썼다. 나머지는 남은 한도 안에서 쓴다 (넘으면 건너뛰지 않고 남은 만큼만)
+    extra = max(0, answer.search_count - 1)
+    if extra:
+        web_budget.try_spend(min(extra, web_budget.remaining()))
     # The terms require showing search suggestions with grounded results: no HTML means failure.
     if not answer.suggestions_html:
         return None
