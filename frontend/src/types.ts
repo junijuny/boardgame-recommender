@@ -117,6 +117,8 @@ export interface ExplainRequest {
   game_ids: number[];
   // 검색 결과가 질문과 잘 맞지 않을 때 true (이유 문장을 부드럽게 쓰도록)
   weak_match?: boolean;
+  // 검색 결과가 웹 검색(근거)을 거쳤을 때 true. 서버는 이 이유를 캐시하지 않는다
+  from_web?: boolean;
 }
 
 // 추천 이유 응답: BGGId(문자열) -> 한 문장

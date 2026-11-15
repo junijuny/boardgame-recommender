@@ -87,7 +87,7 @@ curl -X POST 'http://localhost:8000/search/natural' \
 
 - Gemini(`gemini-3.5-flash-lite`)가 검색어를 조건(포함·제외 메커니즘/테마, 난이도 범위, 영어 검색 문장)으로 바꾸고, `gemini-embedding-2`(768차원)로 만든 `data/gemini_embeddings.npz`와 비교함. 인원·시간은 요청 값만 사용함
 - 응답은 추천과 같은 게임 필드에 `Similarity`, `Score`, `MatchedMechanics`, `MatchedThemes`(검색어에서 뽑은 태그 중 게임이 가진 것), `SortedBy`(`relevance`·`popularity`·`rating`·`newest` 중 결과를 고른 기준)를 더한 5개. 순위 질의일 때 `Score`는 순위 목록 전체에 걸쳐 고르게 줄어드는 값(`1.0 - i/목록 길이`, 1위 1.0). `exclude_ids`로 이미 본 게임을 빼고 다시 받을 수 있음
-- 응답 본문은 `{"games": [...], "interpretation": "Read as: ...", "weak_match": false, "web": null}`. `interpretation`은 검색어를 어떻게 이해했는지 한 문장(없으면 `null`), `weak_match`는 일치하는 게임이 3개 미만이라 가장 가까운 결과만 보여 준다는 뜻, `web`은 5단계용으로 예약된 필드이며 지금은 항상 `null`
+- 응답 본문은 `{"games": [...], "interpretation": "Read as: ...", "weak_match": false, "web": null}`. `interpretation`은 검색어를 어떻게 이해했는지 한 문장(없으면 `null`), `weak_match`는 일치하는 게임이 3개 미만이라 가장 가까운 결과만 보여 준다는 뜻, `web`은 질문에 바깥 사실(수상 목록, 제작자 국적 등)이 필요할 때만 `{"summary": "...", "suggestions_html": "..."}`(Google 웹 검색 요약과 검색어 추천 위젯 HTML), 아니면 `null`. 웹 호출은 인스턴스당 하루 `WEB_SEARCH_DAILY_LIMIT`회(기본 100)이고 `NATURAL_WEB_SEARCH=0`이면 꺼짐
 - 검색어는 300자 이하. IP당 60초에 10회까지
 
 ### 설명 문장
@@ -100,6 +100,7 @@ curl -X POST 'http://localhost:8000/explain' \
 
 - `mode="similar"`는 `basis`를 기준 게임 이름으로, `mode="query"`는 사용자 검색어로 보고 각 게임이 왜 맞는지 영어 한 문장으로 설명함. 게임 정보(메커니즘·테마·난이도·인원·시간·설명글 앞부분)만 근거로 씀
 - `weak_match: true`(검색 응답의 `weak_match` 값)이면 "가장 가까운 결과일 뿐"이라는 규칙을 프롬프트에 더해, 요청을 완전히 충족한다고 말하지 않고 가장 가까운 측면을 짚게 함. 캐시 키에도 포함됨
+- `from_web: true`(검색 응답의 `web`이 null이 아닐 때 화면이 보냄)이면 이유 캐시를 읽지도 쓰지도 않음. 근거 검색 결과에서 나온 내용은 약관상 캐시할 수 없기 때문임
 - `basis`는 300자 이하, `game_ids`는 1~10개. IP당 60초에 30회까지
 - 응답 예: `{"reasons": {"822": "One English sentence."}}`. 실패하면 화면은 설명 없이 공통 메커니즘 칩을 보여 줌
 - Gemini 호출은 `GEMINI_DAILY_CALL_LIMIT`회(기본 2000, UTC 자정 초기화)로 제한하되, 카운터가 인스턴스 메모리에만 있어 인스턴스가 새로 시작되면 0으로 돌아가는 느슨한 안전장치임. 실제 하드 한도는 Google 쪽 쿼터·예산 알림으로 설정함 ([deploy.md](deploy.md) 참고). 같은 검색어·설명은 서버 메모리에 캐시함

@@ -72,6 +72,11 @@ curl 'http://localhost:8000/games/semantic-search?query=친구들과%20가볍게
    - `weak_match`가 true면 화면이 "We couldn't find a close match. These are the nearest games."를 띄우고, `/explain`은 `weak_match`를 받아 이유 문장을 부드럽게 씀
    - 순위 질의의 `Score`는 순위 목록 전체에 걸쳐 `1.0 - i/목록 길이`로 줄어듦
 
+7. **웹 검색 (5단계)**: 질문에 바깥 사실이 필요하면("Spiel des Jahres 수상작", "한국인이 만든 게임") 재순위 단계에서 Gemini가 Google Search 근거로 사실을 확인하고, 그 사실로 후보 25개 안에서 순서를 정함. 응답의 `web`에 요약과 Google 검색어 추천 위젯 HTML이 담기고 화면은 "From the web" 상자로 보여 줌
+   - 웹 결과가 쓰인 검색은 서버 캐시에 넣지 않으며(약관), 화면은 `/explain`에 `from_web: true`를 보내 이유도 캐시하지 않고 클라이언트 쿼리 캐시에도 남기지 않음
+   - 자동 평가(`evaluate_natural`)는 근거 결과를 저장·평가에 쓸 수 없어 항상 웹 검색을 끄고 실행함. 그래서 이 단계의 품질은 평가 점수에 안 잡히고 직접 확인해야 함
+   - 웹 질문에서 "Refresh"를 누르면 같은 질문으로 웹 검색을 다시 실행함(캐시를 쓰지 않으므로). 일일 한도(`WEB_SEARCH_DAILY_LIMIT`)를 넘거나 `NATURAL_WEB_SEARCH=0`이면 웹 없이 1~6단계로만 동작함
+
 **순위 질의** ("가장 유명한 게임", "평점 높은 명작", "최신 게임")
 
 "유명한", "평점 높은", "최신"은 장르가 아니라 순위 기준이고, 이 정보는 설명글이 아니라 리뷰 수·평점·출시 연도 열에 있음. 그래서 1단계에서 Gemini가 `sort`도 함께 정함 (추가 호출 없음).

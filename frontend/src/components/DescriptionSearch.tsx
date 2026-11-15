@@ -13,11 +13,12 @@ import { ResultList, ResultSkeleton } from "./ResultList";
 import { PlayerPicker, TimePicker } from "./ChoicePickers";
 import { ErrorNotice, ServerWakeNotice } from "./LoadingParts";
 import { NoMatchNotice } from "./SearchNotice";
+import WebResultBox from "./WebResultBox";
 import { errorResponse } from "../api";
 import { PLAYER_OPTIONS, TIME_OPTIONS } from "../filters";
 import { formatMinutes } from "../format";
 import { useExplanations, useIsSlow, useNaturalSearch, useServerInfo } from "../queries";
-import { focusRing, primaryButton } from "../styles";
+import { focusRing, noticeBox, primaryButton } from "../styles";
 import type { NaturalSearchRequest } from "../types";
 
 interface DescriptionSearchProps {
@@ -40,7 +41,8 @@ export default function DescriptionSearch({ onShowDetail }: DescriptionSearchPro
   const explanations = useExplanations(
     explanationsOn && results && search.variables
       ? { mode: "query", basis: search.variables.query, game_ids: results.map((g) => g.BGGId),
-          weak_match: search.data?.weak_match }
+          weak_match: search.data?.weak_match,
+          from_web: search.data?.web != null }
       : null,
   );
 
@@ -159,15 +161,16 @@ export default function DescriptionSearch({ onShowDetail }: DescriptionSearchPro
         )}
         {/* "최신 게임" 검색: 데이터셋이 2021년 출시작까지라 그보다 새 게임은 나올 수 없음을 알린다 */}
         {search.isSuccess && search.data.games[0]?.SortedBy === "newest" && (
-          <p className="rounded-xl border border-line bg-card px-4 py-3 text-[15px] text-ink/80">
+          <p className={noticeBox}>
             Our game data covers releases up to {DATA_LAST_YEAR}, so these are the newest games in it.
           </p>
         )}
         {search.isSuccess && search.data.weak_match && (
-          <p className="rounded-xl border border-line bg-card px-4 py-3 text-[15px] text-ink/80">
+          <p className={noticeBox}>
             We couldn't find a close match. These are the nearest games.
           </p>
         )}
+        {search.isSuccess && search.data.web && <WebResultBox web={search.data.web} />}
         {search.isSuccess && (
           <ResultList
             items={search.data.games.map((g) => ({ game: g, chips: [...g.MatchedMechanics, ...g.MatchedThemes].slice(0, 3) }))}
