@@ -10,7 +10,7 @@ import axios from "axios";
 import { PLAYER_OPTIONS, TIME_OPTIONS } from "./filters";
 import type {
   ApiErrorBody, ExplainRequest, ExplainResponse, FilteredGame, GameDetail, GameSummary, Genre, GenreGame,
-  NaturalSearchRequest, NaturalSearchResponse, RecommendRequest, RecommendedGame, ServerInfo,
+  NaturalGame, NaturalSearchRequest, NaturalSearchResponse, RecommendRequest, RecommendedGame, ServerInfo,
 } from "./types";
 
 // 백엔드 서버 주소
@@ -59,12 +59,16 @@ export async function getServerInfo() {
 
 // 자연어 검색 (최대 5개). exclude_ids는 recommend와 같이 비어 있으면 보내지 않는다.
 export async function naturalSearch({ query, players, max_time, exclude_ids }: NaturalSearchRequest) {
-  const res = await api.post<NaturalSearchResponse>("/search/natural", {
+  const res = await api.post<NaturalSearchResponse | NaturalGame[]>("/search/natural", {
     query,
     players,
     max_time,
     ...(exclude_ids && exclude_ids.length > 0 ? { exclude_ids } : {}),
   });
+  // 배포 중(프런트가 먼저 나가는 동안) 옛 서버는 배열을 돌려준다: 한 번의 배포 동안만 받아 준다
+  if (Array.isArray(res.data)) {
+    return { games: res.data, interpretation: null, weak_match: false, web: null } satisfies NaturalSearchResponse;
+  }
   return res.data;
 }
 
