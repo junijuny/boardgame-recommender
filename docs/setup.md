@@ -173,6 +173,20 @@ uv run python -m unittest discover -s tests -v
 
 ---
 
+### 자연어 검색 평가 (Natural search evaluation)
+
+자연어 검색 품질(hit@5, precision@5, recall@25, 시리즈 중복, bad 비율)을 질의 40개로 측정한다.
+
+```bash
+uv run --env-file .env python -m backend.evaluate_natural --label <이름>
+```
+
+- `.env`에 `GEMINI_API_KEY`가 필요하다. 결과는 `data/natural_eval_results/<이름>.json`에 저장되고 표가 출력된다.
+- 질의 세트는 `data/natural_eval_queries.json` (정답 `good` / 오답 `bad` 게임 id 포함).
+- 의도(intent)와 질의 벡터는 `data/natural_eval_cache.json`(git 제외)에 저장되어 재실행 시 Gemini 호출을 줄인다.
+- 의도 추출 프롬프트를 바꿨다면 `--fresh-intents`로 저장된 의도를 무시하고 다시 추출한다.
+- 비용: 캐시 없는 전체 실행 1회에 약 200~300원 (질의당 Gemini 호출 약 2회).
+
 ## 6. 프론트엔드 환경 설정 (React + Vite)
 
 추천 웹 화면 구성을 위한 Node.js 기반 프론트엔드 세팅입니다.

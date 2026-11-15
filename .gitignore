@@ -76,3 +76,6 @@ ehthumbs_vista.db
 # Kaggle BGG 데이터셋의 사용자 평점 (수백 MB) — 각자 내려받아 data/ 에 넣음
 data/user_ratings.csv
 data/gemini_embeddings.partial.npz
+
+# 자연어 검색 평가 캐시 (의도·질의 벡터)
+data/natural_eval_cache.json
