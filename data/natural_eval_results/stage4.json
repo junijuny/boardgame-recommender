@@ -1,0 +1,1067 @@
+{
+  "label": "stage4",
+  "summary": {
+    "queries": 40,
+    "hit_at_5": 0.9697,
+    "precision_at_5": 0.5333,
+    "recall_at_n": 0.6386,
+    "series_duplicate_rate": 0.0,
+    "bad_in_top5_rate": 0.0,
+    "weak_match_rate": 0.15,
+    "by_type": {
+      "audience": {
+        "queries": 7,
+        "hit_at_5": 1.0,
+        "precision_at_5": 0.6,
+        "recall_at_n": 0.5782,
+        "series_duplicate_rate": 0.0,
+        "bad_in_top5_rate": 0.0,
+        "weak_match_rate": 0.0
+      },
+      "external": {
+        "queries": 5,
+        "hit_at_5": 1.0,
+        "precision_at_5": 0.7,
+        "recall_at_n": 0.8393,
+        "series_duplicate_rate": 0.0,
+        "bad_in_top5_rate": 0.0,
+        "weak_match_rate": 0.2
+      },
+      "genre": {
+        "queries": 6,
+        "hit_at_5": 0.8333,
+        "precision_at_5": 0.3333,
+        "recall_at_n": 0.6905,
+        "series_duplicate_rate": 0.0,
+        "bad_in_top5_rate": 0.0,
+        "weak_match_rate": 0.0
+      },
+      "mood": {
+        "queries": 7,
+        "hit_at_5": 1.0,
+        "precision_at_5": 0.3714,
+        "recall_at_n": 0.4325,
+        "series_duplicate_rate": 0.0,
+        "bad_in_top5_rate": 0.0,
+        "weak_match_rate": 0.0
+      },
+      "no_answer": {
+        "queries": 6,
+        "hit_at_5": null,
+        "precision_at_5": null,
+        "recall_at_n": null,
+        "series_duplicate_rate": 0.0,
+        "bad_in_top5_rate": 0.0,
+        "weak_match_rate": 0.8333
+      },
+      "ranking": {
+        "queries": 4,
+        "hit_at_5": 1.0,
+        "precision_at_5": 0.9,
+        "recall_at_n": 0.825,
+        "series_duplicate_rate": 0.0,
+        "bad_in_top5_rate": 0.0,
+        "weak_match_rate": 0.0
+      },
+      "series": {
+        "queries": 5,
+        "hit_at_5": 1.0,
+        "precision_at_5": 0.48,
+        "recall_at_n": 0.64,
+        "series_duplicate_rate": 0.0,
+        "bad_in_top5_rate": 0.0,
+        "weak_match_rate": 0.0
+      }
+    }
+  },
+  "per_query": [
+    {
+      "query": "할머니, 할아버지와 함께하기 좋은 게임",
+      "type": "audience",
+      "ids": [
+        254640,
+        178900,
+        39856,
+        521,
+        270673
+      ],
+      "names": [
+        "Just One",
+        "Codenames",
+        "Dixit",
+        "Crokinole",
+        "Silver & Gold"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.2,
+      "recall_at_n": 0.1,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "어린아이들과 하기 좋은 동물이 나오는 게임",
+      "type": "audience",
+      "ids": [
+        17329,
+        91514,
+        3570,
+        6351,
+        41010
+      ],
+      "names": [
+        "Animal Upon Animal",
+        "Rhino Hero",
+        "Chicken Cha Cha Cha",
+        "Gulo Gulo",
+        "Carcassonne Junior"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.8,
+      "recall_at_n": 0.6,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "동물들도 이해하기 쉬운 게임",
+      "type": "no_answer",
+      "ids": [
+        17329,
+        91514,
+        327,
+        8203,
+        165950
+      ],
+      "names": [
+        "Animal Upon Animal",
+        "Rhino Hero",
+        "Loopin' Louie",
+        "Hey, That's My Fish!",
+        "Beasty Bar"
+      ],
+      "hit_at_5": null,
+      "precision_at_5": null,
+      "recall_at_n": null,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": true
+    },
+    {
+      "query": "Family game night for parents and kids aged 8",
+      "type": "audience",
+      "ids": [
+        9209,
+        204583,
+        70919,
+        153938,
+        822
+      ],
+      "names": [
+        "Ticket to Ride",
+        "Kingdomino",
+        "Takenoko",
+        "Camel Up",
+        "Carcassonne"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.8,
+      "recall_at_n": 0.5555555555555556,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "보드게임을 처음 해보는 친구들과 할 만한 쉬운 게임",
+      "type": "audience",
+      "ids": [
+        9209,
+        133473,
+        254640,
+        178900,
+        204583
+      ],
+      "names": [
+        "Ticket to Ride",
+        "Sushi Go!",
+        "Just One",
+        "Codenames",
+        "Kingdomino"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 1.0,
+      "recall_at_n": 0.7777777777777778,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "A two-player game for a relaxed date night",
+      "type": "audience",
+      "ids": [
+        163412,
+        224037,
+        158600,
+        122298,
+        283155
+      ],
+      "names": [
+        "Patchwork",
+        "Codenames: Duet",
+        "Hanamikoji",
+        "Morels",
+        "Calico"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.4,
+      "recall_at_n": 0.5,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "초등학생 아이와 아빠가 둘이서 하기 좋은 게임",
+      "type": "audience",
+      "ids": [
+        163412,
+        165722,
+        204583,
+        54043,
+        8203
+      ],
+      "names": [
+        "Patchwork",
+        "KLASK",
+        "Kingdomino",
+        "Jaipur",
+        "Hey, That's My Fish!"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.6,
+      "recall_at_n": 0.625,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "Games for a group of 7 friends",
+      "type": "audience",
+      "ids": [
+        30618,
+        262543,
+        46213,
+        33604,
+        254640
+      ],
+      "names": [
+        "Eat Poop You Cat",
+        "Wavelength",
+        "Telestrations",
+        "Say Anything",
+        "Just One"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.4,
+      "recall_at_n": 0.8888888888888888,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "술자리에서",
+      "type": "mood",
+      "ids": [
+        178900,
+        39856,
+        3955,
+        50381,
+        166384
+      ],
+      "names": [
+        "Codenames",
+        "Dixit",
+        "BANG!",
+        "Cards Against Humanity",
+        "Spyfall"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.6,
+      "recall_at_n": 0.5454545454545454,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "긴장감 있는",
+      "type": "mood",
+      "ids": [
+        38453,
+        150376,
+        171273,
+        144826,
+        223953
+      ],
+      "names": [
+        "Space Alert",
+        "Dead of Winter: A Crossroads Game",
+        "FUSE",
+        "Zombie 15'",
+        "Kitchen Rush"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.4,
+      "recall_at_n": 0.5,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "머리 안 쓰는",
+      "type": "mood",
+      "ids": [
+        327,
+        117959,
+        266083,
+        244995,
+        943
+      ],
+      "names": [
+        "Loopin' Louie",
+        "Las Vegas",
+        "L.L.A.M.A.",
+        "Illusion",
+        "Ligretto"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.2,
+      "recall_at_n": 0.1111111111111111,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "Relaxing, cozy game with no conflict",
+      "type": "mood",
+      "ids": [
+        283155,
+        295947,
+        204027,
+        70919,
+        266524
+      ],
+      "names": [
+        "Calico",
+        "Cascadia",
+        "Cottage Garden",
+        "Takenoko",
+        "PARKS"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.4,
+      "recall_at_n": 0.5714285714285714,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "웃기고 정신없는 게임",
+      "type": "mood",
+      "ids": [
+        194626,
+        253664,
+        67877,
+        8098,
+        253618
+      ],
+      "names": [
+        "Happy Salmon",
+        "Taco Cat Goat Cheese Pizza",
+        "Anomia",
+        "Jungle Speed",
+        "5-Minute Marvel"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.2,
+      "recall_at_n": 0.2857142857142857,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "서로 속이고 의심하는 블러핑 게임",
+      "type": "mood",
+      "ids": [
+        188834,
+        156129,
+        147949,
+        41114,
+        153064
+      ],
+      "names": [
+        "Secret Hitler",
+        "Deception: Murder in Hong Kong",
+        "One Night Ultimate Werewolf",
+        "The Resistance",
+        "Good Cop Bad Cop"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.6,
+      "recall_at_n": 0.8888888888888888,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "A quick light filler game while we wait for dinner",
+      "type": "mood",
+      "ids": [
+        133473,
+        270673,
+        943,
+        274960,
+        16992
+      ],
+      "names": [
+        "Sushi Go!",
+        "Silver & Gold",
+        "Ligretto",
+        "Point Salad",
+        "Tsuro"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.2,
+      "recall_at_n": 0.125,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "전쟁 게임",
+      "type": "genre",
+      "ids": [
+        21050,
+        12333,
+        1035,
+        115746,
+        586
+      ],
+      "names": [
+        "Combat Commander: Europe",
+        "Twilight Struggle",
+        "Squad Leader",
+        "War of the Ring: Second Edition",
+        "Up Front"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.4,
+      "recall_at_n": 0.7142857142857143,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "우주를 탐험하는 SF 게임",
+      "type": "genre",
+      "ids": [
+        220308,
+        72125,
+        39463,
+        167791,
+        198190
+      ],
+      "names": [
+        "Gaia Project",
+        "Eclipse",
+        "Cosmic Encounter",
+        "Terraforming Mars",
+        "Kepler-3042"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.4,
+      "recall_at_n": 0.7142857142857143,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "A pirate-themed game",
+      "type": "genre",
+      "ids": [
+        25292,
+        2987,
+        25685,
+        189052,
+        242639
+      ],
+      "names": [
+        "Merchants & Marauders",
+        "Pirate's Cove",
+        "Blackbeard: The Golden Age of Piracy",
+        "Sea of Clouds",
+        "Treasure Island"
+      ],
+      "hit_at_5": false,
+      "precision_at_5": 0.0,
+      "recall_at_n": 0.6,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "농장을 가꾸고 동물을 키우는 경영 게임",
+      "type": "genre",
+      "ids": [
+        31260,
+        242804,
+        300322,
+        146886,
+        156138
+      ],
+      "names": [
+        "Agricola",
+        "Lowlands",
+        "Hallertau",
+        "La Granja",
+        "Happy Pigs"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.2,
+      "recall_at_n": 0.4,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "살인 사건을 추리하는 탐정 게임",
+      "type": "genre",
+      "ids": [
+        188866,
+        181304,
+        182694,
+        156129,
+        239188
+      ],
+      "names": [
+        "Awkward Guests",
+        "Mysterium",
+        "Watson & Holmes",
+        "Deception: Murder in Hong Kong",
+        "Chronicles of Crime"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.6,
+      "recall_at_n": 1.0,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "Abstract strategy game for two players, no luck",
+      "type": "genre",
+      "ids": [
+        38545,
+        160477,
+        2346,
+        2655,
+        681
+      ],
+      "names": [
+        "Kamisado",
+        "Onitama",
+        "DVONN",
+        "Hive",
+        "Quarto"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.4,
+      "recall_at_n": 0.7142857142857143,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "가장 유명한 게임",
+      "type": "ranking",
+      "ids": [
+        30549,
+        822,
+        13,
+        68448,
+        36218
+      ],
+      "names": [
+        "Pandemic",
+        "Carcassonne",
+        "Catan",
+        "7 Wonders",
+        "Dominion"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 1.0,
+      "recall_at_n": 1.0,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "평점이 가장 높은 게임",
+      "type": "ranking",
+      "ids": [
+        174430,
+        161936,
+        224517,
+        167791,
+        220308
+      ],
+      "names": [
+        "Gloomhaven",
+        "Pandemic Legacy: Season 1",
+        "Brass: Birmingham",
+        "Terraforming Mars",
+        "Gaia Project"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 1.0,
+      "recall_at_n": 1.0,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "가장 최신 게임",
+      "type": "ranking",
+      "ids": [
+        295947,
+        290236,
+        324856,
+        262477,
+        314503
+      ],
+      "names": [
+        "Cascadia",
+        "Canvas",
+        "The Crew: Mission Deep Sea",
+        "Mercado de Lisboa",
+        "Codex Naturalis"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 1.0,
+      "recall_at_n": 1.0,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "Most popular two-player game",
+      "type": "ranking",
+      "ids": [
+        173346,
+        2655,
+        160477,
+        21763,
+        158600
+      ],
+      "names": [
+        "7 Wonders Duel",
+        "Hive",
+        "Onitama",
+        "Mr. Jack",
+        "Hanamikoji"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.6,
+      "recall_at_n": 0.3,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "스타워즈 테마의 보드게임",
+      "type": "external",
+      "ids": [
+        164153,
+        3284,
+        939,
+        271896,
+        183880
+      ],
+      "names": [
+        "Star Wars: Imperial Assault",
+        "Star Wars: Epic Duels",
+        "Star Wars: The Queen's Gambit",
+        "Star Wars: Outer Rim",
+        "Risk: Star Wars Edition"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 1.0,
+      "recall_at_n": 1.0,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "한국인이 만든 보드게임",
+      "type": "external",
+      "ids": [
+        30539,
+        208895
+      ],
+      "names": [
+        "Get Bit!",
+        "New York Slice"
+      ],
+      "hit_at_5": null,
+      "precision_at_5": null,
+      "recall_at_n": null,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": true,
+      "expect_weak_match": false
+    },
+    {
+      "query": "Board games designed by Reiner Knizia",
+      "type": "external",
+      "ids": [
+        6955,
+        42,
+        111,
+        220,
+        118
+      ],
+      "names": [
+        "Reiner Knizia's Decathlon",
+        "Tigris & Euphrates",
+        "Rheinländer",
+        "High Society",
+        "Modern Art"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.4,
+      "recall_at_n": 0.8571428571428571,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "Games set in the Lord of the Rings universe",
+      "type": "external",
+      "ids": [
+        269385,
+        31563,
+        115746,
+        4324,
+        83629
+      ],
+      "names": [
+        "The Lord of the Rings: Journeys in Middle-Earth",
+        "Middle-Earth Quest",
+        "War of the Ring: Second Edition",
+        "Risk: The Lord of the Rings",
+        "The Hobbit"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.6,
+      "recall_at_n": 0.5,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "마블 슈퍼히어로가 나오는 보드게임",
+      "type": "external",
+      "ids": [
+        298047,
+        285774,
+        129437,
+        253618,
+        248158
+      ],
+      "names": [
+        "Marvel United",
+        "Marvel Champions: The Card Game",
+        "Legendary: A Marvel Deck Building Game",
+        "5-Minute Marvel",
+        "Thanos Rising: Avengers Infinity War"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.8,
+      "recall_at_n": 1.0,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "Cooperative game where we work together to save the world from disaster",
+      "type": "series",
+      "ids": [
+        161936,
+        100901,
+        71671,
+        282524,
+        159503
+      ],
+      "names": [
+        "Pandemic Legacy: Season 1",
+        "Flash Point: Fire Rescue",
+        "Yggdrasil",
+        "Horrified",
+        "The Captain Is Dead"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.4,
+      "recall_at_n": 0.42857142857142855,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "타일을 하나씩 놓아 땅을 만들어가는 게임",
+      "type": "series",
+      "ids": [
+        822,
+        204583,
+        295947,
+        171499,
+        24508
+      ],
+      "names": [
+        "Carcassonne",
+        "Kingdomino",
+        "Cascadia",
+        "Cacao",
+        "Taluva"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.6,
+      "recall_at_n": 0.5714285714285714,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "Zombie survival game",
+      "type": "series",
+      "ids": [
+        150376,
+        113924,
+        144826,
+        29368,
+        244536
+      ],
+      "names": [
+        "Dead of Winter: A Crossroads Game",
+        "Zombicide",
+        "Zombie 15'",
+        "Last Night on Earth: The Zombie Game",
+        "Tiny Epic Zombies"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.6,
+      "recall_at_n": 0.8,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "덱을 키워가는 덱 빌딩 게임",
+      "type": "series",
+      "ids": [
+        36218,
+        69789,
+        121408,
+        191189,
+        201808
+      ],
+      "names": [
+        "Dominion",
+        "Ascension: Deckbuilding Game",
+        "Trains",
+        "Aeon's End",
+        "Clank!: A Deck-Building Adventure"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.4,
+      "recall_at_n": 0.8,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    },
+    {
+      "query": "윷놀이 같은 한국 전통 보드게임",
+      "type": "no_answer",
+      "ids": [
+        30539,
+        208895
+      ],
+      "names": [
+        "Get Bit!",
+        "New York Slice"
+      ],
+      "hit_at_5": null,
+      "precision_at_5": null,
+      "recall_at_n": null,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": true,
+      "expect_weak_match": true
+    },
+    {
+      "query": "비트코인 채굴을 시뮬레이션하는 게임",
+      "type": "no_answer",
+      "ids": [
+        35570,
+        118,
+        246684,
+        161614,
+        250442
+      ],
+      "names": [
+        "Tinners' Trail",
+        "Modern Art",
+        "Smartphone Inc.",
+        "Stockpile",
+        "Crypt"
+      ],
+      "hit_at_5": null,
+      "precision_at_5": null,
+      "recall_at_n": null,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": true,
+      "expect_weak_match": true
+    },
+    {
+      "query": "A game where you play as a sentient toaster",
+      "type": "no_answer",
+      "ids": [
+        223953,
+        217,
+        38453,
+        116,
+        244521
+      ],
+      "names": [
+        "Kitchen Rush",
+        "A la carte",
+        "Space Alert",
+        "Guillotine",
+        "The Quacks of Quedlinburg"
+      ],
+      "hit_at_5": null,
+      "precision_at_5": null,
+      "recall_at_n": null,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": true,
+      "expect_weak_match": true
+    },
+    {
+      "query": "프로야구 구단주가 되어 선수를 트레이드하는 게임",
+      "type": "no_answer",
+      "ids": [
+        904,
+        161614,
+        26566,
+        254386,
+        15364
+      ],
+      "names": [
+        "Dream Factory",
+        "Stockpile",
+        "Homesteaders",
+        "Raccoon Tycoon",
+        "Vegas Showdown"
+      ],
+      "hit_at_5": null,
+      "precision_at_5": null,
+      "recall_at_n": null,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": true,
+      "expect_weak_match": true
+    },
+    {
+      "query": "Opera-singing octopus ballet",
+      "type": "no_answer",
+      "ids": [
+        2570,
+        66188,
+        193214,
+        56692,
+        70919
+      ],
+      "names": [
+        "Atlantic Star",
+        "Fresco",
+        "Meeple Circus",
+        "Parade",
+        "Takenoko"
+      ],
+      "hit_at_5": null,
+      "precision_at_5": null,
+      "recall_at_n": null,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": true,
+      "expect_weak_match": true
+    },
+    {
+      "query": "Dungeon crawler where we fight monsters and level up heroes",
+      "type": "series",
+      "ids": [
+        174430,
+        104162,
+        181521,
+        172220,
+        254591
+      ],
+      "names": [
+        "Gloomhaven",
+        "Descent: Journeys in the Dark (Second Edition)",
+        "Warhammer Quest: The Adventure Card Game",
+        "Dungeons & Dragons: Temple of Elemental Evil Board Game",
+        "Heroes of Terrinoth"
+      ],
+      "hit_at_5": true,
+      "precision_at_5": 0.4,
+      "recall_at_n": 0.6,
+      "series_duplicate": false,
+      "bad_in_top5": false,
+      "weak_match": false,
+      "expect_weak_match": false
+    }
+  ]
+}

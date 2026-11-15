@@ -94,6 +94,20 @@ export interface NaturalGame extends FilteredGame {
   SortedBy: "relevance" | "popularity" | "rating" | "newest";
 }
 
+// 웹 검색 결과 (화면 표시는 이후 작업에서 추가)
+export interface WebResult {
+  summary: string;
+  suggestions_html: string;
+}
+
+// 자연어 검색 응답: 게임 목록 + 질문 해석 + 약한 일치 여부
+export interface NaturalSearchResponse {
+  games: NaturalGame[];
+  interpretation: string | null;
+  weak_match: boolean;
+  web: WebResult | null;
+}
+
 // 추천 이유 요청 (POST /explain): "similar" = 기준 게임 이름, "query" = 검색 설명문
 export type ExplainMode = "similar" | "query";
 
@@ -101,6 +115,10 @@ export interface ExplainRequest {
   mode: ExplainMode;
   basis: string;
   game_ids: number[];
+  // 검색 결과가 질문과 잘 맞지 않을 때 true (이유 문장을 부드럽게 쓰도록)
+  weak_match?: boolean;
+  // 검색 결과가 웹 검색(근거)을 거쳤을 때 true. 서버는 이 이유를 캐시하지 않는다
+  from_web?: boolean;
 }
 
 // 추천 이유 응답: BGGId(문자열) -> 한 문장

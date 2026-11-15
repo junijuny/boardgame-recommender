@@ -1,0 +1,725 @@
+[
+ {
+  "query": "할머니, 할아버지와 함께하기 좋은 게임",
+  "type": "audience",
+  "players": 4,
+  "max_time": 60,
+  "good": [
+   9209,
+   822,
+   25669,
+   811,
+   230802,
+   204583,
+   133473,
+   2453,
+   39856,
+   129622
+  ],
+  "bad": [
+   12333,
+   174430,
+   50381
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "어린아이들과 하기 좋은 동물이 나오는 게임",
+  "type": "audience",
+  "players": 3,
+  "max_time": 30,
+  "good": [
+   17329,
+   91514,
+   3570,
+   6351,
+   172931,
+   9441,
+   7708,
+   17557,
+   8195,
+   137909
+  ],
+  "bad": [
+   50381,
+   12333
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "동물들도 이해하기 쉬운 게임",
+  "type": "no_answer",
+  "players": 2,
+  "max_time": 30,
+  "good": [],
+  "bad": [],
+  "expect_weak_match": true
+ },
+ {
+  "query": "Family game night for parents and kids aged 8",
+  "type": "audience",
+  "players": 4,
+  "max_time": 60,
+  "good": [
+   204583,
+   9209,
+   822,
+   133473,
+   230802,
+   65244,
+   27588,
+   25669,
+   70919
+  ],
+  "bad": [
+   12333,
+   50381
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "보드게임을 처음 해보는 친구들과 할 만한 쉬운 게임",
+  "type": "audience",
+  "players": 4,
+  "max_time": 60,
+  "good": [
+   9209,
+   822,
+   129622,
+   133473,
+   204583,
+   254640,
+   230802,
+   70919,
+   178900
+  ],
+  "bad": [
+   12333,
+   174430,
+   167791
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "A two-player game for a relaxed date night",
+  "type": "audience",
+  "players": 2,
+  "max_time": 45,
+  "good": [
+   173346,
+   54043,
+   163412,
+   50,
+   194655,
+   2655,
+   224037,
+   160477
+  ],
+  "bad": [
+   50381,
+   12333
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "초등학생 아이와 아빠가 둘이서 하기 좋은 게임",
+  "type": "audience",
+  "players": 2,
+  "max_time": 45,
+  "good": [
+   204583,
+   2655,
+   624,
+   163412,
+   194655,
+   2453,
+   54043,
+   91514
+  ],
+  "bad": [
+   12333,
+   50381
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "Games for a group of 7 friends",
+  "type": "audience",
+  "players": 7,
+  "max_time": 60,
+  "good": [
+   178900,
+   254640,
+   46213,
+   147949,
+   41114,
+   166384,
+   225694,
+   147151,
+   20100
+  ],
+  "bad": [
+   12333,
+   230802
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "술자리에서",
+  "type": "mood",
+  "players": 6,
+  "max_time": 45,
+  "good": [
+   50381,
+   46213,
+   92415,
+   131357,
+   166384,
+   8098,
+   20100,
+   147949,
+   39856,
+   254640,
+   45
+  ],
+  "bad": [
+   12333,
+   174430,
+   31260
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "긴장감 있는",
+  "type": "mood",
+  "players": 4,
+  "max_time": 120,
+  "good": [
+   30549,
+   38453,
+   92415,
+   131357,
+   10547,
+   136063,
+   150376,
+   113294
+  ],
+  "bad": [
+   91514,
+   133473
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "머리 안 쓰는",
+  "type": "mood",
+  "players": 4,
+  "max_time": 30,
+  "good": [
+   8098,
+   2944,
+   62871,
+   327,
+   63268,
+   91514,
+   46213,
+   50381,
+   2452
+  ],
+  "bad": [
+   12333,
+   31260,
+   167791
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "Relaxing, cozy game with no conflict",
+  "type": "mood",
+  "players": 3,
+  "max_time": 60,
+  "good": [
+   295947,
+   204583,
+   230802,
+   70919,
+   219513,
+   822,
+   133473
+  ],
+  "bad": [
+   12333,
+   50381
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "웃기고 정신없는 게임",
+  "type": "mood",
+  "players": 5,
+  "max_time": 45,
+  "good": [
+   50381,
+   46213,
+   8098,
+   258,
+   62871,
+   155362,
+   143741
+  ],
+  "bad": [
+   12333,
+   31260
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "서로 속이고 의심하는 블러핑 게임",
+  "type": "mood",
+  "players": 6,
+  "max_time": 45,
+  "good": [
+   131357,
+   92415,
+   41114,
+   128882,
+   188834,
+   147949,
+   45,
+   9220,
+   166384
+  ],
+  "bad": [
+   230802,
+   204583
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "A quick light filler game while we wait for dinner",
+  "type": "mood",
+  "players": 3,
+  "max_time": 45,
+  "good": [
+   129622,
+   133473,
+   254640,
+   131357,
+   92415,
+   62871,
+   63268,
+   8098
+  ],
+  "bad": [
+   12333,
+   167791
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "전쟁 게임",
+  "type": "genre",
+  "players": 2,
+  "max_time": 240,
+  "good": [
+   12333,
+   10630,
+   98,
+   21050,
+   9609,
+   14105,
+   22825
+  ],
+  "bad": [
+   50381,
+   133473
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "우주를 탐험하는 SF 게임",
+  "type": "genre",
+  "players": 3,
+  "max_time": 240,
+  "good": [
+   72125,
+   12493,
+   28143,
+   39463,
+   31481,
+   38453,
+   82222
+  ],
+  "bad": [
+   822,
+   31260
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "A pirate-themed game",
+  "type": "genre",
+  "players": 4,
+  "max_time": 180,
+  "good": [
+   125618,
+   156009,
+   157403,
+   168788,
+   28259
+  ],
+  "bad": [
+   12333,
+   174430
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "농장을 가꾸고 동물을 키우는 경영 게임",
+  "type": "genre",
+  "players": 3,
+  "max_time": 150,
+  "good": [
+   31260,
+   35677,
+   177736,
+   11,
+   164928
+  ],
+  "bad": [
+   12333,
+   38453
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "살인 사건을 추리하는 탐정 게임",
+  "type": "genre",
+  "players": 4,
+  "max_time": 90,
+  "good": [
+   181304,
+   1294,
+   156129,
+   239188
+  ],
+  "bad": [
+   230802,
+   31260
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "Abstract strategy game for two players, no luck",
+  "type": "genre",
+  "players": 2,
+  "max_time": 45,
+  "good": [
+   2655,
+   194655,
+   160477,
+   624,
+   16395,
+   163412,
+   50
+  ],
+  "bad": [
+   50381,
+   12333
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "가장 유명한 게임",
+  "type": "ranking",
+  "players": 4,
+  "max_time": 120,
+  "good": [
+   13,
+   822,
+   30549,
+   9209,
+   178900,
+   68448,
+   36218,
+   230802,
+   148228,
+   39856
+  ],
+  "bad": [],
+  "expect_weak_match": false
+ },
+ {
+  "query": "평점이 가장 높은 게임",
+  "type": "ranking",
+  "players": 4,
+  "max_time": 300,
+  "good": [
+   174430,
+   161936,
+   224517,
+   167791,
+   220308
+  ],
+  "bad": [],
+  "expect_weak_match": false
+ },
+ {
+  "query": "가장 최신 게임",
+  "type": "ranking",
+  "players": 4,
+  "max_time": 45,
+  "good": [
+   262477,
+   290236,
+   295947,
+   307305,
+   314503,
+   324856
+  ],
+  "bad": [],
+  "expect_weak_match": false
+ },
+ {
+  "query": "Most popular two-player game",
+  "type": "ranking",
+  "players": 2,
+  "max_time": 60,
+  "good": [
+   173346,
+   54043,
+   163412,
+   224037,
+   50,
+   2655,
+   194655,
+   147020,
+   118048,
+   160477
+  ],
+  "bad": [],
+  "expect_weak_match": false
+ },
+ {
+  "query": "스타워즈 테마의 보드게임",
+  "type": "external",
+  "players": 4,
+  "max_time": 180,
+  "good": [
+   164153,
+   271896,
+   183880,
+   180564,
+   3284,
+   939
+  ],
+  "bad": [
+   12333
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "한국인이 만든 보드게임",
+  "type": "external",
+  "players": 4,
+  "max_time": 90,
+  "good": [],
+  "bad": [],
+  "expect_weak_match": false
+ },
+ {
+  "query": "Board games designed by Reiner Knizia",
+  "type": "external",
+  "players": 4,
+  "max_time": 90,
+  "good": [
+   12,
+   42,
+   118,
+   21882,
+   3,
+   503,
+   131260
+  ],
+  "bad": [
+   12333
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "Games set in the Lord of the Rings universe",
+  "type": "external",
+  "players": 4,
+  "max_time": 300,
+  "good": [
+   823,
+   269385,
+   4324,
+   31563,
+   127127,
+   8107
+  ],
+  "bad": [
+   12333,
+   230802
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "마블 슈퍼히어로가 나오는 보드게임",
+  "type": "external",
+  "players": 4,
+  "max_time": 90,
+  "good": [
+   129437,
+   285774,
+   298047,
+   253618,
+   293296
+  ],
+  "bad": [
+   230802,
+   822
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "Cooperative game where we work together to save the world from disaster",
+  "type": "series",
+  "players": 4,
+  "max_time": 90,
+  "good": [
+   30549,
+   161936,
+   221107,
+   65244,
+   136063,
+   100901,
+   37046
+  ],
+  "bad": [
+   50381,
+   230802
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "타일을 하나씩 놓아 땅을 만들어가는 게임",
+  "type": "series",
+  "players": 3,
+  "max_time": 60,
+  "good": [
+   822,
+   4390,
+   204583,
+   295947,
+   25669,
+   128,
+   6249
+  ],
+  "bad": [
+   12333,
+   50381
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "Zombie survival game",
+  "type": "series",
+  "players": 4,
+  "max_time": 120,
+  "good": [
+   113924,
+   150376,
+   62871,
+   2471,
+   29368
+  ],
+  "bad": [
+   230802,
+   822
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "덱을 키워가는 덱 빌딩 게임",
+  "type": "series",
+  "players": 3,
+  "max_time": 60,
+  "good": [
+   36218,
+   40834,
+   201808,
+   53953,
+   129437
+  ],
+  "bad": [
+   12333,
+   50381
+  ],
+  "expect_weak_match": false
+ },
+ {
+  "query": "윷놀이 같은 한국 전통 보드게임",
+  "type": "no_answer",
+  "players": 4,
+  "max_time": 60,
+  "good": [],
+  "bad": [],
+  "expect_weak_match": true
+ },
+ {
+  "query": "비트코인 채굴을 시뮬레이션하는 게임",
+  "type": "no_answer",
+  "players": 4,
+  "max_time": 90,
+  "good": [],
+  "bad": [],
+  "expect_weak_match": true
+ },
+ {
+  "query": "A game where you play as a sentient toaster",
+  "type": "no_answer",
+  "players": 3,
+  "max_time": 45,
+  "good": [],
+  "bad": [],
+  "expect_weak_match": true
+ },
+ {
+  "query": "프로야구 구단주가 되어 선수를 트레이드하는 게임",
+  "type": "no_answer",
+  "players": 3,
+  "max_time": 90,
+  "good": [],
+  "bad": [],
+  "expect_weak_match": true
+ },
+ {
+  "query": "Opera-singing octopus ballet",
+  "type": "no_answer",
+  "players": 4,
+  "max_time": 60,
+  "good": [],
+  "bad": [],
+  "expect_weak_match": true
+ },
+ {
+  "query": "Dungeon crawler where we fight monsters and level up heroes",
+  "type": "series",
+  "players": 4,
+  "max_time": 180,
+  "good": [
+   174430,
+   291457,
+   104162,
+   197070,
+   160081
+  ],
+  "bad": [
+   230802,
+   50381
+  ],
+  "expect_weak_match": false
+ }
+]

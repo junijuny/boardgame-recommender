@@ -28,6 +28,15 @@ EMBED_DIM = 768
 TIMEOUT_SECONDS = 10
 EXTRACT_MAX_TOKENS = 512
 EXPLAIN_MAX_TOKENS = 1024
+PROFILE_MODEL = "gemini-3.5-flash-lite"
+PROFILE_MAX_TOKENS = 4096  # 게임 10개 x (약 120단어 + 목록)
+RERANK_MODEL = "gemini-3.5-flash-lite"
+RERANK_TIMEOUT_SECONDS = 10  # brief said 5, but the API rejects deadlines under 10s (400)
+RERANK_MAX_TOKENS = 1024
+WEB_MODEL = "gemini-3.5-flash-lite"
+WEB_TIMEOUT_SECONDS = 8  # 벽시계 상한 (natural_search 가 건다)
+WEB_SDK_TIMEOUT_SECONDS = 10  # API 는 10초 미만 deadline 을 거부한다
+WEB_MAX_TOKENS = 1024
 
 
 class GeminiError(Exception):
@@ -49,8 +58,40 @@ class QueryIntent:
     weight_max: float | None = None
     # 순위 기준. relevance = 설명글 유사도, 나머지는 리뷰 수·평점·출시 연도 순
     sort: str = "relevance"
+    age_max: float | None = None
+    categories: tuple[str, ...] = ()
+    low_text: bool = False
+    keywords: tuple[str, ...] = ()
+    terms: tuple[str, ...] = ()
+    needs_web: bool = False
+    web_query: str = ""
 
 
+@dataclass(frozen=True)
+class WebAnswer:
+    text: str
+    suggestions_html: str
+    search_count: int
+
+
+@dataclass(frozen=True)
+class GameProfile:
+    bgg_id: int
+    profile: str
+    franchise: tuple[str, ...] = ()
+    base_game: str | None = None
+    designers: tuple[str, ...] = ()
+    designer_countries: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class RerankResult:
+    interpretation: str
+    ranked_ids: tuple[int, ...]
+    weak_match: bool
+
+
+CATEGORY_NAMES = ("Thematic", "Strategy", "War", "Family", "CGS", "Abstract", "Party", "Childrens")
 SORT_OPTIONS = ("relevance", "popularity", "rating", "newest")
 
 
@@ -77,7 +118,14 @@ class GeminiClient(Protocol):
         basis: str,
         basis_facts: dict | None,
         games: Sequence[dict],
+        weak_match: bool = False,
     ) -> dict[int, str]: ...
+
+    def write_profiles(self, games: Sequence[dict]) -> list[GameProfile]: ...
+
+    def rerank(self, query: str, games: Sequence[dict]) -> RerankResult: ...
+
+    def web_search(self, query: str) -> WebAnswer: ...
 
 
 EXTRACT_PROMPT = """\
@@ -89,19 +137,34 @@ Rules:
   Do not add requirements the request does not imply. Translate Korean meaning into English.
   If the request has no genre or gameplay aspect at all (only "famous", "best rated", "newest" etc.),
   set search_text to an empty string.
+  A game type defined by player count ("two-player game", "head-to-head", "solo game", 2인용, 혼자 하는)
+  IS a gameplay aspect: keep it in search_text (e.g. "a game designed for exactly two players, head-to-head")
+  even when sort is popularity, rating or newest.
 - sort: how to rank the results.
   "popularity" for famous / popular / well-known / classic / everyone plays it (e.g. 유명한, 인기 있는, 국민 게임).
   "rating" for best rated / highest rated / masterpiece / best ever (e.g. 평점 높은, 명작). This means the BGG
   user rating, NOT scoring points inside a game.
   "newest" for new / recent / latest releases (e.g. 최신, 요즘 나온).
   "relevance" for everything else (default).
-- Ignore player counts and play time; the UI supplies them.
+- age_max: the highest minimum age that fits; set only when children or an age is mentioned, else null.
+- categories: only names from the allowed categories that the request clearly implies.
+- low_text: true for "no reading needed / language-independent" requests, else false.
+- keywords: proper nouns (franchise, designer, publisher, country) in their official English form
+  (스타워즈 -> "Star Wars", 한국 -> "Korea"); still never put them in search_text.
+- terms: up to 3 concrete subject nouns in English (e.g. "animals", "zombies", "trains"), not mechanics.
+- needs_web: true only when the request depends on facts that game descriptions and general game
+  knowledge do not hold: awards, designer nationality, a specific publisher, popularity in a specific
+  country or community. False for genre, mood, audience and ranking requests.
+- web_query: when needs_web is true, a short English web search query for the request (e.g.
+  "board games designed by South Korean designers"); otherwise an empty string.
+- Ignore plain player counts and play time (e.g. "for 4 players", "30 minutes"); the UI supplies them.
 - Weight is BGG complexity on a 1-5 scale. Map "light/easy" (e.g. 가벼운) to a low range such as 1.0-2.5,
   and "heavy/complex" to a high range such as 3.5-5.0. Leave weight_min/weight_max null if not implied.
 - include_*/exclude_*: only tags clearly implied by the request. "No dice" means exclude Dice Rolling.
   Use only names from the allowed lists.
 Allowed mechanics: {mechanics}
 Allowed themes: {themes}
+Allowed categories: {categories}
 Request: {query}
 """
 
@@ -111,10 +174,46 @@ Write exactly one English sentence (at most 25 words) per game, using only the f
 Never mention facts that are not in the input.
 Never restate the player count, play time or difficulty; the game card already shows them.
 {mode_rule}
-Return one entry per game, keyed by its bgg_id.
+{weak_rule}Return one entry per game, keyed by its bgg_id.
 Basis: {basis}
 Basis facts: {basis_facts}
 Games: {games}
+"""
+
+PROFILE_PROMPT = """You write short play-experience profiles of board games for a search index.
+Always write in English. For each game return:
+- profile: 60-90 words describing who the game suits (ages, families, couples, parties, experienced
+  players), the occasions it fits, its mood, how players interact, the learning curve and how a session
+  feels. Never contradict the given data (player count, play time, weight, age, mechanics, themes).
+- franchise: franchises, licenses or series the game belongs to (e.g. "Star Wars"); empty if none or unsure.
+- base_game: only when this game is a version, sequel, expansion-like standalone or spin-off of another
+  game, the name of that game; otherwise null.
+- designers: the game's designers; empty if you are not sure, and always empty when the game's
+  include_designers is false.
+- designer_countries: the countries the designers are from; empty if you are not sure, and always
+  empty when include_designers is false.
+Leave a field empty rather than guessing. Return one entry per game, keyed by its bgg_id.
+Games: {games}
+"""
+
+RERANK_PROMPT = """You re-rank candidate board games for a search request (any language, often Korean).
+Rules:
+- ranked_ids: bgg_ids of the games that fit the request, best fit first. Omit poor fits. At most 20 ids.
+- interpretation: one English sentence starting with "Read as:" saying how you understood the request.
+  Do not mention any game names.
+- weak_match: true when fewer than 3 of the games fit the request well, else false.
+- Judge only from the facts given for each game; do not rely on outside knowledge of the games.
+- web_mentioned, when present, only means the game was mentioned on the web for this request; it is a
+  weak hint, not proof of fit.
+Request: {query}
+Games: {games}
+"""
+
+WEB_PROMPT = """Answer this board game request: {query}
+You must use Google Search before answering, and answer only from what the search finds, not from memory.
+First list the official English names of the board games that answer it, one per line, with no
+numbering or other text, at most 15 names. Then a blank line, then a one or two sentence English
+summary of what you found.
 """
 
 MODE_RULES = {
@@ -130,6 +229,16 @@ MODE_RULES = {
         "Round review counts in words (e.g. 'over 100,000 BGG reviews', 'about 45,000 reviews')."
     ),
 }
+
+
+WEAK_MATCH_RULE = (
+    "These games are only the nearest matches; do not claim they fully deliver the request. "
+    "Say which aspect comes closest.\n"
+)
+
+
+def weak_match_rule(weak_match: bool = True) -> str:
+    return WEAK_MATCH_RULE if weak_match else ""
 
 
 def _normalize_rows(arr: np.ndarray) -> np.ndarray:
@@ -173,6 +282,13 @@ def _intent_from_dict(data: dict) -> QueryIntent:
             weight_min=_opt_float(data.get("weight_min")),
             weight_max=_opt_float(data.get("weight_max")),
             sort=_sort(data.get("sort")),
+            age_max=_opt_float(data.get("age_max")),
+            categories=_tags(data.get("categories")),
+            low_text=bool(data.get("low_text")),
+            keywords=_tags(data.get("keywords")),
+            terms=_tags(data.get("terms")),
+            needs_web=bool(data.get("needs_web")),
+            web_query="" if data.get("web_query") is None else str(data.get("web_query")),
         )
     except (TypeError, ValueError, AttributeError) as exc:
         raise GeminiError(f"Unexpected intent response: {exc}") from exc
@@ -184,12 +300,20 @@ class GoogleGeminiClient:
 
         self._types = genai.types
         self._client = genai.Client(api_key=api_key)
+        self.usage = {"calls": 0, "prompt_tokens": 0, "output_tokens": 0}  # 오프라인 작업 비용 집계용
 
-    def _http_options(self):
+    def _http_options(self, timeout_seconds: int = TIMEOUT_SECONDS):
         # HttpOptions.timeout 단위는 밀리초
-        return self._types.HttpOptions(timeout=TIMEOUT_SECONDS * 1000)
+        return self._types.HttpOptions(timeout=timeout_seconds * 1000)
 
-    def _generate(self, model: str, prompt: str, schema: dict, max_output_tokens: int) -> dict:
+    def _generate(
+        self,
+        model: str,
+        prompt: str,
+        schema: dict,
+        max_output_tokens: int,
+        timeout_seconds: int = TIMEOUT_SECONDS,
+    ) -> dict:
         t = self._types
         try:
             resp = self._client.models.generate_content(
@@ -200,8 +324,14 @@ class GoogleGeminiClient:
                     response_schema=schema,
                     max_output_tokens=max_output_tokens,
                     thinking_config=t.ThinkingConfig(thinking_level=t.ThinkingLevel.MINIMAL),
-                    http_options=self._http_options(),
+                    http_options=self._http_options(timeout_seconds),
                 ),
+            )
+            meta = getattr(resp, "usage_metadata", None)
+            self.usage["calls"] += 1
+            self.usage["prompt_tokens"] += getattr(meta, "prompt_token_count", 0) or 0
+            self.usage["output_tokens"] += (getattr(meta, "candidates_token_count", 0) or 0) + (
+                getattr(meta, "thoughts_token_count", 0) or 0
             )
             return json.loads(resp.text)
         except Exception as exc:
@@ -219,6 +349,13 @@ class GoogleGeminiClient:
                 "weight_min": {"type": "NUMBER", "nullable": True},
                 "weight_max": {"type": "NUMBER", "nullable": True},
                 "sort": {"type": "STRING", "enum": list(SORT_OPTIONS)},
+                "age_max": {"type": "NUMBER", "nullable": True},
+                "categories": _tag_array(),
+                "low_text": {"type": "BOOLEAN"},
+                "keywords": _tag_array(),
+                "terms": _tag_array(),
+                "needs_web": {"type": "BOOLEAN"},
+                "web_query": {"type": "STRING"},
             },
             "required": ["search_text"],
         }
@@ -226,6 +363,7 @@ class GoogleGeminiClient:
                 query=query,
                 mechanics=json.dumps(list(mechanic_names), ensure_ascii=False),
                 themes=json.dumps(list(theme_names), ensure_ascii=False),
+                categories=json.dumps(list(CATEGORY_NAMES)),
             ), schema, EXTRACT_MAX_TOKENS)
         return _intent_from_dict(data)
 
@@ -255,7 +393,7 @@ class GoogleGeminiClient:
             return np.zeros((0, EMBED_DIM), dtype=np.float32)
         return self._embed([document_text(title, body) for title, body in docs])
 
-    def explain(self, mode, basis, basis_facts, games) -> dict[int, str]:
+    def explain(self, mode, basis, basis_facts, games, weak_match=False) -> dict[int, str]:
         schema = {
             "type": "OBJECT",
             "properties": {
@@ -275,6 +413,7 @@ class GoogleGeminiClient:
         }
         prompt = EXPLAIN_PROMPT.format(
             mode_rule=MODE_RULES[mode],
+            weak_rule=weak_match_rule(weak_match),
             basis=basis,
             basis_facts=json.dumps(basis_facts, ensure_ascii=False),
             games=json.dumps(list(games), ensure_ascii=False),
@@ -288,6 +427,103 @@ class GoogleGeminiClient:
             }
         except (KeyError, TypeError, ValueError) as exc:
             raise GeminiError(f"Unexpected explanation response: {exc}") from exc
+
+    def write_profiles(self, games) -> list[GameProfile]:
+        # 검색 도구(Google Search 등)는 쓰지 않는다: 약관상 근거 검색 결과를 저장할 수 없음
+        str_array = {"type": "ARRAY", "items": {"type": "STRING"}}
+        schema = {
+            "type": "OBJECT",
+            "properties": {
+                "profiles": {
+                    "type": "ARRAY",
+                    "items": {
+                        "type": "OBJECT",
+                        "properties": {
+                            "bgg_id": {"type": "INTEGER"},
+                            "profile": {"type": "STRING"},
+                            "franchise": str_array,
+                            "base_game": {"type": "STRING", "nullable": True},
+                            "designers": str_array,
+                            "designer_countries": str_array,
+                        },
+                        "required": ["bgg_id", "profile"],
+                    },
+                }
+            },
+            "required": ["profiles"],
+        }
+        prompt = PROFILE_PROMPT.format(games=json.dumps(list(games), ensure_ascii=False))
+        data = self._generate(PROFILE_MODEL, prompt, schema, PROFILE_MAX_TOKENS)
+        try:
+            out = (_profile_from_dict(r) for r in data["profiles"])
+            return [p for p in out if p is not None]
+        except (KeyError, TypeError, ValueError, AttributeError) as exc:
+            raise GeminiError(f"Unexpected profile response: {exc}") from exc
+
+    def rerank(self, query, games) -> RerankResult:
+        # 검색 도구는 쓰지 않는다
+        schema = {
+            "type": "OBJECT",
+            "properties": {
+                "interpretation": {"type": "STRING"},
+                "ranked_ids": {"type": "ARRAY", "items": {"type": "INTEGER"}},
+                "weak_match": {"type": "BOOLEAN"},
+            },
+            "required": ["interpretation", "ranked_ids", "weak_match"],
+        }
+        prompt = RERANK_PROMPT.format(
+            query=query, games=json.dumps(list(games), ensure_ascii=False)
+        )
+        data = self._generate(
+            RERANK_MODEL, prompt, schema, RERANK_MAX_TOKENS, RERANK_TIMEOUT_SECONDS
+        )
+        try:
+            interpretation = data["interpretation"]
+            return RerankResult(
+                interpretation="" if interpretation is None else str(interpretation),
+                ranked_ids=tuple(int(i) for i in data["ranked_ids"]),
+                weak_match=bool(data.get("weak_match")),
+            )
+        except (KeyError, TypeError, ValueError, AttributeError) as exc:
+            raise GeminiError(f"Unexpected rerank response: {exc}") from exc
+
+    def web_search(self, query) -> WebAnswer:
+        # Google Search 근거 호출: 응답 스키마·JSON 모드 없이, 결과는 저장·로그하지 않는다 (약관)
+        t = self._types
+        try:
+            resp = self._client.models.generate_content(
+                model=WEB_MODEL,
+                contents=WEB_PROMPT.format(query=query),
+                config=t.GenerateContentConfig(
+                    tools=[t.Tool(google_search=t.GoogleSearch())],
+                    max_output_tokens=WEB_MAX_TOKENS,
+                    thinking_config=t.ThinkingConfig(thinking_level=t.ThinkingLevel.MINIMAL),
+                    http_options=self._http_options(WEB_SDK_TIMEOUT_SECONDS),
+                ),
+            )
+            self.usage["calls"] += 1
+            meta = resp.candidates[0].grounding_metadata
+            entry = getattr(meta, "search_entry_point", None)
+            html = getattr(entry, "rendered_content", None) or ""
+            queries = getattr(meta, "web_search_queries", None) or []
+            return WebAnswer(text=resp.text or "", suggestions_html=html, search_count=len(queries))
+        except Exception as exc:
+            raise GeminiError("Gemini web search failed") from exc
+
+
+def _profile_from_dict(r: dict) -> GameProfile | None:
+    text = r.get("profile")
+    if not isinstance(text, str) or not text.strip():
+        return None
+    base = r.get("base_game")
+    return GameProfile(
+        bgg_id=int(r["bgg_id"]),
+        profile=text.strip(),
+        franchise=_tags(r.get("franchise")),
+        base_game=base.strip() if isinstance(base, str) and base.strip() else None,
+        designers=_tags(r.get("designers")),
+        designer_countries=_tags(r.get("designer_countries")),
+    )
 
 
 _UNSET = object()

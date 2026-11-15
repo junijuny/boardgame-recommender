@@ -110,6 +110,8 @@ class ExplainRequest(BaseModel):
     mode: Literal["similar", "query"]
     basis: str
     game_ids: list[int]
+    weak_match: bool = False
+    from_web: bool = False
 
 
 MAX_EXPLAIN_BASIS_LENGTH = 300
@@ -283,7 +285,7 @@ def search_natural(body: NaturalSearchRequest, request: Request):
         )
 
     try:
-        results = natural_search(
+        result = natural_search(
             query,
             players=body.players,
             max_time=body.max_time,
@@ -296,13 +298,18 @@ def search_natural(body: NaturalSearchRequest, request: Request):
             detail="Natural language search is temporarily unavailable"
         )
 
-    if not results:
+    if not result.games:
         raise HTTPException(
             status_code=404,
             detail="No games match the selected conditions"
         )
 
-    return results
+    return {
+        "games": result.games,
+        "interpretation": result.interpretation,
+        "weak_match": result.weak_match,
+        "web": result.web,
+    }
 
 
 @app.post("/explain")
@@ -340,7 +347,7 @@ def explain(body: ExplainRequest, request: Request):
         )
 
     try:
-        reasons = explain_games(body.mode, basis, body.game_ids)
+        reasons = explain_games(body.mode, basis, body.game_ids, body.weak_match, body.from_web)
     except LookupError:
         raise HTTPException(
             status_code=404,

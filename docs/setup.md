@@ -164,14 +164,39 @@ uv run python -m unittest discover -s tests -v
   uv run --env-file .env uvicorn backend.main:app --reload --port 8000
   ```
   키가 없어도 앱은 정상 동작하며, "By description" 탭이 숨겨지고 결과 설명은 공통 메커니즘 칩으로 대체됩니다. 키는 프론트엔드에 넣지 않습니다.
+- 자연어 검색의 웹 검색(Google Search 근거)은 `NATURAL_WEB_SEARCH=0` 환경변수로 서버에서 끌 수 있습니다(기본 켜짐). 근거 검색 결과는 약관상 저장·평가에 쓸 수 없어, 평가 스크립트는 환경변수와 무관하게 항상 웹 검색을 끄고 실행합니다. 일일 웹 호출 한도는 `WEB_SEARCH_DAILY_LIMIT`(기본 100, 배포 워크플로에도 100으로 설정됨). 웹 결과가 나온 검색은 화면의 "From the web" 상자에 요약과 Google 검색어 추천이 보입니다.
 - `data/gemini_embeddings.npz`는 git에 포함되어 있습니다. 게임 데이터를 바꿨다면 다시 만들어 커밋합니다 (약 7분, 약 $1.7, 키 필요):
   ```bash
   uv run --env-file .env python -m backend.build_gemini_embeddings
   ```
+- 게임 프로필(Gemini가 쓴 플레이 경험 설명 + franchise·base_game·제작자 정보)은 `data/game_profiles.json`, 프로필 임베딩은 `data/profile_embeddings.npz`이며 둘 다 git에 포함되어 있다. 리뷰 1,000개 이상 게임(약 2,900개)이 대상이고, 제작자·국가는 리뷰 3,000개 이상 게임만 채운다. 프로필 정보는 검색에만 쓰이고 화면에는 보이지 않는다.
+  ```bash
+  # 시범 (약 50개, 결과를 직접 검토): 
+  uv run --env-file .env python -m backend.build_game_profiles --sample
+  # 전체 프로필 생성 (중단 후 다시 실행하면 이어서 진행)
+  uv run --env-file .env python -m backend.build_game_profiles
+  # 프로필 임베딩 (약 1분, 약 400원)
+  uv run --env-file .env python -m backend.build_profile_embeddings
+  ```
+  `natural_search.PROFILE_VECTOR_WEIGHT`(0~1)로 프로필 임베딩 반영 비율을 정한다 (평가: `stage3_blend0/30/50.json`, `stage3_profilevec.json`). franchise·제작자·국가는 키워드 일치와 시리즈 묶기에 쓰인다.
 - 임베딩·협업 필터링 재생성과 성능 평가 방법은 [recommendation_pipeline.md](recommendation_pipeline.md)를 참고하세요.
 - API 명세와 오류 응답은 [backend_api.md](backend_api.md)를 참고하세요.
 
 ---
+
+### 자연어 검색 평가 (Natural search evaluation)
+
+자연어 검색 품질(hit@5, precision@5, recall@25, 시리즈 중복, bad 비율)을 질의 40개로 측정한다.
+
+```bash
+uv run --env-file .env python -m backend.evaluate_natural --label <이름>
+```
+
+- `.env`에 `GEMINI_API_KEY`가 필요하다. 결과는 `data/natural_eval_results/<이름>.json`에 저장되고 표가 출력된다.
+- 질의 세트는 `data/natural_eval_queries.json` (정답 `good` / 오답 `bad` 게임 id 포함).
+- 의도(intent)와 질의 벡터는 `data/natural_eval_cache.json`(git 제외)에 저장되어 재실행 시 Gemini 호출을 줄인다.
+- 의도 추출 프롬프트를 바꿨다면 `--fresh-intents`로 저장된 의도를 무시하고 다시 추출한다.
+- 비용: 캐시 없는 전체 실행 1회에 약 200~300원 (질의당 Gemini 호출 약 2회).
 
 ## 6. 프론트엔드 환경 설정 (React + Vite)
 

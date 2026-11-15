@@ -20,10 +20,9 @@ RUN uv sync --frozen --no-dev
 COPY backend ./backend
 COPY data ./data
 
-# embeddings.npz 가 없을 때만 TF-IDF 캐시를 이미지 빌드 때 미리 생성
-RUN if [ ! -f data/embeddings.npz ]; then \
-      cd backend && python -c "import features; features.load_or_compute_tfidf(features.load_games())"; \
-    fi
+# TF-IDF 캐시를 이미지 빌드 때 항상 미리 생성 (.dockerignore 가 로컬 캐시를 빼므로 여기서 새로 만들어 이미지에 남는다)
+# 자연어 검색의 단어 일치(terms)가 첫 질의에서 TF-IDF 를 새로 학습하지 않게 한다
+RUN cd backend && python -c "import features; features.load_or_compute_tfidf(features.load_games())"
 
 # root 가 아닌 일반 사용자로 실행
 RUN useradd -m -u 1000 user && chown -R user /app

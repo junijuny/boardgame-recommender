@@ -36,3 +36,6 @@ export const pageTitle =
 
 // 화면 가운데에 내용을 모으는 폭 (헤더와 본문이 같은 폭을 쓴다)
 export const container = "mx-auto w-full max-w-7xl px-4 sm:px-6";
+
+// 결과 위에 띄우는 안내 상자와 웹 검색 상자가 같이 쓰는 카드 모양
+export const noticeBox = "rounded-xl border border-line bg-card px-4 py-3 text-[15px] text-ink/80";

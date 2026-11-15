@@ -24,7 +24,7 @@ SAVE_EVERY = 10
 BACKOFF_SECONDS = 2.0
 
 
-def _save(path: Path, ids: np.ndarray, vectors: np.ndarray) -> None:
+def _save(path: Path, ids: np.ndarray, vectors: np.ndarray, **extra) -> None:
     # np.savez 는 확장자가 .npz 가 아니면 덧붙이므로 파일 객체로 저장
     with open(path, "wb") as f:
         np.savez(
@@ -33,6 +33,7 @@ def _save(path: Path, ids: np.ndarray, vectors: np.ndarray) -> None:
             vectors=vectors.astype(np.float16),
             model_name=np.str_(gemini.EMBED_MODEL),
             dim=np.int32(gemini.EMBED_DIM),
+            **extra,
         )
 
 
@@ -49,27 +50,10 @@ def _embed_with_retry(client, docs, sleep=time.sleep) -> np.ndarray:
     raise AssertionError("unreachable")
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--limit", type=int, default=None, help="앞쪽 N개만 처리 (테스트용)")
-    parser.add_argument("--out", type=Path, default=features.GEMINI_EMBEDDINGS_PATH)
-    args = parser.parse_args()
-    if args.limit and args.out == features.GEMINI_EMBEDDINGS_PATH:
-        parser.error("--limit requires --out so the committed embeddings are not overwritten")
-
-    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-    if not api_key:
-        raise SystemExit("GEMINI_API_KEY is not set. Put it in .env and run with `uv run --env-file .env ...`.")
-    client = gemini.GoogleGeminiClient(api_key)
-
-    df = features.load_games()
-    if args.limit:
-        df = df.head(args.limit).reset_index(drop=True)
-    mechanics = features.load_binary_features(features.MECHANICS_PATH, df["BGGId"])
-    themes = features.load_binary_features(features.THEMES_PATH, df["BGGId"])
-    docs = semantic.game_documents(df, mechanics, themes)
-    ids = df["BGGId"].to_numpy().astype(np.int64)
-    partial_path = args.out.with_suffix(".partial.npz")
+def embed_all(client, ids: np.ndarray, docs, out: Path, extra: dict | None = None) -> None:
+    """docs[i] 를 ids[i] 의 문서로 임베딩해 out 에 저장 (부분 저장·재시도·이어서 진행 포함)"""
+    extra = extra or {}
+    partial_path = out.with_suffix(".partial.npz")
 
     done_ids = np.empty(0, dtype=np.int64)
     done_vecs = np.empty((0, gemini.EMBED_DIM), dtype=np.float16)
@@ -98,6 +82,7 @@ def main() -> None:
                 partial_path,
                 np.concatenate([done_ids, *new_ids]),
                 np.concatenate([done_vecs.astype(np.float32), *new_vecs]),
+                **extra,
             )
             print(f"  부분 저장: {partial_path}")
 
@@ -110,9 +95,32 @@ def main() -> None:
     all_vecs /= np.linalg.norm(all_vecs, axis=1, keepdims=True)
     assert len(all_ids) == len(ids) and np.array_equal(all_ids, ids)
 
-    _save(args.out, all_ids, all_vecs)
+    _save(out, all_ids, all_vecs, **extra)
     partial_path.unlink(missing_ok=True)
-    print(f"저장: {args.out} ({len(all_ids)}개, {time.time() - start:.1f}초)")
+    print(f"저장: {out} ({len(all_ids)}개, {time.time() - start:.1f}초)")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--limit", type=int, default=None, help="앞쪽 N개만 처리 (테스트용)")
+    parser.add_argument("--out", type=Path, default=features.GEMINI_EMBEDDINGS_PATH)
+    args = parser.parse_args()
+    if args.limit and args.out == features.GEMINI_EMBEDDINGS_PATH:
+        parser.error("--limit requires --out so the committed embeddings are not overwritten")
+
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        raise SystemExit("GEMINI_API_KEY is not set. Put it in .env and run with `uv run --env-file .env ...`.")
+    client = gemini.GoogleGeminiClient(api_key)
+
+    df = features.load_games()
+    if args.limit:
+        df = df.head(args.limit).reset_index(drop=True)
+    mechanics = features.load_binary_features(features.MECHANICS_PATH, df["BGGId"])
+    themes = features.load_binary_features(features.THEMES_PATH, df["BGGId"])
+    docs = semantic.game_documents(df, mechanics, themes)
+    ids = df["BGGId"].to_numpy().astype(np.int64)
+    embed_all(client, ids, docs, args.out)
 
 
 if __name__ == "__main__":

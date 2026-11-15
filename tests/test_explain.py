@@ -73,11 +73,39 @@ class ExplainTest(unittest.TestCase):
         self.assertEqual(r.json()["reasons"], {str(A): "One."})
         self.assertEqual(len(explain_calls(self.fake)), 1)
 
+    def test_from_web_never_cached(self):
+        self.fake.reasons = {A: "One."}
+        body = {**self.req([A]), "from_web": True}
+        post(body)
+        r = post(body)
+        self.assertEqual(r.json()["reasons"], {str(A): "One."})
+        self.assertEqual(len(explain_calls(self.fake)), 2)
+        self.assertEqual(len(explain._cache), 0)
+
     def test_only_uncached_ids_sent_in_order(self):
         self.fake.reasons = {A: "One.", B: "Two.", C: "Three."}
         post(self.req([A]))
         post(self.req([C, A, B, C]))
         self.assertEqual([g["bgg_id"] for g in explain_calls(self.fake)[-1][4]], [C, B])
+
+    def test_weak_match_reaches_client_and_cache(self):
+        self.fake.reasons = {A: "One."}
+        r = post({**self.req([A]), "weak_match": True})
+        self.assertEqual(r.status_code, 200)
+        calls = explain_calls(self.fake)
+        self.assertEqual(len(calls), 1)
+        self.assertIs(calls[0][-1], True)
+        post({**self.req([A]), "weak_match": True})
+        self.assertEqual(len(explain_calls(self.fake)), 1)
+        post(self.req([A]))
+        calls = explain_calls(self.fake)
+        self.assertEqual(len(calls), 2)
+        self.assertIs(calls[1][-1], False)
+
+    def test_weak_match_prompt_rule(self):
+        prompt = gemini.weak_match_rule()
+        self.assertIn("only the nearest matches", prompt)
+        self.assertIn("Say which aspect comes closest.", prompt)
 
     def test_unknown_ids_ignored(self):
         r = post(self.req([999999999, A]))

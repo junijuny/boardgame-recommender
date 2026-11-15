@@ -23,6 +23,14 @@ class ExplainParsingTests(unittest.TestCase):
         self.assertEqual(client.explain("query", "x", None, []), {2: "Fine."})
 
 
+class ExtractPromptTest(unittest.TestCase):
+    def test_player_count_game_type_stays_in_search_text(self):
+        text = gemini.EXTRACT_PROMPT
+        self.assertIn("two-player game", text)
+        self.assertIn("IS a gameplay aspect", text)
+        self.assertIn("even when sort is popularity", text)
+
+
 class IntentParsingTest(unittest.TestCase):
     def test_null_and_string_fields_are_coerced(self):
         i = gemini._intent_from_dict({
@@ -35,6 +43,16 @@ class IntentParsingTest(unittest.TestCase):
         self.assertEqual((i.weight_min, i.weight_max), (None, 2.0))
         self.assertEqual(gemini._intent_from_dict({}).search_text, "")
 
+    def test_web_query_parsed(self):
+        self.assertEqual(gemini._intent_from_dict({"web_query": "South Korean board games"}).web_query,
+                         "South Korean board games")
+        self.assertEqual(gemini._intent_from_dict({"web_query": None}).web_query, "")
+        self.assertEqual(gemini._intent_from_dict({}).web_query, "")
+
+    def test_web_prompt_requires_searching(self):
+        self.assertIn("Google Search before answering", gemini.WEB_PROMPT)
+        self.assertIn("web_query", gemini.EXTRACT_PROMPT)
+
     def test_sort_is_parsed_and_unknown_values_fall_back_to_relevance(self):
         self.assertEqual(gemini._intent_from_dict({"sort": "popularity"}).sort, "popularity")
         self.assertEqual(gemini._intent_from_dict({"sort": " Rating "}).sort, "rating")
@@ -42,6 +60,19 @@ class IntentParsingTest(unittest.TestCase):
         self.assertEqual(gemini._intent_from_dict({"sort": "cheapest"}).sort, "relevance")
         self.assertEqual(gemini._intent_from_dict({"sort": None}).sort, "relevance")
         self.assertEqual(gemini._intent_from_dict({}).sort, "relevance")
+
+    def test_intent_from_dict_reads_new_fields(self):
+        i = gemini._intent_from_dict({
+            "age_max": 8, "categories": ["Family", "Party"], "low_text": True,
+            "keywords": ["Star Wars"], "terms": ["zombies", "trains"],
+        })
+        self.assertEqual(i.age_max, 8.0)
+        self.assertEqual(i.categories, ("Family", "Party"))
+        self.assertIs(i.low_text, True)
+        self.assertEqual(i.keywords, ("Star Wars",))
+        self.assertEqual(i.terms, ("zombies", "trains"))
+        d = gemini._intent_from_dict({})
+        self.assertEqual((d.age_max, d.categories, d.low_text, d.keywords, d.terms), (None, (), False, (), ()))
 
     def test_bad_weight_raises_gemini_error(self):
         with self.assertRaises(gemini.GeminiError):
@@ -93,6 +124,85 @@ class GeminiModuleTest(unittest.TestCase):
         with self.assertRaises(gemini.GeminiError):
             fake.embed_query("x")
         self.assertEqual(fake.calls, [("embed_query", "x")])
+
+
+class ProfilesParsingTest(unittest.TestCase):
+    def test_profiles_parsing(self):
+        client = gemini.GoogleGeminiClient.__new__(gemini.GoogleGeminiClient)
+        client._generate = lambda *a, **k: {
+            "profiles": [
+                {"bgg_id": 1, "profile": "A calm game.", "franchise": ["Foo"], "base_game": "Bar",
+                 "designers": ["A B"], "designer_countries": ["Germany"]},
+                {"bgg_id": 2, "franchise": [], "designers": []},
+                {"bgg_id": 3, "profile": "Plain.", "base_game": ""},
+            ]
+        }
+        out = client.write_profiles([{"bgg_id": 1}, {"bgg_id": 2}, {"bgg_id": 3}])
+        self.assertEqual([p.bgg_id for p in out], [1, 3])
+        self.assertEqual(out[0], gemini.GameProfile(
+            bgg_id=1, profile="A calm game.", franchise=("Foo",), base_game="Bar",
+            designers=("A B",), designer_countries=("Germany",)))
+        self.assertIsNone(out[1].base_game)
+        self.assertEqual(out[1].franchise, ())
+
+
+class RerankParsingTest(unittest.TestCase):
+    def _client(self, data):
+        client = gemini.GoogleGeminiClient.__new__(gemini.GoogleGeminiClient)
+        client._generate = lambda *a, **k: data
+        return client
+
+    def test_rerank_result_parsing(self):
+        out = self._client(
+            {"interpretation": "Read as: x", "ranked_ids": [3, "4"], "weak_match": True}
+        ).rerank("q", [])
+        self.assertEqual(out, gemini.RerankResult("Read as: x", (3, 4), True))
+
+    def test_missing_ids_raises(self):
+        with self.assertRaises(gemini.GeminiError):
+            self._client({"interpretation": "Read as: x", "weak_match": False}).rerank("q", [])
+
+
+def _web_client(resp, seen=None):
+    from types import SimpleNamespace as NS
+
+    client = gemini.GoogleGeminiClient.__new__(gemini.GoogleGeminiClient)
+    client.usage = {"calls": 0, "prompt_tokens": 0, "output_tokens": 0}
+    client._types = NS(
+        Tool=lambda **k: k, GoogleSearch=lambda: None, ThinkingLevel=NS(MINIMAL=1),
+        ThinkingConfig=lambda **k: k, HttpOptions=lambda **k: k,
+        GenerateContentConfig=lambda **k: NS(**k),
+    )
+
+    def generate_content(**kw):
+        if seen is not None:
+            seen.update(kw)
+        return resp
+
+    client._client = NS(models=NS(generate_content=generate_content))
+    return client
+
+
+class WebAnswerParsingTest(unittest.TestCase):
+    def test_web_answer_parsing(self):
+        from types import SimpleNamespace as NS
+
+        meta = NS(search_entry_point=NS(rendered_content="<div>sugg</div>"), web_search_queries=["a", "b"])
+        resp = NS(text="Catan\n\nSummary.", candidates=[NS(grounding_metadata=meta)])
+        seen = {}
+        out = _web_client(resp, seen).web_search("q")
+        self.assertEqual(out, gemini.WebAnswer("Catan\n\nSummary.", "<div>sugg</div>", 2))
+        cfg = seen["config"]
+        self.assertFalse(hasattr(cfg, "response_schema"))
+        self.assertFalse(hasattr(cfg, "response_mime_type"))
+        self.assertGreaterEqual(cfg.http_options["timeout"], 10_000)
+
+    def test_missing_grounding_metadata_has_empty_html(self):
+        from types import SimpleNamespace as NS
+
+        resp = NS(text="x", candidates=[NS(grounding_metadata=None)])
+        out = _web_client(resp).web_search("q")
+        self.assertEqual((out.suggestions_html, out.search_count), ("", 0))
 
 
 if __name__ == "__main__":

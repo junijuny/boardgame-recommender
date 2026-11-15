@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import './index.css'
 import App from './App'
+import ErrorBoundary from './components/ErrorBoundary'
 
 // TanStack Query: 서버 데이터를 불러오고 기억(캐시)해 두는 도구
 // 같은 데이터를 다시 열면 기억해 둔 값을 바로 보여 준다.
@@ -19,7 +20,9 @@ const queryClient = new QueryClient({
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <App />
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
     </QueryClientProvider>
   </StrictMode>,
 )
