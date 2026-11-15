@@ -1,5 +1,6 @@
 """자연어 검색 엔진: Gemini 의도 추출 + 임베딩 유사도 + 태그 일치 + 평점."""
 
+import concurrent.futures
 import re
 import threading
 import zipfile
@@ -11,12 +12,13 @@ import numpy as np
 import pandas as pd
 
 try:
-    from backend import features, gemini, profiles, recommend_engine as eng, series
+    from backend import features, gemini, profiles, recommend_engine as eng, rerank, series
 except ImportError:
     import features
     import gemini
     import profiles
     import recommend_engine as eng
+    import rerank
     import series
 
 MIN_RATING = 5.5
@@ -43,6 +45,25 @@ CACHE_SIZE = 256
 # 프로필 임베딩이 있는 게임의 유사도 = (1-w)*원문 코사인 + w*프로필 코사인 (0 = 원문만, 1 = 프로필만)
 PROFILE_VECTOR_WEIGHT = 0.5
 PROFILE_DOC_VERSION = 1
+# 점수 상위 이 개수(시리즈당 1개)를 재정렬에 보낸다
+SHORTLIST_SIZE = 25
+# Gemini API 는 10초 미만 deadline 을 거부하므로 재정렬의 5초 상한은 벽시계로 직접 건다
+RERANK_WALL_SECONDS = 5
+RANKING_COPY = {
+    "popularity": "Ranked by number of BGG reviews.",
+    "rating": "Ranked by BGG rating.",
+    "newest": "Ranked by release year.",
+}
+_rerank_pool = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="rerank")
+
+
+@dataclass
+class NaturalResult:
+    games: list[dict]
+    interpretation: str | None
+    weak_match: bool
+    shortlist_ids: list[int]
+    web: dict | None = None
 
 
 @dataclass
@@ -136,11 +157,13 @@ class _LRU:
 
 _intent_cache = _LRU()
 _vector_cache = _LRU()
+_rerank_cache = _LRU()
 
 
 def clear_caches() -> None:
     _intent_cache.clear()
     _vector_cache.clear()
+    _rerank_cache.clear()
     global _text_lower
     _text_lower = None
 
@@ -306,7 +329,7 @@ def natural_search(
     max_time: int,
     exclude_ids: list[int] | None = None,
     top_n: int = 5,
-) -> list[dict]:
+) -> NaturalResult:
     client = gemini.get_client()
     index = _index
     if client is None or index is None:
@@ -336,7 +359,7 @@ def natural_search(
 
     cand_idx = np.flatnonzero(mask)
     if len(cand_idx) == 0:
-        return []
+        return _empty_result()
 
     # 키워드가 프로필 메타데이터(시리즈·제작자·국가)에 걸리는 후보가 하나라도 있으면 필수 조건으로 쓴다
     if intent.keywords:
@@ -346,7 +369,7 @@ def natural_search(
             keep = (text_hit | meta_hit)[:, hard].all(axis=1)
             cand_idx = cand_idx[keep]
             if len(cand_idx) == 0:
-                return []
+                return _empty_result()
 
     tag_hits = np.zeros(len(cand_idx))
     include_total = (
@@ -372,7 +395,7 @@ def natural_search(
             # "가장 유명한 협력 게임": 태그가 하나라도 있는 게임 안에서만 순위를 매긴다
             keep = tag_hits > 0
             if not keep.any():
-                return []
+                return _empty_result()
             cand_idx, tag_hits = cand_idx[keep], tag_hits[keep]
             matched = {k: v[keep] for k, v in matched.items()}
         tag_ratio = tag_hits / include_total
@@ -399,13 +422,19 @@ def natural_search(
     else:
         similarity = np.zeros(len(cand_idx))
 
+    interpretation: str | None = None
+    weak_match = False
     if sort_column:
-        picked = _sorted_positions(
-            cand_idx, similarity, sort_column, top_n, narrow=embedding is not None, tag_hits=tag_hits
+        ranked = _sorted_positions(
+            cand_idx, similarity, sort_column, max(top_n, SHORTLIST_SIZE), narrow=embedding is not None,
+            tag_hits=tag_hits,
         )
+        picked = ranked[:top_n]
+        shortlist = ranked[:SHORTLIST_SIZE]
+        interpretation = RANKING_COPY[intent.sort]
         # 정렬 질의의 Score는 순위 (1.0, 0.8, ... 1위가 가장 높음)
         score = np.zeros(len(cand_idx))
-        score[picked] = 1.0 - np.arange(len(picked)) / max(len(picked), 1)
+        score[ranked] = 1.0 - np.arange(len(ranked)) / max(len(ranked), 1)
     else:
         score = (
             SIMILARITY_WEIGHT * similarity
@@ -413,8 +442,15 @@ def natural_search(
             + SOFT_WEIGHT * _soft_score(cand_idx, players, intent.low_text)
         )
         # 같은 시리즈(확장·버전·외전)는 한 게임만 남기고 다양화한다
-        reps = group_series(cand_idx, score, tag_hits, "NumUserRatings")
-        picked = reps[eng.diversify(cand_idx[reps], score[reps], top_n)]
+        ordered = group_series(cand_idx, score, tag_hits, "NumUserRatings")
+        shortlist = ordered[:SHORTLIST_SIZE]
+        result = _get_rerank(query, players, max_time, cand_idx[shortlist], bool(exclude_ids))
+        if result is None:  # 재정렬 실패 -> 기존 순서
+            picked = ordered[eng.diversify(cand_idx[ordered], score[ordered], top_n)]
+        else:
+            picked, padded = _compose_page(result.ranked_ids, ordered, cand_idx, top_n)
+            interpretation = result.interpretation or None
+            weak_match = bool(result.weak_match) or padded
 
     results = []
     for pos in picked:
@@ -429,7 +465,59 @@ def natural_search(
         )
         record["SortedBy"] = intent.sort
         results.append(record)
-    return results
+    shortlist_ids = [int(b) for b in df["BGGId"].to_numpy()[cand_idx[shortlist]]]
+    return NaturalResult(results, interpretation, weak_match, shortlist_ids, None)
+
+
+def _empty_result() -> NaturalResult:
+    return NaturalResult([], None, False, [], None)
+
+
+def _get_rerank(query: str, players: int, max_time: int, rows: np.ndarray, refresh: bool):
+    """캐시된 재정렬 결과 또는 새 호출. 실패·시간 초과면 None (캐시하지 않는다).
+    첫 페이지(exclude_ids 없음)만 저장하고, 새로고침은 저장된 결과를 재사용한다."""
+    key = (query.strip().lower(), players, max_time)
+    cached = _rerank_cache.get(key)
+    if cached is not None:
+        return cached
+    future = _rerank_pool.submit(rerank.rerank, query, [int(r) for r in rows])
+    try:
+        result = future.result(timeout=RERANK_WALL_SECONDS)
+    except (gemini.GeminiError, concurrent.futures.TimeoutError):
+        future.cancel()
+        return None
+    if not refresh:
+        _rerank_cache.put(key, result)
+    return result
+
+
+def _compose_page(
+    ranked_ids, ordered: np.ndarray, cand_idx: np.ndarray, top_n: int
+) -> tuple[np.ndarray, bool]:
+    """재정렬 순서(후보에 아직 남은 id) 뒤에 기존 순서를 이어 붙여 top_n개, 시리즈당 1개.
+    반환: (cand_idx 안 위치 배열, 기존 순서로 채운 게임이 있는가)"""
+    pos_of = {int(b): i for i, b in enumerate(eng.df["BGGId"].to_numpy()[cand_idx])}
+    keys = series.KEYS[cand_idx]
+    picked: list[int] = []
+    used: set = set()
+    for bgg_id in ranked_ids:
+        pos = pos_of.get(int(bgg_id))
+        if pos is None or keys[pos] in used:
+            continue
+        picked.append(pos)
+        used.add(keys[pos])
+        if len(picked) == top_n:
+            return np.array(picked, dtype=int), False
+    padded = False
+    for pos in ordered:
+        if keys[pos] in used:
+            continue
+        picked.append(int(pos))
+        used.add(keys[pos])
+        padded = True
+        if len(picked) == top_n:
+            break
+    return np.array(picked, dtype=int), padded
 
 
 def group_series(

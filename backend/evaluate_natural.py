@@ -74,22 +74,23 @@ def run(entries: list[dict], label: str, search=natural_search.natural_search, r
     per_query = []
     for entry in entries:
         good, bad = set(entry["good"]), set(entry["bad"])
-        rows = search(entry["query"], entry["players"], entry["max_time"], top_n=max(K, recall_n))
-        ids = [int(r["BGGId"]) for r in rows]
-        top = ids[:K]
+        found = search(entry["query"], entry["players"], entry["max_time"], top_n=K)
+        rows = found.games
+        top = [int(r["BGGId"]) for r in rows][:K]
+        # 재현율은 재정렬 전 후보 묶음(상위 recall_n)에서 계산한다
+        ids = [int(i) for i in found.shortlist_ids][:recall_n]
         scored = bool(good)
-        weak = [r["weak_match"] for r in rows if "weak_match" in r]
         per_query.append({
             "query": entry["query"],
             "type": entry["type"],
             "ids": top,
             "names": [r["Name"] for r in rows[:K]],
-            "hit_at_5": hit_at_k(ids, good, K) if scored else None,
-            "precision_at_5": precision_at_k(ids, good, K) if scored else None,
+            "hit_at_5": hit_at_k(top, good, K) if scored else None,
+            "precision_at_5": precision_at_k(top, good, K) if scored else None,
             "recall_at_n": len(good & set(ids)) / len(good) if scored else None,
             "series_duplicate": has_series_duplicate(top),
             "bad_in_top5": any(i in bad for i in top),
-            "weak_match": bool(weak[0]) if weak else None,
+            "weak_match": bool(found.weak_match),
             "expect_weak_match": entry["expect_weak_match"],
         })
     summary = _summarize(per_query)

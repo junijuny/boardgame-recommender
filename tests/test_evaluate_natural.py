@@ -57,11 +57,30 @@ class MetricsTest(unittest.TestCase):
         rows = [{"BGGId": gid, "Name": "Pandemic"}, {"BGGId": 1, "Name": "Other"}]
         entry = {"query": "co-op", "type": "genre", "players": 4, "max_time": 120,
                  "good": [gid], "bad": [], "expect_weak_match": False}
-        result = ev.run([entry], "fake", search=lambda q, p, t, top_n: rows)
+        fake = lambda q, p, t, top_n: ns.NaturalResult(rows, None, False, [gid, 1, 2], None)
+        result = ev.run([entry], "fake", search=fake)
         self.assertEqual(result["summary"]["hit_at_5"], 1.0)
         self.assertEqual(result["per_query"][0]["names"], ["Pandemic", "Other"])
         self.assertEqual(result["label"], "fake")
         self.assertIn("genre", result["summary"]["by_type"])
+
+    def test_recall_uses_shortlist_and_weak_rate_is_numeric(self):
+        g1, g2 = bgg_id("Pandemic"), bgg_id("Catan")
+        base = {"type": "genre", "players": 4, "max_time": 120, "bad": [], "expect_weak_match": False}
+        entries = [
+            {**base, "query": "a", "good": [g1, g2]},
+            {**base, "query": "none", "type": "no_answer", "good": [], "expect_weak_match": True},
+        ]
+
+        def fake(q, p, t, top_n):
+            rows = [{"BGGId": g1, "Name": "Pandemic"}]
+            return ns.NaturalResult(rows, None, q == "none", [g1, g2], None)
+
+        result = ev.run(entries, "fake", search=fake)
+        self.assertEqual(result["per_query"][0]["recall_at_n"], 1.0)
+        self.assertEqual(result["per_query"][1]["weak_match"], True)
+        self.assertEqual(result["summary"]["by_type"]["no_answer"]["weak_match_rate"], 1.0)
+        self.assertEqual(result["summary"]["by_type"]["genre"]["weak_match_rate"], 0.0)
 
 
 class DiskCacheTest(unittest.TestCase):

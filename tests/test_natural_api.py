@@ -49,7 +49,21 @@ class NaturalApiTest(unittest.TestCase):
     def test_search_returns_five(self):
         r = client.post("/search/natural", json=BODY)
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(len(r.json()), 5)
+        self.assertEqual(len(r.json()["games"]), 5)
+
+    def test_search_returns_object(self):
+        r = client.post("/search/natural", json=BODY)
+        body = r.json()
+        self.assertEqual(set(body), {"games", "interpretation", "weak_match", "web"})
+        self.assertEqual(body["interpretation"], "Read as: fake.")
+        self.assertIs(body["weak_match"], False)
+        self.assertIsNone(body["web"])
+
+    def test_rerank_failure_still_200(self):
+        self.fake.rerank_error = GeminiError("boom")
+        body = client.post("/search/natural", json=BODY).json()
+        self.assertEqual(len(body["games"]), 5)
+        self.assertIsNone(body["interpretation"])
 
     def test_validation(self):
         for q, p, t in [(" ", 4, 60), ("x" * 301, 4, 60), ("q", 0, 60), ("q", 4, 0)]:

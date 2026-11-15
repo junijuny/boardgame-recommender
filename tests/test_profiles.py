@@ -1,3 +1,5 @@
+import contextlib
+import io
 import json
 import sys
 import tempfile
@@ -20,7 +22,10 @@ class LoadTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "bad.json"
             p.write_text("{not json", encoding="utf-8")
-            self.assertEqual(profiles.load(p), {})
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(profiles.load(p), {})
+            self.assertIn("could not load game profiles", out.getvalue())
 
     def test_load_reads_profiles(self):
         with tempfile.TemporaryDirectory() as d:

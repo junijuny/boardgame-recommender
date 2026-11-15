@@ -1,6 +1,7 @@
 import re
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -14,7 +15,13 @@ from backend import gemini, natural_search as ns, profiles, recommend_engine as 
 from backend.gemini import QueryIntent, set_client
 from tests.gemini_fake import FakeGeminiClient
 
-natural_search = ns.natural_search
+search_full = ns.natural_search
+
+
+def natural_search(*args, **kwargs):
+    """Games only; tests of the result object call search_full."""
+    return search_full(*args, **kwargs).games
+
 sanitize_intent = ns.sanitize_intent
 
 
@@ -134,9 +141,9 @@ class NaturalSearchTest(unittest.TestCase):
         from unittest import mock
         with mock.patch.object(gemini, "charge") as charge:
             natural_search("co-op", 4, 60)
-            self.assertEqual(charge.call_count, 2)
+            self.assertEqual(charge.call_count, 3)
             natural_search("co-op", 4, 60)
-            self.assertEqual(charge.call_count, 2)
+            self.assertEqual(charge.call_count, 3)
 
     def test_unavailable_without_client(self):
         set_client(None)
@@ -489,6 +496,23 @@ class ProfileSearchTest(unittest.TestCase):
         self.fake.intent = QueryIntent("anything", keywords=("Nowhereland",))
         self.assertEqual(len(natural_search("q", 4, 120)), 5)
 
+    def test_two_metadata_keywords_are_anded(self):
+        a, b, c = self.pool_ids(3)
+        profiles.PROFILES = {
+            a: {"franchise": ["Xenon"]},
+            b: {"designers": ["Yolanda"]},
+            c: {"franchise": ["Xenon"], "designers": ["Yolanda"]},
+        }
+        self.fake.intent = QueryIntent("anything", keywords=("Xenon", "Yolanda"))
+        games = natural_search("q", 4, 120, top_n=50)
+        ids = {g["BGGId"] for g in games}
+        self.assertIn(c, ids)
+        self.assertFalse({a, b} & ids)
+        for g in games:
+            desc = eng.df.loc[eng.df["BGGId"] == g["BGGId"], "Description"].iloc[0]
+            text = f"{g['Name']} {desc}".lower()
+            self.assertTrue(g["BGGId"] == c or ("xenon" in text and "yolanda" in text), g["Name"])
+
     def test_keyword_hits_matches_metadata(self):
         a, _ = self.pool_ids()
         profiles.PROFILES = {a: {"designers": ["Zzyzx Qwerty"], "franchise": [], "designer_countries": []}}
@@ -505,6 +529,159 @@ class ProfileSearchTest(unittest.TestCase):
         self.fake.intent = QueryIntent("co-op")
         names = {g["Name"] for g in natural_search("q", 4, 120, top_n=20)}
         self.assertFalse({"Catan", "Lost Cities"} <= names)
+
+
+class RerankSearchTest(unittest.TestCase):
+    def setUp(self):
+        self._client = gemini._client
+        self._index = ns._index
+        self._wall = ns.RERANK_WALL_SECONDS
+        ns.clear_caches()
+        e0 = np.zeros(8, dtype=np.float32)
+        e0[0] = 1.0
+        self.fake = FakeGeminiClient(
+            intent=QueryIntent("co-op", include_mechanics=("Cooperative Game",)), query_vector=e0
+        )
+        set_client(self.fake)
+        ns.set_index(make_index(idx_of("Pandemic")))
+
+    def tearDown(self):
+        gemini._client = self._client
+        ns._index = self._index
+        ns.RERANK_WALL_SECONDS = self._wall
+        ns.clear_caches()
+
+    def rerank_calls(self):
+        return [c for c in self.fake.calls if c[0] == "rerank"]
+
+    def shortlist(self):
+        ids = search_full("co-op", 4, 60).shortlist_ids
+        ns.clear_caches()
+        self.fake.calls.clear()
+        return ids
+
+    def test_rerank_order_is_used(self):
+        short = self.shortlist()
+        want = tuple(reversed(short[:8]))
+        self.fake.rerank_result = gemini.RerankResult("Read as: x.", want, False)
+        r = search_full("co-op", 4, 60)
+        self.assertEqual([g["BGGId"] for g in r.games], list(want[:5]))
+        self.assertEqual(r.interpretation, "Read as: x.")
+        self.assertFalse(r.weak_match)
+        self.assertIsNone(r.web)
+        self.assertEqual(len(self.rerank_calls()[-1][2]), ns.SHORTLIST_SIZE)
+
+    def test_pads_to_five_and_flags_weak(self):
+        short = self.shortlist()
+        self.fake.rerank_result = gemini.RerankResult("Read as: x.", tuple(short[3:5]), False)
+        r = search_full("co-op", 4, 60)
+        self.assertEqual(len(r.games), 5)
+        self.assertEqual([g["BGGId"] for g in r.games[:2]], short[3:5])
+        self.assertTrue(r.weak_match)
+        self.assertEqual(len({g["BGGId"] for g in r.games}), 5)
+
+    def test_model_weak_flag_passes_through(self):
+        short = self.shortlist()
+        self.fake.rerank_result = gemini.RerankResult("Read as: x.", tuple(short[:5]), True)
+        self.assertTrue(search_full("co-op", 4, 60).weak_match)
+
+    def test_empty_interpretation_is_none(self):
+        short = self.shortlist()
+        self.fake.rerank_result = gemini.RerankResult("", tuple(short[:5]), False)
+        self.assertIsNone(search_full("co-op", 4, 60).interpretation)
+
+    def test_dedupes_series_in_rerank_output(self):
+        a, b = idx_of("Pandemic"), idx_of("Pandemic Legacy: Season 1")
+        ids = [int(eng.df.loc[a, "BGGId"]), int(eng.df.loc[b, "BGGId"])]
+        self.assertEqual(series.KEYS[a], series.KEYS[b])
+        short = self.shortlist()
+        self.fake.rerank_result = gemini.RerankResult("Read as: x.", tuple(ids + short[:6]), False)
+        games = search_full("co-op", 4, 60).games
+        self.assertEqual(len(games), 5)
+        keys = [series.KEYS[int(eng.df.index[eng.df["BGGId"] == g["BGGId"]][0])] for g in games]
+        self.assertEqual(len(set(keys)), 5)
+
+    def test_refresh_uses_cache(self):
+        short = self.shortlist()
+        self.fake.rerank_result = gemini.RerankResult("Read as: x.", tuple(short[:12]), False)
+        first = search_full("co-op", 4, 60)
+        second = search_full("co-op", 4, 60, exclude_ids=[g["BGGId"] for g in first.games])
+        self.assertEqual([g["BGGId"] for g in second.games], short[5:10])
+        self.assertEqual(second.interpretation, "Read as: x.")
+        self.assertEqual(len(self.rerank_calls()), 1)
+
+    def test_refresh_cache_miss_calls_again_without_storing(self):
+        first = search_full("co-op", 4, 60)
+        shown = [g["BGGId"] for g in first.games]
+        ns._rerank_cache.clear()
+        self.fake.calls.clear()
+        search_full("co-op", 4, 60, exclude_ids=shown)
+        self.assertEqual(len(self.rerank_calls()), 1)
+        self.assertIsNone(ns._rerank_cache.get(("co-op", 4, 60)))
+        search_full("co-op", 4, 60, exclude_ids=shown)
+        self.assertEqual(len(self.rerank_calls()), 2)
+
+    def test_first_page_is_cached_by_normalized_query(self):
+        search_full(" Co-Op ", 4, 60)
+        self.assertIsNotNone(ns._rerank_cache.get(("co-op", 4, 60)))
+
+    def test_rerank_failure_falls_back(self):
+        self.fake.rerank_error = gemini.GeminiError("boom")
+        r = search_full("co-op", 4, 60)
+        self.assertEqual(len(r.games), 5)
+        self.assertEqual([g["BGGId"] for g in r.games], [g["BGGId"] for g in search_full("co-op", 4, 60).games])
+        self.assertIsNone(r.interpretation)
+        self.assertIs(r.weak_match, False)
+        self.assertIsNone(ns._rerank_cache.get(("co-op", 4, 60)))
+
+    def test_rerank_timeout_falls_back(self):
+        real = self.fake.rerank
+
+        def slow(query, games):
+            time.sleep(0.5)
+            return real(query, games)
+
+        self.fake.rerank = slow
+        ns.RERANK_WALL_SECONDS = 0.05
+        r = search_full("co-op", 4, 60)
+        self.assertEqual(len(r.games), 5)
+        self.assertIsNone(r.interpretation)
+        self.assertFalse(r.weak_match)
+        self.assertIsNone(ns._rerank_cache.get(("co-op", 4, 60)))
+
+    def test_budget_exhausted_for_rerank_falls_back(self):
+        self.fake.rerank_error = gemini.BudgetExceeded("limit")
+        r = search_full("co-op", 4, 60)
+        self.assertEqual(len(r.games), 5)
+        self.assertIsNone(r.interpretation)
+
+    def test_ranking_query_skips_rerank(self):
+        self.fake.intent = QueryIntent("", sort="popularity")
+        r = search_full("most popular", 4, 60)
+        self.assertEqual(r.interpretation, "Ranked by number of BGG reviews.")
+        self.assertFalse(r.weak_match)
+        self.assertEqual(self.rerank_calls(), [])
+        self.assertEqual(len(r.shortlist_ids), ns.SHORTLIST_SIZE)
+        self.assertEqual(r.shortlist_ids[:5], [g["BGGId"] for g in r.games])
+        for sort, copy in (("rating", "Ranked by BGG rating."), ("newest", "Ranked by release year.")):
+            self.fake.intent = QueryIntent("", sort=sort)
+            self.assertEqual(search_full(sort, 4, 60).interpretation, copy)
+
+    def test_exhausted_candidates_returns_empty(self):
+        seen: list[int] = []
+        for _ in range(500):
+            r = search_full("co-op", 4, 60, exclude_ids=seen)
+            if not r.games:
+                break
+            ids = [g["BGGId"] for g in r.games]
+            self.assertFalse(set(ids) & set(seen))
+            seen += ids
+        else:
+            self.fail("never exhausted")
+        self.assertEqual(r.games, [])
+        self.assertEqual(r.shortlist_ids, [])
+        self.assertIsNone(r.interpretation)
+        self.assertEqual(len(seen), len(set(seen)))
 
 
 if __name__ == "__main__":
