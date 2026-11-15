@@ -153,5 +153,47 @@ class RerankParsingTest(unittest.TestCase):
             self._client({"interpretation": "Read as: x", "weak_match": False}).rerank("q", [])
 
 
+def _web_client(resp, seen=None):
+    from types import SimpleNamespace as NS
+
+    client = gemini.GoogleGeminiClient.__new__(gemini.GoogleGeminiClient)
+    client.usage = {"calls": 0, "prompt_tokens": 0, "output_tokens": 0}
+    client._types = NS(
+        Tool=lambda **k: k, GoogleSearch=lambda: None, ThinkingLevel=NS(MINIMAL=1),
+        ThinkingConfig=lambda **k: k, HttpOptions=lambda **k: k,
+        GenerateContentConfig=lambda **k: NS(**k),
+    )
+
+    def generate_content(**kw):
+        if seen is not None:
+            seen.update(kw)
+        return resp
+
+    client._client = NS(models=NS(generate_content=generate_content))
+    return client
+
+
+class WebAnswerParsingTest(unittest.TestCase):
+    def test_web_answer_parsing(self):
+        from types import SimpleNamespace as NS
+
+        meta = NS(search_entry_point=NS(rendered_content="<div>sugg</div>"), web_search_queries=["a", "b"])
+        resp = NS(text="Catan\n\nSummary.", candidates=[NS(grounding_metadata=meta)])
+        seen = {}
+        out = _web_client(resp, seen).web_search("q")
+        self.assertEqual(out, gemini.WebAnswer("Catan\n\nSummary.", "<div>sugg</div>", 2))
+        cfg = seen["config"]
+        self.assertFalse(hasattr(cfg, "response_schema"))
+        self.assertFalse(hasattr(cfg, "response_mime_type"))
+        self.assertGreaterEqual(cfg.http_options["timeout"], 10_000)
+
+    def test_missing_grounding_metadata_has_empty_html(self):
+        from types import SimpleNamespace as NS
+
+        resp = NS(text="x", candidates=[NS(grounding_metadata=None)])
+        out = _web_client(resp).web_search("q")
+        self.assertEqual((out.suggestions_html, out.search_count), ("", 0))
+
+
 if __name__ == "__main__":
     unittest.main()

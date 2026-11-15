@@ -3,9 +3,9 @@
 import numpy as np
 
 try:
-    from backend.gemini import EMBED_DIM, GameProfile, QueryIntent, RerankResult
+    from backend.gemini import EMBED_DIM, GameProfile, QueryIntent, RerankResult, WebAnswer
 except ImportError:
-    from gemini import EMBED_DIM, GameProfile, QueryIntent, RerankResult
+    from gemini import EMBED_DIM, GameProfile, QueryIntent, RerankResult, WebAnswer
 
 
 class FakeGeminiClient:
@@ -18,7 +18,11 @@ class FakeGeminiClient:
         extra_profiles: list[GameProfile] | None = None,
         rerank_result: RerankResult | None = None,
         rerank_error: Exception | None = None,
+        web_answer: WebAnswer | None = None,
+        web_error: Exception | None = None,
     ):
+        self.web_answer = web_answer
+        self.web_error = web_error
         self.rerank_result = rerank_result
         self.rerank_error = rerank_error
         self.extra_profiles = extra_profiles or []
@@ -77,3 +81,11 @@ class FakeGeminiClient:
         if self.rerank_result is not None:
             return self.rerank_result
         return RerankResult("Read as: fake.", tuple(int(g["bgg_id"]) for g in games), False)
+
+    def web_search(self, query):
+        self._record("web_search", query)
+        if self.web_error is not None:
+            raise self.web_error
+        if self.web_answer is not None:
+            return self.web_answer
+        return WebAnswer("Catan" + chr(92) + "n" + chr(92) + "nFake summary.", "<div>fake suggestions</div>", 1)

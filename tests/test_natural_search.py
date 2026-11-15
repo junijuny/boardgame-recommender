@@ -698,5 +698,103 @@ class RerankSearchTest(unittest.TestCase):
         self.assertEqual(len(seen), len(set(seen)))
 
 
+class WebSearchNaturalTest(unittest.TestCase):
+    def setUp(self):
+        self._client = gemini._client
+        self._index = ns._index
+        self._budget = ns.web_search.web_budget
+        ns.web_search.web_budget = ns.web_search.limits.DailyBudget(100)
+        ns.clear_caches()
+        e0 = np.zeros(8, dtype=np.float32)
+        e0[0] = 1.0
+        self.fake = FakeGeminiClient(
+            intent=QueryIntent("co-op", include_mechanics=("Cooperative Game",), needs_web=True),
+            query_vector=e0,
+        )
+        set_client(self.fake)
+        ns.set_index(make_index(idx_of("Pandemic")))
+        short = search_full("co-op", 4, 60).shortlist_ids
+        self.short_names = [str(eng.df.loc[eng.df["BGGId"] == i, "Name"].iloc[0]) for i in short]
+        ns.clear_caches()
+        self.fake.calls.clear()
+
+    def tearDown(self):
+        gemini._client = self._client
+        ns._index = self._index
+        ns.web_search.web_budget = self._budget
+        ns.clear_caches()
+
+    def calls(self, name):
+        return [c for c in self.fake.calls if c[0] == name]
+
+    def answer(self, names, html="<div>s</div>"):
+        self.fake.web_answer = gemini.WebAnswer("\n".join(names) + "\n\nSummary here.", html, 1)
+
+    def test_no_web_call_without_needs_web(self):
+        self.fake.intent = QueryIntent("co-op", include_mechanics=("Cooperative Game",))
+        r = search_full("co-op", 4, 60)
+        self.assertEqual(self.calls("web_search"), [])
+        self.assertIsNone(r.web)
+
+    def test_disabled_by_env(self):
+        with mock.patch.dict("os.environ", {"NATURAL_WEB_SEARCH": "0"}):
+            r = search_full("co-op", 4, 60)
+        self.assertEqual(self.calls("web_search"), [])
+        self.assertIsNone(r.web)
+
+    def test_web_ids_hard_filter_when_five_or_more(self):
+        names = self.short_names[10:16]
+        self.answer(names)
+        r = search_full("co-op", 4, 60)
+        self.assertEqual(len(r.games), 5)
+        self.assertTrue({g["Name"] for g in r.games} <= set(names))
+        facts = self.calls("rerank")[0][2]
+        self.assertTrue(all(g["web_mentioned"] for g in facts))
+
+    def test_web_ids_soft_when_fewer(self):
+        self.answer(self.short_names[10:12])
+        r = search_full("co-op", 4, 60)
+        self.assertEqual(len(r.games), 5)
+        facts = self.calls("rerank")[0][2]
+        self.assertEqual(sum(1 for g in facts if g["web_mentioned"]), 2)
+        self.assertGreater(len(facts), 2)
+
+    def test_web_result_attached(self):
+        self.answer(self.short_names[:2], html="<div>unique suggestions</div>")
+        r = search_full("co-op", 4, 60)
+        self.assertEqual(r.web["suggestions_html"], "<div>unique suggestions</div>")
+        self.assertEqual(r.web["summary"], "Summary here.")
+
+    def test_web_query_never_cached(self):
+        self.answer(self.short_names[:2])
+        search_full("co-op", 4, 60)
+        search_full("co-op", 4, 60)
+        self.assertEqual(len(self.calls("web_search")), 2)
+        self.assertEqual(len(self.calls("rerank")), 2)
+        self.assertIsNone(ns._rerank_cache.get(("co-op", 4, 60)))
+
+    def test_web_failure_falls_back(self):
+        self.fake.web_error = gemini.GeminiError("boom")
+        r = search_full("co-op", 4, 60)
+        self.assertIsNone(r.web)
+        self.assertEqual(len(r.games), 5)
+
+    def test_web_timeout_falls_back(self):
+        real = ns.web_search.lookup
+
+        def slow(query):
+            time.sleep(0.5)
+            return real(query)
+
+        ns.WEB_WALL_SECONDS = 0.05
+        try:
+            with mock.patch.object(ns.web_search, "lookup", slow):
+                r = search_full("co-op", 4, 60)
+        finally:
+            ns.WEB_WALL_SECONDS = gemini.WEB_TIMEOUT_SECONDS
+        self.assertIsNone(r.web)
+        self.assertEqual(len(r.games), 5)
+
+
 if __name__ == "__main__":
     unittest.main()

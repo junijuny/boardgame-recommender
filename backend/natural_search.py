@@ -1,6 +1,7 @@
 """자연어 검색 엔진: Gemini 의도 추출 + 임베딩 유사도 + 태그 일치 + 평점."""
 
 import concurrent.futures
+import os
 import re
 import threading
 import zipfile
@@ -12,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 try:
-    from backend import features, gemini, profiles, recommend_engine as eng, rerank, series
+    from backend import features, gemini, profiles, recommend_engine as eng, rerank, series, web_search
 except ImportError:
     import features
     import gemini
@@ -20,6 +21,7 @@ except ImportError:
     import recommend_engine as eng
     import rerank
     import series
+    import web_search
 
 MIN_RATING = 5.5
 # 리뷰가 적은 무명 게임은 설명글이 짧고 일반적이라("우주를 탐험하는 게임입니다") 짧은 질의와
@@ -49,12 +51,22 @@ PROFILE_DOC_VERSION = 1
 SHORTLIST_SIZE = 25
 # Gemini API 는 10초 미만 deadline 을 거부하므로 재정렬의 5초 상한은 벽시계로 직접 건다
 RERANK_WALL_SECONDS = 5
+# 웹 검색 벽시계 상한 (SDK deadline 은 10초 이상이어야 하므로 직접 건다)
+WEB_WALL_SECONDS = gemini.WEB_TIMEOUT_SECONDS
+# 웹 근거 id 가 이 개수 이상 필터를 통과하면 필수 조건, 미만이면 태그 하나로 쓴다
+WEB_HARD_MIN = 5
 RANKING_COPY = {
     "popularity": "Ranked by number of BGG reviews.",
     "rating": "Ranked by BGG rating.",
     "newest": "Ranked by release year.",
 }
 _rerank_pool = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="rerank")
+_web_pool = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="web")
+
+
+def web_search_enabled() -> bool:
+    """NATURAL_WEB_SEARCH=0 이면 웹 검색을 끈다 (평가 스크립트 등: 근거 검색 결과는 평가에 쓸 수 없다)"""
+    return os.environ.get("NATURAL_WEB_SEARCH", "1").strip() != "0"
 
 
 @dataclass
@@ -222,6 +234,7 @@ def sanitize_intent(intent: gemini.QueryIntent, raw_query: str) -> gemini.QueryI
         low_text=bool(intent.low_text),
         keywords=_clean_words(intent.keywords),
         terms=_clean_words(intent.terms),
+        needs_web=bool(intent.needs_web),
     )
 
 
@@ -337,6 +350,14 @@ def natural_search(
 
     intent = _get_intent(client, query)
     sort_column = SORT_COLUMNS.get(intent.sort)
+    # 웹 근거 결과는 이 응답에만 쓰고 캐시·로그에 남기지 않는다 (Gemini API 추가 약관)
+    use_web = bool(intent.needs_web) and web_search_enabled()
+    web_ids: frozenset[int] = frozenset()
+    web_info: dict | None = None
+    if use_web:
+        found = _web_lookup(query)
+        if found is not None:
+            web_ids, web_info = found
 
     df = eng.df
     mask = eng._condition_mask(players, max_time, MIN_RATING).to_numpy() & index.present
@@ -371,10 +392,18 @@ def natural_search(
             if len(cand_idx) == 0:
                 return _empty_result()
 
+    web_tag = None
+    if web_ids:
+        in_web = np.isin(df["BGGId"].to_numpy()[cand_idx], list(web_ids))
+        if int(in_web.sum()) >= WEB_HARD_MIN:
+            cand_idx = cand_idx[in_web]
+        else:
+            web_tag = in_web
+
     tag_hits = np.zeros(len(cand_idx))
     include_total = (
         len(intent.include_mechanics) + len(intent.include_themes) + len(intent.categories) + len(intent.keywords)
-    )
+    ) + (web_tag is not None and bool(web_tag.any()))
     matched: dict[str, np.ndarray] = {}
     tag_ratio = None
     if include_total:
@@ -391,6 +420,8 @@ def natural_search(
             tag_hits += (df[cat_cols].to_numpy()[cand_idx] > 0).sum(axis=1)
         if intent.keywords:
             tag_hits += keyword_hits(cand_idx, intent.keywords).sum(axis=1)
+        if web_tag is not None and web_tag.any():
+            tag_hits += web_tag
         if sort_column:
             # "가장 유명한 협력 게임": 태그가 하나라도 있는 게임 안에서만 순위를 매긴다
             keep = tag_hits > 0
@@ -445,7 +476,10 @@ def natural_search(
         # 같은 시리즈(확장·버전·외전)는 한 게임만 남기고 다양화한다
         ordered = group_series(cand_idx, score, tag_hits, "NumUserRatings")
         shortlist = ordered[:SHORTLIST_SIZE]
-        result = _get_rerank(query, players, max_time, cand_idx[shortlist], bool(exclude_ids))
+        result = _get_rerank(
+            query, players, max_time, cand_idx[shortlist], bool(exclude_ids),
+            web_ids=web_ids, use_cache=not use_web,
+        )
         if result is None:  # 재정렬 실패 -> 기존 순서
             picked = ordered[eng.diversify(cand_idx[ordered], score[ordered], top_n)]
         else:
@@ -467,27 +501,45 @@ def natural_search(
         record["SortedBy"] = intent.sort
         results.append(record)
     shortlist_ids = [int(b) for b in df["BGGId"].to_numpy()[cand_idx[shortlist]]]
-    return NaturalResult(results, interpretation, weak_match, shortlist_ids, None)
+    return NaturalResult(results, interpretation, weak_match, shortlist_ids, web_info)
 
 
 def _empty_result() -> NaturalResult:
     return NaturalResult([], None, False, [], None)
 
 
-def _get_rerank(query: str, players: int, max_time: int, rows: np.ndarray, refresh: bool):
+def _web_lookup(query: str):
+    """웹 검색 (ids, 정보) 또는 None. 벽시계 상한을 넘기면 None"""
+    future = _web_pool.submit(web_search.lookup, query)
+    try:
+        return future.result(timeout=WEB_WALL_SECONDS)
+    except concurrent.futures.TimeoutError:
+        future.cancel()
+        return None
+
+
+def _get_rerank(
+    query: str, players: int, max_time: int, rows: np.ndarray, refresh: bool,
+    web_ids: frozenset[int] = frozenset(), use_cache: bool = True,
+):
     """캐시된 재정렬 결과 또는 새 호출. 실패·시간 초과면 None (캐시하지 않는다).
-    첫 페이지(exclude_ids 없음)만 저장하고, 새로고침은 저장된 결과를 재사용한다."""
+    첫 페이지(exclude_ids 없음)만 저장하고, 새로고침은 저장된 결과를 재사용한다.
+    웹 검색 질의는 캐시를 읽지도 쓰지도 않는다 (근거 결과 저장 금지)."""
     key = (query.strip().lower(), players, max_time)
-    cached = _rerank_cache.get(key)
-    if cached is not None:
-        return cached
-    future = _rerank_pool.submit(rerank.rerank, query, [int(r) for r in rows])
+    if use_cache:
+        cached = _rerank_cache.get(key)
+        if cached is not None:
+            return cached
+    if web_ids:
+        future = _rerank_pool.submit(rerank.rerank, query, [int(r) for r in rows], web_ids=web_ids)
+    else:
+        future = _rerank_pool.submit(rerank.rerank, query, [int(r) for r in rows])
     try:
         result = future.result(timeout=RERANK_WALL_SECONDS)
     except (gemini.GeminiError, concurrent.futures.TimeoutError):
         future.cancel()
         return None
-    if not refresh:
+    if use_cache and not refresh:
         _rerank_cache.put(key, result)
     return result
 

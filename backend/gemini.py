@@ -33,6 +33,10 @@ PROFILE_MAX_TOKENS = 4096  # 게임 10개 x (약 120단어 + 목록)
 RERANK_MODEL = "gemini-3.5-flash-lite"
 RERANK_TIMEOUT_SECONDS = 10  # brief said 5, but the API rejects deadlines under 10s (400)
 RERANK_MAX_TOKENS = 1024
+WEB_MODEL = "gemini-3.5-flash-lite"
+WEB_TIMEOUT_SECONDS = 8  # 벽시계 상한 (natural_search 가 건다)
+WEB_SDK_TIMEOUT_SECONDS = 10  # API 는 10초 미만 deadline 을 거부한다
+WEB_MAX_TOKENS = 1024
 
 
 class GeminiError(Exception):
@@ -59,6 +63,14 @@ class QueryIntent:
     low_text: bool = False
     keywords: tuple[str, ...] = ()
     terms: tuple[str, ...] = ()
+    needs_web: bool = False
+
+
+@dataclass(frozen=True)
+class WebAnswer:
+    text: str
+    suggestions_html: str
+    search_count: int
 
 
 @dataclass(frozen=True)
@@ -112,6 +124,8 @@ class GeminiClient(Protocol):
 
     def rerank(self, query: str, games: Sequence[dict]) -> RerankResult: ...
 
+    def web_search(self, query: str) -> WebAnswer: ...
+
 
 EXTRACT_PROMPT = """\
 You convert a board-game search request (any language, often Korean) into structured filters.
@@ -137,6 +151,9 @@ Rules:
 - keywords: proper nouns (franchise, designer, publisher, country) in their official English form
   (스타워즈 -> "Star Wars", 한국 -> "Korea"); still never put them in search_text.
 - terms: up to 3 concrete subject nouns in English (e.g. "animals", "zombies", "trains"), not mechanics.
+- needs_web: true only when the request depends on facts that game descriptions and general game
+  knowledge do not hold: awards, designer nationality, a specific publisher, popularity in a specific
+  country or community. False for genre, mood, audience and ranking requests.
 - Ignore plain player counts and play time (e.g. "for 4 players", "30 minutes"); the UI supplies them.
 - Weight is BGG complexity on a 1-5 scale. Map "light/easy" (e.g. 가벼운) to a low range such as 1.0-2.5,
   and "heavy/complex" to a high range such as 3.5-5.0. Leave weight_min/weight_max null if not implied.
@@ -187,6 +204,12 @@ Rules:
   weak hint, not proof of fit.
 Request: {query}
 Games: {games}
+"""
+
+WEB_PROMPT = """Use Google Search to answer this board game request: {query}
+First list the official English names of the board games that answer it, one per line, with no
+numbering or other text, at most 15 names. Then a blank line, then a one or two sentence English
+summary of what you found.
 """
 
 MODE_RULES = {
@@ -260,6 +283,7 @@ def _intent_from_dict(data: dict) -> QueryIntent:
             low_text=bool(data.get("low_text")),
             keywords=_tags(data.get("keywords")),
             terms=_tags(data.get("terms")),
+            needs_web=bool(data.get("needs_web")),
         )
     except (TypeError, ValueError, AttributeError) as exc:
         raise GeminiError(f"Unexpected intent response: {exc}") from exc
@@ -325,6 +349,7 @@ class GoogleGeminiClient:
                 "low_text": {"type": "BOOLEAN"},
                 "keywords": _tag_array(),
                 "terms": _tag_array(),
+                "needs_web": {"type": "BOOLEAN"},
             },
             "required": ["search_text"],
         }
@@ -455,6 +480,29 @@ class GoogleGeminiClient:
             )
         except (KeyError, TypeError, ValueError, AttributeError) as exc:
             raise GeminiError(f"Unexpected rerank response: {exc}") from exc
+
+    def web_search(self, query) -> WebAnswer:
+        # Google Search 근거 호출: 응답 스키마·JSON 모드 없이, 결과는 저장·로그하지 않는다 (약관)
+        t = self._types
+        try:
+            resp = self._client.models.generate_content(
+                model=WEB_MODEL,
+                contents=WEB_PROMPT.format(query=query),
+                config=t.GenerateContentConfig(
+                    tools=[t.Tool(google_search=t.GoogleSearch())],
+                    max_output_tokens=WEB_MAX_TOKENS,
+                    thinking_config=t.ThinkingConfig(thinking_level=t.ThinkingLevel.MINIMAL),
+                    http_options=self._http_options(WEB_SDK_TIMEOUT_SECONDS),
+                ),
+            )
+            self.usage["calls"] += 1
+            meta = resp.candidates[0].grounding_metadata
+            entry = getattr(meta, "search_entry_point", None)
+            html = getattr(entry, "rendered_content", None) or ""
+            queries = getattr(meta, "web_search_queries", None) or []
+            return WebAnswer(text=resp.text or "", suggestions_html=html, search_count=len(queries))
+        except Exception as exc:
+            raise GeminiError("Gemini web search failed") from exc
 
 
 def _profile_from_dict(r: dict) -> GameProfile | None:
