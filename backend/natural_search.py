@@ -40,8 +40,8 @@ MAX_WORD_CHARS = 40
 AGE_RANGE = (2.0, 18.0)
 _HANGUL = re.compile("[ㄱ-ㆎ가-힣]")
 CACHE_SIZE = 256
-# 프로필 임베딩이 있는 게임은 원문 임베딩 대신 프로필 임베딩을 쓸지 (평가: stage3_profilevec.json 은 hit@5 0.85, 끄면 0.88 이라 꺼 둠)
-USE_PROFILE_VECTORS = False
+# 프로필 임베딩이 있는 게임의 유사도 = (1-w)*원문 코사인 + w*프로필 코사인 (0 = 원문만, 1 = 프로필만)
+PROFILE_VECTOR_WEIGHT = 0.5
 PROFILE_DOC_VERSION = 1
 
 
@@ -49,6 +49,8 @@ PROFILE_DOC_VERSION = 1
 class GeminiIndex:
     vectors: np.ndarray  # float32 (len(df), dim), 없는 게임은 0 행
     present: np.ndarray  # bool (len(df),)
+    profile_vectors: np.ndarray | None = None  # float32 (프로필 있는 게임 수, dim)
+    profile_pos: np.ndarray | None = None  # int (len(df),), profile_vectors 의 행 번호, 없으면 -1
 
 
 def _read_npz(path: Path, label: str):
@@ -84,12 +86,15 @@ def load_index(
     if base is None:
         return None
     present, vectors = _place(*base)
-    if USE_PROFILE_VECTORS:
-        prof = _read_npz(profile_path, "profile")
-        if prof is not None and prof[1].shape[1] == vectors.shape[1]:
-            has, pvecs = _place(*prof)
-            vectors[has] = pvecs[has]
-    return GeminiIndex(vectors=vectors, present=present)
+    index = GeminiIndex(vectors=vectors, present=present)
+    prof = _read_npz(profile_path, "profile")
+    if prof is not None and prof[1].shape[1] == vectors.shape[1]:
+        has, pvecs = _place(*prof)
+        rows = np.flatnonzero(has)
+        pos = np.full(len(has), -1, dtype=np.int64)
+        pos[rows] = np.arange(len(rows))
+        index.profile_vectors, index.profile_pos = pvecs[rows], pos
+    return index
 
 
 _index: GeminiIndex | None = load_index()
@@ -376,7 +381,13 @@ def natural_search(
     embedding = None
     if intent.search_text:
         query_vec = _get_query_vector(client, intent.search_text, index.vectors.shape[1])
-        raw = (index.vectors @ query_vec)[cand_idx]
+        raw = index.vectors[cand_idx] @ query_vec
+        if index.profile_vectors is not None and PROFILE_VECTOR_WEIGHT > 0:
+            pos = index.profile_pos[cand_idx]
+            has = pos >= 0
+            if has.any():
+                prof_cos = index.profile_vectors[pos[has]] @ query_vec
+                raw[has] = (1 - PROFILE_VECTOR_WEIGHT) * raw[has] + PROFILE_VECTOR_WEIGHT * prof_cos
         low, high = np.median(raw), raw.max()
         embedding = np.clip((raw - low) / max(high - low, 1e-6), 0.0, 1.0)
 

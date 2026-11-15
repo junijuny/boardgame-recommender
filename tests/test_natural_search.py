@@ -430,35 +430,44 @@ class ProfileSearchTest(unittest.TestCase):
         np.savez(path, ids=np.asarray(ids), vectors=vectors.astype(np.float16),
                  model_name=gemini.EMBED_MODEL, dim=np.int32(vectors.shape[1]), doc_version=np.int32(1))
 
-    def test_profile_vector_preferred(self):
+    def test_profile_vector_weight(self):
         n, dim = len(eng.df), gemini.EMBED_DIM
         rng = np.random.default_rng(1)
         base = rng.normal(size=(n, dim)).astype(np.float32)
-        base[:, 0] = 0.0
+        base[:, :2] = 0.0
         base /= np.linalg.norm(base, axis=1, keepdims=True)
-        target = idx_of("Catan")
+        target, other = idx_of("Catan"), idx_of("Pandemic")
+        # other: old vector matches the query best; target: only its profile vector matches
+        base[other] = 0.0
+        base[other, 0] = 1.0
         pv = np.zeros((1, dim), dtype=np.float32)
-        pv[0, 0] = 1.0
+        pv[0, 1] = 1.0
+        query = np.zeros(dim, dtype=np.float32)
+        query[0] = 1.0
         ids = eng.df["BGGId"].to_numpy()
         with tempfile.TemporaryDirectory() as d:
             base_path, prof_path = Path(d) / "g.npz", Path(d) / "p.npz"
             self.write_npz(base_path, ids, base)
             self.write_npz(prof_path, ids[[target]], pv)
-            with mock.patch.object(ns, "USE_PROFILE_VECTORS", True):
-                with_profile = ns.load_index(base_path, prof_path)
-                without = ns.load_index(base_path, Path(d) / "missing.npz")
-            self.assertTrue(np.allclose(with_profile.vectors[target], pv[0]))
-            self.assertTrue(np.allclose(without.vectors[target], base[target], atol=1e-3))
-            self.assertTrue(np.array_equal(with_profile.present, without.present))
-            off = ns.load_index(base_path, prof_path)  # default: USE_PROFILE_VECTORS is False
-            self.assertFalse(ns.USE_PROFILE_VECTORS)
-            self.assertTrue(np.allclose(off.vectors[target], base[target], atol=1e-3))
-            self.fake.query_vector = pv[0].copy()
-            ns.set_index(with_profile)
-            self.assertEqual(natural_search("q", 4, 120)[0]["Name"], "Catan")
+            index = ns.load_index(base_path, prof_path)
+            missing = ns.load_index(base_path, Path(d) / "missing.npz")
+        self.assertIsNone(missing.profile_vectors)
+        self.assertEqual(int((index.profile_pos >= 0).sum()), 1)
+        self.assertTrue(np.allclose(index.vectors[target], base[target], atol=1e-3))  # old vector kept
+
+        def top(weight, q, idx=index):
             ns.clear_caches()
-            ns.set_index(without)
-            self.assertNotEqual(natural_search("q", 4, 120)[0]["Name"], "Catan")
+            self.fake.query_vector = q
+            ns.set_index(idx)
+            with mock.patch.object(ns, "PROFILE_VECTOR_WEIGHT", weight):
+                return natural_search("q", 4, 120)[0]["Name"]
+
+        self.assertEqual(top(0.0, query), "Pandemic")  # w=0: old behavior
+        q_prof = np.zeros(dim, dtype=np.float32)
+        q_prof[1] = 1.0
+        self.assertEqual(top(1.0, q_prof), "Catan")  # w=1: profile vector wins
+        self.assertNotEqual(top(0.0, q_prof), "Catan")
+        self.assertNotEqual(top(1.0, q_prof, missing), "Catan")  # no profile file: old behavior
 
     def pool_ids(self, n=2):
         mask = eng._condition_mask(4, 120, ns.MIN_RATING).to_numpy() & (

@@ -177,7 +177,7 @@ uv run python -m unittest discover -s tests -v
   # 프로필 임베딩 (약 1분, 약 400원)
   uv run --env-file .env python -m backend.build_profile_embeddings
   ```
-  `natural_search.USE_PROFILE_VECTORS`로 프로필 임베딩 사용 여부를 정한다 (평가 결과 `stage3.json` 대 `stage3_profilevec.json` 참고). franchise·제작자·국가는 키워드 일치와 시리즈 묶기에 쓰인다.
+  `natural_search.PROFILE_VECTOR_WEIGHT`(0~1)로 프로필 임베딩 반영 비율을 정한다 (평가: `stage3_blend0/30/50.json`, `stage3_profilevec.json`). franchise·제작자·국가는 키워드 일치와 시리즈 묶기에 쓰인다.
 - 임베딩·협업 필터링 재생성과 성능 평가 방법은 [recommendation_pipeline.md](recommendation_pipeline.md)를 참고하세요.
 - API 명세와 오류 응답은 [backend_api.md](backend_api.md)를 참고하세요.
 
