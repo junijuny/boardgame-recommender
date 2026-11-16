@@ -138,6 +138,19 @@ class NaturalSearchTest(unittest.TestCase):
         self.assertEqual(sum(c[0] == "extract_intent" for c in self.fake.calls), 1)
         self.assertEqual(sum(c[0] == "embed_query" for c in self.fake.calls), 1)
 
+    def test_exclude_ids_also_excludes_same_name_rows(self):
+        pop = eng.df[eng.df["NumUserRatings"] >= ns.MIN_REVIEWS]
+        norm = pop["Name"].str.strip().str.lower()
+        dups = pop[norm.duplicated(keep=False)]
+        dup_name = norm.loc[dups.index[0]]
+        pair = pop[norm == dup_name]
+        first_id = int(pair.iloc[0]["BGGId"])
+        sibling_ids = {int(i) for i in pair["BGGId"]}
+        keep_ids = {int(i) for i in pop["BGGId"] if int(i) not in sibling_ids}
+        # 다른 모든 게임을 빼고 동명이인 쌍 중 하나만 exclude_ids에 넣으면 나머지 같은 이름도 제외돼야 한다
+        games = natural_search("co-op", 4, 180, exclude_ids=[first_id, *keep_ids])
+        self.assertFalse(sibling_ids & {g["BGGId"] for g in games})
+
     def test_charge_only_on_cache_miss(self):
         from unittest import mock
         with mock.patch.object(gemini, "charge") as charge:
@@ -246,8 +259,9 @@ class AudienceSignalTest(unittest.TestCase):
         mask &= eng.df["NumUserRatings"].to_numpy() >= ns.MIN_REVIEWS
         has_word = eng.df["Description"].str.contains(r"\bzombies\b", case=False, regex=True).to_numpy()
         fits = np.array([players in g for g in eng.df["GoodPlayers"]])
-        a = int(np.flatnonzero(mask & has_word & fits)[0])
-        b = int(np.flatnonzero(mask & ~has_word & fits)[0])
+        unique_name = ~eng._names_lower.duplicated(keep=False).to_numpy()
+        a = int(np.flatnonzero(mask & has_word & fits & unique_name)[0])
+        b = int(np.flatnonzero(mask & ~has_word & fits & unique_name)[0])
         keep = {int(eng.df.at[a, "BGGId"]), int(eng.df.at[b, "BGGId"])}
         exclude = [int(i) for i in eng.df["BGGId"] if int(i) not in keep]
         ns.set_index(ns.GeminiIndex(vectors=np.tile(np.eye(1, 8, dtype=np.float32), (len(eng.df), 1)),

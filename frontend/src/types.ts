@@ -106,6 +106,15 @@ export interface NaturalSearchResponse {
   interpretation: string | null;
   weak_match: boolean;
   web: WebResult | null;
+  suggested_game?: GameSummary | null;
+  redirect_to_game?: boolean;
+}
+
+// "By description"에서 "By game" 탭으로 전환할 때 넘기는 조건
+export interface GameSwitchOptions {
+  players: number;
+  maxTime: number;
+  autoSearch: boolean;
 }
 
 // 추천 이유 요청 (POST /explain): "similar" = 기준 게임 이름, "query" = 검색 설명문

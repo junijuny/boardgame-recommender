@@ -60,10 +60,37 @@ class NaturalApiTest(unittest.TestCase):
     def test_search_returns_object(self):
         r = client.post("/search/natural", json=BODY)
         body = r.json()
-        self.assertEqual(set(body), {"games", "interpretation", "weak_match", "web"})
+        self.assertEqual(
+            set(body),
+            {"games", "interpretation", "weak_match", "web", "suggested_game", "redirect_to_game"},
+        )
         self.assertEqual(body["interpretation"], "Read as: fake.")
         self.assertIs(body["weak_match"], False)
         self.assertIsNone(body["web"])
+        self.assertIsNone(body["suggested_game"])
+        self.assertIs(body["redirect_to_game"], False)
+
+    def test_explicit_similar_query_redirects_without_gemini(self):
+        r = client.post(
+            "/search/natural", json={"query": "games like Catan", "players": 4, "max_time": 60}
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertTrue(body["redirect_to_game"])
+        self.assertEqual(body["suggested_game"]["Name"], "Catan")
+        self.assertEqual(body["games"], [])
+        self.assertEqual(self.fake.calls, [])
+
+    def test_exact_game_name_suggests_switch_without_redirect(self):
+        r = client.post(
+            "/search/natural", json={"query": "Catan", "players": 4, "max_time": 60}
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertFalse(body["redirect_to_game"])
+        self.assertEqual(body["suggested_game"]["Name"], "Catan")
+        self.assertEqual(len(body["games"]), 5)
+        self.assertTrue(self.fake.calls)
 
     def test_rerank_failure_still_200(self):
         self.fake.rerank_error = GeminiError("boom")

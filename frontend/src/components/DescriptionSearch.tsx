@@ -19,13 +19,14 @@ import { PLAYER_OPTIONS, TIME_OPTIONS } from "../filters";
 import { formatMinutes } from "../format";
 import { useExplanations, useIsSlow, useNaturalSearch, useServerInfo } from "../queries";
 import { focusRing, noticeBox, primaryButton } from "../styles";
-import type { NaturalSearchRequest } from "../types";
+import type { GameSummary, GameSwitchOptions, NaturalSearchRequest } from "../types";
 
 interface DescriptionSearchProps {
   onShowDetail: (bggId: number) => void;
+  onSwitchToGame?: (game: GameSummary, options: GameSwitchOptions) => void;
 }
 
-export default function DescriptionSearch({ onShowDetail }: DescriptionSearchProps) {
+export default function DescriptionSearch({ onShowDetail, onSwitchToGame }: DescriptionSearchProps) {
   const [query, setQuery] = useState("");
   const [players, setPlayers] = useState(4);
   const [maxTime, setMaxTime] = useState(60);
@@ -39,7 +40,7 @@ export default function DescriptionSearch({ onShowDetail }: DescriptionSearchPro
   const explanationsOn = useServerInfo().data?.explanations === true;
   const results = search.data?.games;
   const explanations = useExplanations(
-    explanationsOn && results && search.variables
+    explanationsOn && results && results.length > 0 && search.variables
       ? { mode: "query", basis: search.variables.query, game_ids: results.map((g) => g.BGGId),
           weak_match: search.data?.weak_match,
           from_web: search.data?.web != null }
@@ -57,7 +58,19 @@ export default function DescriptionSearch({ onShowDetail }: DescriptionSearchPro
     const body = request ?? { query: query.trim(), players, max_time: maxTime, exclude_ids: exclude };
     if (!body.query || loading) return;
     search.mutate(body, {
-      onSuccess: ({ games }) => setShownIds([...exclude, ...games.map((g) => g.BGGId)]),
+      onSuccess: (data) => {
+        if (data.redirect_to_game && data.suggested_game && onSwitchToGame) {
+          search.reset();
+          setShownIds([]);
+          onSwitchToGame(data.suggested_game, {
+            players: body.players,
+            maxTime: body.max_time,
+            autoSearch: true,
+          });
+          return;
+        }
+        setShownIds([...exclude, ...data.games.map((g) => g.BGGId)]);
+      },
     });
   }
 
@@ -171,6 +184,29 @@ export default function DescriptionSearch({ onShowDetail }: DescriptionSearchPro
           </p>
         )}
         {search.isSuccess && search.data.web && <WebResultBox web={search.data.web} />}
+        {search.isSuccess && !search.data.redirect_to_game && search.data.suggested_game && onSwitchToGame && (
+          <div className={clsx(noticeBox, "flex flex-wrap items-center justify-between gap-3")}>
+            <p>
+              Looking for games similar to <strong>{search.data.suggested_game.Name}</strong>?
+            </p>
+            <button
+              type="button"
+              onClick={() =>
+                onSwitchToGame(search.data.suggested_game!, {
+                  players: search.variables?.players ?? players,
+                  maxTime: search.variables?.max_time ?? maxTime,
+                  autoSearch: true,
+                })
+              }
+              className={clsx(
+                "min-h-10 rounded-lg border-[1.5px] border-primary bg-card px-3.5 text-sm font-bold text-primary transition-colors hover:bg-line",
+                focusRing,
+              )}
+            >
+              Switch to By game
+            </button>
+          </div>
+        )}
         {search.isSuccess && (
           <ResultList
             items={search.data.games.map((g) => ({ game: g, chips: [...g.MatchedMechanics, ...g.MatchedThemes].slice(0, 3) }))}

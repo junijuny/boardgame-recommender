@@ -8,7 +8,7 @@
 //   onShowDetail : 게임을 눌렀을 때 상세 팝업을 열어 달라고 부탁하는 함수 (팝업은 화면이 하나만 둔다)
 // ---------------------------------------------------------------------
 import clsx from "clsx";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RefreshCw, Search } from "lucide-react";
 import GameSearch from "./GameSearch";
 import { ResultList, ResultSkeleton } from "./ResultList";
@@ -24,14 +24,23 @@ import type { GameSummary, RecommendRequest } from "../types";
 
 interface SimilarSearchProps {
   initialGame: GameSummary | null;
+  initialPlayers?: number;
+  initialMaxTime?: number;
+  autoRecommend?: boolean;
   onShowDetail: (bggId: number) => void;
 }
 
-export default function SimilarSearch({ initialGame, onShowDetail }: SimilarSearchProps) {
+export default function SimilarSearch({
+  initialGame,
+  initialPlayers,
+  initialMaxTime,
+  autoRecommend = false,
+  onShowDetail,
+}: SimilarSearchProps) {
   // 검색 결과에서 선택한 게임 (선택 안 했으면 null)
   const [game, setGame] = useState<GameSummary | null>(initialGame);
-  const [players, setPlayers] = useState(4);
-  const [maxTime, setMaxTime] = useState(60);
+  const [players, setPlayers] = useState(initialPlayers ?? 4);
+  const [maxTime, setMaxTime] = useState(initialMaxTime ?? 60);
 
   // 추천 요청 (isPending: 요청 중, data: 결과, error: 실패, variables: 보낸 조건)
   const recommendation = useRecommend();
@@ -63,6 +72,17 @@ export default function SimilarSearch({ initialGame, onShowDetail }: SimilarSear
       { onSuccess: (games) => setShownIds([...exclude, ...games.map((g) => g.BGGId)]) },
     );
   }
+
+  // "By description"에서 게임 전환으로 넘어온 경우 바로 추천을 실행한다
+  const autoRan = useRef(false);
+  useEffect(() => {
+    if (!autoRecommend || !initialGame || autoRan.current) return;
+    autoRan.current = true;
+    recommendation.mutate(
+      { game_name: initialGame.Name, players, max_time: maxTime, exclude_ids: [] },
+      { onSuccess: (games) => setShownIds(games.map((g) => g.BGGId)) },
+    );
+  }, [autoRecommend, initialGame, players, maxTime, recommendation]);
 
   // "Get recommendations": 처음부터 다시
   function handleRecommend() {

@@ -374,7 +374,7 @@ def natural_search(
     mask = eng._condition_mask(players, max_time, MIN_RATING).to_numpy() & index.present
     mask &= df["NumUserRatings"].to_numpy() >= MIN_REVIEWS
     if exclude_ids:
-        mask &= ~df["BGGId"].isin(exclude_ids).to_numpy()
+        mask &= eng.exclude_mask(exclude_ids).to_numpy()
     weight = df["GameWeight"].to_numpy(dtype=float)
     known = weight > 0
     if intent.weight_min is not None:
