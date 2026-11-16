@@ -19,6 +19,9 @@ try:
         semantic_search_available,
     )
     from backend.recommend_engine import (
+        detect_game as engine_detect_game,
+    )
+    from backend.recommend_engine import (
         filter_games as engine_filter_games,
     )
     from backend.recommend_engine import (
@@ -41,6 +44,9 @@ except ImportError:
         df,
         mechanics,
         semantic_search_available,
+    )
+    from recommend_engine import (
+        detect_game as engine_detect_game,
     )
     from recommend_engine import (
         filter_games as engine_filter_games,
@@ -284,6 +290,23 @@ def search_natural(body: NaturalSearchRequest, request: Request):
             detail="Too many requests"
         )
 
+    detected = engine_detect_game(query)
+    if detected is not None:
+        suggested_game, redirect_to_game = detected
+    else:
+        suggested_game, redirect_to_game = None, False
+
+    # "games like Catan" 등 명시적 유사 게임 패턴이면 Gemini 호출 없이 By game 전환을 안내
+    if redirect_to_game and not body.exclude_ids:
+        return {
+            "games": [],
+            "interpretation": None,
+            "weak_match": False,
+            "web": None,
+            "suggested_game": suggested_game,
+            "redirect_to_game": True,
+        }
+
     try:
         result = natural_search(
             query,
@@ -309,6 +332,8 @@ def search_natural(body: NaturalSearchRequest, request: Request):
         "interpretation": result.interpretation,
         "weak_match": result.weak_match,
         "web": result.web,
+        "suggested_game": suggested_game,
+        "redirect_to_game": False,
     }
 
 

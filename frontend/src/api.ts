@@ -67,7 +67,14 @@ export async function naturalSearch({ query, players, max_time, exclude_ids }: N
   });
   // 배포 중(프런트가 먼저 나가는 동안) 옛 서버는 배열을 돌려준다: 한 번의 배포 동안만 받아 준다
   if (Array.isArray(res.data)) {
-    return { games: res.data, interpretation: null, weak_match: false, web: null } satisfies NaturalSearchResponse;
+    return {
+      games: res.data,
+      interpretation: null,
+      weak_match: false,
+      web: null,
+      suggested_game: null,
+      redirect_to_game: false,
+    } satisfies NaturalSearchResponse;
   }
   return res.data;
 }

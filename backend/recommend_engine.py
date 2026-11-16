@@ -14,6 +14,8 @@ backend/recommend_engine.py
 4. 다양성 재정렬(MMR): 서로 너무 비슷한 게임이 Top N을 채우지 않게 함
 """
 
+import re
+from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
@@ -275,10 +277,74 @@ def search_games(query: str, limit: int = 10) -> list[dict[str, Any]]:
     )
 
 
+_SIMILAR_GAME_PATTERNS = (
+    re.compile(r"^(?:games?|board\s*games?)\s+(?:like|similar\s+to)\s+(.+?)[.!?]?$", re.IGNORECASE),
+    re.compile(r"^(?:something|anything)\s+similar\s+to\s+(.+?)[.!?]?$", re.IGNORECASE),
+)
+
+
+def _game_summary(row: pd.Series) -> dict[str, Any]:
+    """GameSummary 형식의 요약 딕셔너리 생성"""
+    year = row["YearPublished"]
+    image = row["ImagePath"]
+    return {
+        "BGGId": int(row["BGGId"]),
+        "Name": str(row["Name"]),
+        "YearPublished": int(year) if pd.notna(year) else 0,
+        "ImagePath": "" if pd.isna(image) else str(image),
+    }
+
+
+def _find_summary_by_name(name_lower: str) -> dict[str, Any] | None:
+    """정규화된 게임 이름과 일치하는 대표 게임 요약(리뷰 수 최다 판본) 반환"""
+    matches = df[_names_lower == name_lower]
+    if matches.empty:
+        return None
+    best = matches.sort_values("NumUserRatings", ascending=False).iloc[0]
+    return _game_summary(best)
+
+
+def detect_game(query: str) -> tuple[dict[str, Any], bool] | None:
+    """검색어에서 게임 이름을 감지해 (요약 정보, 명시적 유사 패턴 여부) 반환.
+
+    - 'games like Catan' 등 명시적 유사 패턴이면 (summary, True)
+    - 게임 이름이 정확히 일치하면 (summary, False)
+    """
+    text = query.strip()
+    if not text:
+        return None
+
+    for pattern in _SIMILAR_GAME_PATTERNS:
+        match = pattern.match(text)
+        if not match:
+            continue
+        candidate = match.group(1).strip().lower()
+        if candidate:
+            summary = _find_summary_by_name(candidate)
+            if summary is not None:
+                return summary, True
+
+    summary = _find_summary_by_name(text.lower())
+    if summary is not None:
+        return summary, False
+
+    return None
+
+
+def exclude_mask(exclude_ids: Sequence[int] | None) -> pd.Series:
+    """exclude_ids에 포함된 게임과 이름이 같은 중복 행까지 제외하는 마스크"""
+    if not exclude_ids:
+        return pd.Series(True, index=df.index)
+    by_id = df["BGGId"].isin(exclude_ids)
+    excluded_names = set(_names_lower[by_id].dropna())
+    return ~(by_id | _names_lower.isin(excluded_names))
+
+
 def _condition_mask(players: int, max_time: int, min_rating: float) -> pd.Series:
     return (
         (df["MinPlayers"] <= players)
         & (df["MaxPlayers"] >= players)
+        & (df["ComMaxPlaytime"] > 0)
         & (df["ComMaxPlaytime"] <= max_time)
         & (df["BayesAvgRating"] >= min_rating)
     )
@@ -324,9 +390,9 @@ def recommend_games(
 
     mask = _condition_mask(players, max_time, min_rating) & (df.index != target_idx)
 
-    # 이전에 추천했던 게임은 다음 추천 후보에서 제외
+    # 이전에 추천했던 게임(및 같은 이름의 중복 행)은 다음 추천 후보에서 제외
     if exclude_ids:
-        mask = mask & ~df["BGGId"].isin(exclude_ids)
+        mask = mask & exclude_mask(exclude_ids)
 
     cand_idx = np.flatnonzero(mask.to_numpy())
     if len(cand_idx) == 0:

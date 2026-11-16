@@ -18,7 +18,7 @@ import GameDetailModal from "../components/GameDetailModal";
 import SimilarSearch from "../components/SimilarSearch";
 import { useServerInfo } from "../queries";
 import { container, focusRing, pageTitle } from "../styles";
-import type { GameDetail, GameSummary } from "../types";
+import type { GameDetail, GameSummary, GameSwitchOptions } from "../types";
 
 interface RecommendScreenProps {
   initialGame: GameSummary | null;
@@ -36,8 +36,18 @@ export default function RecommendScreen({ initialGame, onRecommendSimilar }: Rec
   // 상세 팝업으로 보고 있는 게임 ID (닫혀 있으면 null)
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [tab, setTab] = useState<TabKey>("game");
+  const [similarPreset, setSimilarPreset] = useState<{
+    key: number;
+    game: GameSummary;
+    options: GameSwitchOptions;
+  } | null>(null);
   const tabRefs = useRef<Record<TabKey, HTMLButtonElement | null>>({ game: null, description: null });
   const naturalOn = useServerInfo().data?.natural_search === true;
+
+  function handleSwitchToGame(game: GameSummary, options: GameSwitchOptions) {
+    setSimilarPreset((prev) => ({ key: (prev?.key ?? 0) + 1, game, options }));
+    setTab("game");
+  }
 
   // 화살표·Home·End 키로 탭 옮기기 (옮기면 바로 그 탭이 선택된다)
   function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
@@ -95,11 +105,18 @@ export default function RecommendScreen({ initialGame, onRecommendSimilar }: Rec
         aria-labelledby={naturalOn ? "tab-game" : undefined}
         hidden={naturalOn && tab !== "game"}
       >
-        <SimilarSearch initialGame={initialGame} onShowDetail={setSelectedId} />
+        <SimilarSearch
+          key={similarPreset?.key ?? 0}
+          initialGame={similarPreset?.game ?? initialGame}
+          initialPlayers={similarPreset?.options.players}
+          initialMaxTime={similarPreset?.options.maxTime}
+          autoRecommend={similarPreset?.options.autoSearch}
+          onShowDetail={setSelectedId}
+        />
       </div>
       {naturalOn && (
         <div role="tabpanel" id="panel-description" aria-labelledby="tab-description" hidden={tab !== "description"}>
-          <DescriptionSearch onShowDetail={setSelectedId} />
+          <DescriptionSearch onShowDetail={setSelectedId} onSwitchToGame={handleSwitchToGame} />
         </div>
       )}
 

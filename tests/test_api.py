@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from backend.genres import genre_games, genre_mask
 from backend.main import app
-from backend.recommend_engine import df, mechanics
+from backend.recommend_engine import _condition_mask, detect_game, df, exclude_mask, mechanics
 
 GENRE_KEYS = ["strategy", "family", "party", "thematic", "war", "childrens", "cgs", "deduction"]
 
@@ -507,6 +507,43 @@ class APITests(unittest.TestCase):
         self.assertEqual(names[0], "pandemic")
         starts = [name.startswith("pandemic") for name in names]
         self.assertEqual(starts, sorted(starts, reverse=True))
+
+    def test_condition_mask_excludes_missing_playtime(self):
+        missing = df["ComMaxPlaytime"] <= 0
+        self.assertTrue(missing.any())
+        self.assertFalse((_condition_mask(4, 90, 5.5) & missing).any())
+
+    def test_detect_game_patterns_and_exact_match(self):
+        like_catan = detect_game("Games like Catan!")
+        self.assertIsNotNone(like_catan)
+        self.assertEqual(like_catan[0]["Name"], "Catan")
+        self.assertTrue(like_catan[1])
+
+        similar = detect_game("something similar to wingspan?")
+        self.assertIsNotNone(similar)
+        self.assertEqual(similar[0]["Name"], "Wingspan")
+        self.assertTrue(similar[1])
+
+        exact = detect_game("  catan ")
+        self.assertIsNotNone(exact)
+        self.assertEqual(exact[0]["Name"], "Catan")
+        self.assertFalse(exact[1])
+
+        reprint = detect_game("games like Puerto Rico")
+        self.assertIsNotNone(reprint)
+        self.assertEqual(reprint[0]["BGGId"], 3076)
+        self.assertTrue(reprint[1])
+
+        self.assertIsNone(detect_game("a cooperative game with no dice"))
+
+    def test_exclude_mask_excludes_same_name_duplicates(self):
+        norm = df["Name"].str.strip().str.lower()
+        dups = df[norm.duplicated(keep=False)]
+        first_name = norm.loc[dups.index[0]]
+        same_name_rows = df[norm == first_name]
+        first_id = int(same_name_rows.iloc[0]["BGGId"])
+        kept = exclude_mask([first_id])
+        self.assertFalse(kept.loc[same_name_rows.index].any())
 
 if __name__ == "__main__":
     unittest.main()
