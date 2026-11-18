@@ -1,4 +1,6 @@
-# 백엔드 API 실행·연동·검증 가이드
+# 🔌 백엔드 API 실행·연동·검증 가이드
+
+[🏠 메인 README로 이동](../README.md) • [🧠 추천 파이프라인](recommendation_pipeline.md) • [🔎 자연어 검색](natural_search.md)
 
 모든 명령어는 `pyproject.toml`이 있는 프로젝트 최상위 폴더에서 실행
 (실제 `data/clean_games.csv`와 `backend/recommend_engine.py`를 사용)
@@ -15,7 +17,7 @@ uv run --locked uvicorn backend.main:app --reload --port 8000
 - 서버 종료: 실행한 터미널에서 `Ctrl+C`
 - `.python-version`에 지정된 Python 3.12와 `uv.lock`의 패키지 버전을 사용함
 - `data/embeddings.npz`가 있으면 시작 시 TF-IDF 계산을 건너뛰며, 임베딩이 없을 때만 첫 요청 시 TF-IDF 캐시를 생성함
-- 추천 알고리즘과 선택 기능(임베딩, 협업 필터링, 평가) 준비 방법은 [recommendation_pipeline.md](recommendation_pipeline.md) 참고
+- 추천 알고리즘과 선택 기능(임베딩, 협업 필터링, 평가) 준비 방법은 [recommendation_pipeline.md](recommendation_pipeline.md), Gemini 자연어 검색은 [natural_search.md](natural_search.md) 참고
 
 ## 2. 요청과 응답
 
@@ -23,10 +25,10 @@ uv run --locked uvicorn backend.main:app --reload --port 8000
 | --- | --- | --- |
 | `GET /` | 없음 | 서버 이름, `total_games`, 사용 중인 추천 신호 `signals`, `GET /games/semantic-search` 사용 가능 여부 `semantic_search`, Gemini 자연어 검색 가능 여부 `natural_search`, 설명 문장 가능 여부 `explanations` (모두 bool) |
 | `GET /games/search` | 쿼리 `query` | 최대 10개 게임 목록. 이름이 정확히 같은 게임 → 검색어로 시작하는 게임 → 포함하는 게임 순, 같은 순위는 리뷰 수 순 |
-| `GET /games/filter` | 쿼리 `players`, `max_time` | 조건을 만족하는 최대 10개 게임, 평점 내림차순 |
+| `GET /games/filter` | 쿼리 `players`, `max_time` | 조건을 만족하는 최대 10개 게임, 평점 내림차순 (플레이 시간이 0으로 기록된 게임 제외) |
 | `POST /recommend` | JSON `game_name`, `players`, `max_time`, 선택 `exclude_ids` | 조건을 만족하는 최대 5개 추천 게임 |
 | `GET /games/semantic-search` | 쿼리 `query`, 선택 `players`, `max_time` | 자연어(한국어 가능) 설명에 맞는 최대 10개 게임. 임베딩 미준비 시 `503` |
-| `POST /search/natural` | JSON `query`, `players`, `max_time`, 선택 `exclude_ids` | 검색어(한국어·영어)의 장르적 특성에 맞는 최대 5개 게임(리뷰 1,000개 이상, 평점 5.5 이상 중에서). 항목은 게임 필드와 `Similarity`, `Score`, `MatchedMechanics`, `MatchedThemes`, `SortedBy`. "가장 유명한/평점 높은/최신" 같은 순위 질의는 리뷰 수·평점·출시 연도 순. 키·임베딩이 없으면 `503` |
+| `POST /search/natural` | JSON `query`, `players`, `max_time`, 선택 `exclude_ids` | 검색어(한국어·영어)의 장르적 특성에 맞는 최대 5개 게임(리뷰 1,000개 이상, 평점 5.5 이상 중에서). 항목은 게임 필드와 `Similarity`, `Score`, `MatchedMechanics`, `MatchedThemes`, `SortedBy`. "가장 유명한/평점 높은/최신" 같은 순위 질의는 리뷰 수·평점·출시 연도 순. "games like Catan"처럼 쓰면 검색 없이 By game 전환 안내(`redirect_to_game`). 키·임베딩이 없으면 `503` |
 | `POST /explain` | JSON `mode`(`similar` 또는 `query`), `basis`, `game_ids`, 선택 `weak_match`(기본 `false`), 선택 `from_web`(기본 `false`; 검색 응답의 `web`이 null이 아니면 `true`로 보낸다. 웹 근거 검색으로 고른 게임이므로 설명 캐시를 읽지도 쓰지도 않는다) | `{"reasons": {"<BGGId>": "영어 한 문장"}}`. 키가 없으면 `503` |
 | `GET /games/{bgg_id}` | 경로의 게임 ID(`BGGId`) | 게임 한 개의 상세 정보(설명, 난이도, 인원, 시간, 평점) |
 | `GET /genres` | 없음 | 장르 8개와 장르별 대표 게임 최대 6개 |
@@ -60,7 +62,7 @@ curl -X POST 'http://localhost:8000/recommend' \
 ```
 
 `players`와 `max_time`은 1 이상의 정수이고, 시간 단위는 분.
-`exclude_ids`(게임 ID 목록)를 보내면 그 게임들을 빼고 추천함. "다른 게임 5개 추천받기"에서 지금까지 보여준 게임 ID를 쌓아서 보내는 용도이며, 남은 후보가 없으면 `404`.
+`exclude_ids`(게임 ID 목록)를 보내면 그 게임들과, 이름이 같은 다른 판본까지 빼고 추천함. "Refresh"(다른 게임 5개)에서 지금까지 보여준 게임 ID를 쌓아서 보내는 용도이며, 남은 후보가 없으면 `404`.
 조건 필터를 통과한 게임을 하이브리드 유사도(메커니즘·테마·카테고리·텍스트·협업 필터링)와 평점을 합친 `Score`로 정렬한 뒤, 서로 너무 비슷한 게임이 몰리지 않게 다양성 재정렬하여 반환함. 기준 게임 자체는 제외하고, 같은 시리즈 변형판은 감점함. 자세한 내용은 [recommendation_pipeline.md](recommendation_pipeline.md).
 
 추천 결과의 각 항목에는 다음 필드가 있으며, 대문자로 시작하는 키 이름을 그대로 사용함.
@@ -87,8 +89,13 @@ curl -X POST 'http://localhost:8000/search/natural' \
 
 - Gemini(`gemini-3.5-flash-lite`)가 검색어를 조건(포함·제외 메커니즘/테마, 난이도 범위, 영어 검색 문장)으로 바꾸고, `gemini-embedding-2`(768차원)로 만든 `data/gemini_embeddings.npz`와 비교함. 인원·시간은 요청 값만 사용함
 - 응답은 추천과 같은 게임 필드에 `Similarity`, `Score`, `MatchedMechanics`, `MatchedThemes`(검색어에서 뽑은 태그 중 게임이 가진 것), `SortedBy`(`relevance`·`popularity`·`rating`·`newest` 중 결과를 고른 기준)를 더한 5개. 순위 질의일 때 `Score`는 순위 목록 전체에 걸쳐 고르게 줄어드는 값(`1.0 - i/목록 길이`, 1위 1.0). `exclude_ids`로 이미 본 게임을 빼고 다시 받을 수 있음
-- 응답 본문은 `{"games": [...], "interpretation": "Read as: ...", "weak_match": false, "web": null}`. `interpretation`은 검색어를 어떻게 이해했는지 한 문장(없으면 `null`), `weak_match`는 일치하는 게임이 3개 미만이라 가장 가까운 결과만 보여 준다는 뜻, `web`은 질문에 바깥 사실(수상 목록, 제작자 국적 등)이 필요할 때만 `{"summary": "...", "suggestions_html": "..."}`(Google 웹 검색 요약과 검색어 추천 위젯 HTML), 아니면 `null`. 웹 호출은 인스턴스당 하루 `WEB_SEARCH_DAILY_LIMIT`회(기본 100)이고 `NATURAL_WEB_SEARCH=0`이면 꺼짐
+- 응답 본문은 `{"games": [...], "interpretation": "Read as: ...", "weak_match": false, "web": null, "suggested_game": null, "redirect_to_game": false}`. `interpretation`은 검색어를 어떻게 이해했는지 한 문장(없으면 `null`), `weak_match`는 일치하는 게임이 3개 미만이라 가장 가까운 결과만 보여 준다는 뜻, `web`은 질문에 바깥 사실(수상 목록, 제작자 국적 등)이 필요할 때만 `{"summary": "...", "suggestions_html": "..."}`(Google 웹 검색 요약과 검색어 추천 위젯 HTML), 아니면 `null`. 웹 호출은 인스턴스당 하루 `WEB_SEARCH_DAILY_LIMIT`회(기본 100)이고 `NATURAL_WEB_SEARCH=0`이면 꺼짐
+- `suggested_game`은 검색어에서 게임 이름을 찾았을 때의 게임 요약(`BGGId`, `Name`, `YearPublished`, `ImagePath`), 아니면 `null`
+  - "games like Catan", "board games similar to Catan", "something similar to Catan" 같은 패턴이면 Gemini를 부르지 않고 `games: []`, `redirect_to_game: true`를 돌려줌. 화면은 By game 탭으로 넘어가 같은 인원·시간으로 추천함. `exclude_ids`가 있는 요청(Refresh)에는 적용하지 않음
+  - 검색어 전체가 게임 이름과 같으면(예: `"Catan"`) 검색은 그대로 하고 `suggested_game`만 채움 (`redirect_to_game: false`). 화면은 "Switch to By game" 버튼을 띄움
+- `exclude_ids`의 게임은 이름이 같은 다른 판본까지 제외함
 - 검색어는 300자 이하. IP당 60초에 10회까지
+- 파이프라인 단계별 설명은 [natural_search.md](natural_search.md)
 
 ### 설명 문장
 
@@ -201,10 +208,23 @@ uv run --locked python -m unittest discover -s tests -v
 uv run --locked ruff check backend/main.py tests/test_api.py
 ```
 
-테스트 메서드가 다음을 검증함. 여러 입력을 확인하는 하위 테스트도 포함.
+Gemini를 쓰는 테스트는 `tests/gemini_fake.py`의 가짜 클라이언트를 써서 키 없이, 실제 API 호출 없이 실행됨.
 
-- 실제 데이터 로딩, 검색(정확히 일치·접두어·포함 순 정렬), 조건 필터, 추천 순위와 기준 게임 제외
-- `exclude_ids`를 이용한 중복 없는 재추천("다른 게임 5개 추천받기") 및 남은 후보 없음 처리
+| 테스트 파일 | 대상 |
+| --- | --- |
+| `test_api.py` | 검색·필터·추천·상세·장르 API, 오류 응답, CORS, 게임 이름 감지, 같은 이름 판본 제외 |
+| `test_natural_api.py`, `test_natural_search.py` | `POST /search/natural`과 자연어 검색 파이프라인 (필터, 점수, 순위 질의, 시리즈 묶기, 웹 검색, 재순위) |
+| `test_explain.py` | `POST /explain` 이유 문장 생성·검증·캐시 |
+| `test_gemini.py`, `test_rerank.py`, `test_web_search.py` | Gemini 응답 처리, 재순위 결과 검증, 웹 검색 결과 이름 맞추기 |
+| `test_game_profiles.py`, `test_profiles.py`, `test_series.py` | 게임 프로필 생성·읽기, 시리즈 키 |
+| `test_limits.py` | IP별 요청 제한, 일일 호출 예산 |
+| `test_evaluate_natural.py`, `test_semantic_documents.py` | 자연어 검색 평가 지표, e5 임베딩 문서 구성 |
+
+`test_api.py`의 테스트 메서드가 다음을 검증함. 여러 입력을 확인하는 하위 테스트도 포함.
+
+- 실제 데이터 로딩, 검색(정확히 일치·접두어·포함 순 정렬), 조건 필터(플레이 시간 0인 게임 제외), 추천 순위와 기준 게임 제외
+- `exclude_ids`를 이용한 중복 없는 재추천(Refresh), 같은 이름 판본 제외, 남은 후보 없음 처리
+- "games like Catan" 패턴과 정확한 이름 일치의 게임 이름 감지
 - 빈 입력, 누락된 필드, 잘못된 자료형, 존재하지 않는 게임, 후보 없음
 - 추천 요청의 POST 사용
 - 두 개발 화면 출처의 사전 확인 요청과 정상·오류 응답의 CORS 헤더

@@ -1,6 +1,6 @@
 # 🚀 배포 가이드 (Deploy Guide)
 
-[🏠 메인 README로 이동](../README.md) • [⚙️ 개발 환경 세팅 가이드](setup.md)
+[🏠 메인 README로 이동](../README.md) • [⚙️ 개발 환경 세팅 가이드](setup.md) • [🔎 자연어 검색](natural_search.md)
 
 프론트엔드는 Vercel, 백엔드는 Google Cloud Run(서울 리전 `asia-northeast3`)에 배포합니다. `main` 브랜치에 push하면 두 서비스 모두 자동으로 다시 배포됩니다.
 
@@ -12,13 +12,15 @@
 ```mermaid
 flowchart LR
     U["사용자 브라우저"] --> F["Vercel<br/>(React 정적 파일)"]
-    U -- "API 요청 (VITE_API_URL)" --> B["Google Cloud Run · 서울<br/>(FastAPI + 데이터)"]
+    U -- "API 요청 (VITE_BASE_URL)" --> B["Google Cloud Run · 서울<br/>(FastAPI + 데이터)"]
+    B -- "자연어 검색·추천 이유" --> G["Google Gemini API"]
 ```
 
 > [!NOTE]
 > - 서버 메모리 사용량은 약 250MB(CSV 로드 피크 여유분 포함 `1Gi` 설정)이며, `embeddings.npz`가 있으면 TF-IDF 캐시를 건너뛰어 기동 시간을 단축합니다.
-> - 의미 기반 검색(`sentence-transformers`)은 설치하지 않으므로 `/games/semantic-search` 만 꺼지고, 추천·검색·장르 화면은 모두 정상 동작합니다.
-> - 추천에 쓰는 `data/embeddings.npz`, `data/cf_factors.npz` 는 git에 포함되어 있습니다. 다시 만들었다면 함께 커밋해야 배포에 반영됩니다.
+> - 이전 방식의 e5 시맨틱 검색(`sentence-transformers`)은 설치하지 않으므로 `/games/semantic-search` 만 꺼지고, 화면의 모든 기능은 정상 동작합니다. 화면의 자연어 검색은 Gemini API를 씁니다.
+> - 추천·자연어 검색에 쓰는 `data/` 산출물(`embeddings.npz`, `cf_factors.npz`, `gemini_embeddings.npz`, `game_profiles.json`, `profile_embeddings.npz`)은 git에 포함되어 이미지에 그대로 들어갑니다. 다시 만들었다면 함께 커밋해야 배포에 반영됩니다.
+> - 이미지를 빌드할 때 TF-IDF 캐시를 미리 만들어 두어, 자연어 검색의 첫 질의가 TF-IDF를 새로 학습하지 않습니다.
 
 ---
 
@@ -53,7 +55,7 @@ flowchart LR
    - 근거 검색 결과와 검색어 추천을 **캐시·저장하지 않습니다**(서버 캐시, 평가 데이터, 브라우저 저장소 모두). 코드는 웹 결과가 쓰인 검색을 캐시하지 않고, `/explain`에 `from_web`을 보내 이유도 캐시하지 않습니다.
    - Google 검색어 추천은 **수정 없이** 결과와 함께 보여 주고, 결과는 요청한 사용자에게만 보여 줍니다.
    - Google은 근거 검색에 쓴 프롬프트와 결과를 30일간 보관합니다.
-9. `data/gemini_embeddings.npz`는 이미지에 포함되어 배포됩니다. 파일이 없으면 자연어 검색은 `503`입니다.
+9. `data/gemini_embeddings.npz`는 이미지에 포함되어 배포됩니다. 파일이 없으면 자연어 검색은 `503`입니다. 게임 프로필(`game_profiles.json`, `profile_embeddings.npz`)이 없으면 자연어 검색은 프로필 없이 설명글 임베딩만으로 동작합니다.
 
 ### 배포 실행 및 주소 확인
 1. `main` 브랜치에 push하거나 GitHub **Actions → Deploy Backend to Cloud Run → Run workflow** 를 실행합니다.
@@ -73,14 +75,14 @@ flowchart LR
    | Root Directory | `frontend` |
    | Framework Preset | Vite (자동 인식) |
 4. **Environment Variables** 에 백엔드 주소를 추가합니다.
-   - Key: `VITE_API_URL`
+   - Key: `VITE_BASE_URL` (예전 이름 `VITE_API_URL`도 인식하며, 둘 다 있으면 `VITE_BASE_URL`을 씀)
    - Value: 1번에서 확인한 Cloud Run 주소 (끝에 `/` 없이)
    - Type: **Config** (Secret 으로 저장하면 경고가 나오고, 나중에 Config 로 바꿀 수 없어 지우고 다시 만들어야 함)
 5. **Deploy** 를 누르면 `https://<프로젝트이름>.vercel.app` 주소가 생깁니다.
    대표 주소는 **Settings → Domains** 에서 확인합니다.
 
 > [!IMPORTANT]
-> `VITE_API_URL` 은 빌드할 때 코드에 들어갑니다. 값을 바꾸면 **Deployments → ⋯ → Redeploy** 해야 반영됩니다.
+> `VITE_BASE_URL` 은 빌드할 때 코드에 들어갑니다. 값을 바꾸면 **Deployments → ⋯ → Redeploy** 해야 반영됩니다.
 > 이 값은 브라우저에 공개되는 주소일 뿐이라 공개되어도 괜찮습니다. 토큰 같은 비밀값은 `VITE_` 변수에 넣지 않습니다.
 
 ---
@@ -88,7 +90,7 @@ flowchart LR
 ## 3. 서로 연결 확인
 
 - Vercel 주소가 바뀌면 [`.github/workflows/deploy-backend.yml`](../.github/workflows/deploy-backend.yml) 의 `ALLOWED_ORIGINS` 를 수정해 재배포합니다.
-- Cloud Run 주소가 바뀌면 Vercel의 `VITE_API_URL` 을 바꾸고 Redeploy 합니다.
+- Cloud Run 주소가 바뀌면 Vercel의 `VITE_BASE_URL` 을 바꾸고 Redeploy 합니다.
 
 PowerShell에서 CORS 설정을 확인하는 방법:
 
@@ -108,7 +110,7 @@ curl.exe -s -i -H "Origin: https://boardgame-recommender-nine.vercel.app" https:
 
 **Q. 화면에서 검색이 안 돼요.**
 - F12 → Console 에 `blocked by CORS policy` 가 있으면 `ALLOWED_ORIGINS` 가 Vercel 주소와 정확히 같은지 확인합니다.
-- F12 → Network 의 요청 주소가 `localhost:8000` 이면 Vercel의 `VITE_API_URL` 설정 후 Redeploy 합니다.
+- F12 → Network 의 요청 주소가 `localhost:8000` 이면 Vercel의 `VITE_BASE_URL` 설정 후 Redeploy 합니다.
 
 **Q. 로컬 개발에는 영향이 없나요?**
 - 없습니다. 환경변수를 지정하지 않으면 기존처럼 `http://localhost:8000` 과 `http://localhost:5173` 을 사용합니다.

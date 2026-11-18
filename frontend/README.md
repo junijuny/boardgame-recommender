@@ -39,7 +39,10 @@ npm run preview   # 빌드 결과 미리보기
 App.tsx
 ├── Header            모든 화면 위의 헤더: 로고(시작 화면으로) + 메뉴 2개
 ├── StartScreen       시작 화면: 제목, 버튼 2개, 위에서 아래로 흐르는 무작위 게임 사진 두 줄
-├── RecommendScreen   게임 검색 → 인원·시간 선택 → 추천 Top 5 (Refresh: 본 게임을 exclude_ids로 빼고 다른 5개)
+├── RecommendScreen   "Find games" 화면. 탭 두 개 (서버가 자연어 검색을 꺼 두면 By game만)
+│   ├── SimilarSearch      By game: 게임 검색 → 인원·시간 선택 → 추천 Top 5 (Refresh: 본 게임을 exclude_ids로 빼고 다른 5개)
+│   └── DescriptionSearch  By description: 원하는 게임을 문장으로 설명 → Top 5, 해석 한 줄·약한 일치·웹 결과 표시
+│                          ("games like Catan"이면 By game 탭으로 넘어가 바로 추천)
 ├── GenreScreen       8개 장르별 대표 게임 (Refresh: 본 게임을 exclude_ids로 빼고 같은 장르의 다른 게임)
 └── GameDetailModal   게임 상세 팝업 (어느 화면에서든 열림, "Find similar games"로 이동)
 ```
@@ -50,6 +53,12 @@ App.tsx
 | :--- | :--- |
 | `public/favicon.png` | 주사위 파비콘 이미지 (`index.html`에서 연결) |
 | `src/screens/` | 화면 단위 컴포넌트 |
+| `src/components/SimilarSearch.tsx` | "By game" 탭. 기준 게임·인원·시간으로 추천, Refresh |
+| `src/components/DescriptionSearch.tsx` | "By description" 탭. 자연어 검색, 해석·약한 일치 안내, "Switch to By game" 버튼 |
+| `src/components/ResultList.tsx` | 두 탭이 같이 쓰는 결과 목록과 로딩 뼈대. 이유 문장(없으면 메커니즘 칩) 표시 |
+| `src/components/SearchNotice.tsx` | "조건에 맞는 게임 없음" 안내 |
+| `src/components/WebResultBox.tsx` | 웹 검색 요약과 Google 검색어 추천 위젯 ("From the web", 샌드박스 iframe, 새 탭으로 열기) |
+| `src/components/ErrorBoundary.tsx` | 화면을 그리다 오류가 나도 빈 화면 대신 안내 문구 표시 |
 | `src/components/Header.tsx` | 헤더. 데이터가 있는 상태에서 다시 불러오는 동안 아래에 진행 막대 표시 |
 | `src/components/GameSearch.tsx` | 게임 이름 자동완성 검색 (입력이 멈추면 검색, 검색어가 바뀌면 이전 요청 취소) |
 | `src/components/SelectedGameCard.tsx` | 선택한 기준 게임 표시 |
@@ -60,11 +69,11 @@ App.tsx
 | `src/components/DiceBadge.tsx` | 주사위 로고 |
 | `src/components/DifficultyPips.tsx` | 난이도 5칸 표시 |
 | `src/api.ts` | axios로 백엔드에 요청하는 함수 모음. 시작 화면 사진용 `getRandomPhotos`(무작위 인원·시간으로 `/games/filter`를 불러 표지 사진 주소만 남김)도 여기 있음 |
-| `src/queries.ts` | TanStack Query 훅 모음. 화면 코드는 이 훅으로 서버 데이터를 불러옴 |
+| `src/queries.ts` | TanStack Query 훅 모음. 화면 코드는 이 훅으로 서버 데이터를 불러옴. 웹 검색 결과가 쓰인 응답은 캐시에 남기지 않음 |
 | `src/filters.ts` | 인원·시간으로 고를 수 있는 값 (추천 화면과 무작위 사진에서 같이 씀) |
 | `src/format.ts` | 플레이 시간·인원·점수 표시 등 글자 변환 |
 | `src/styles.ts` | 공통 버튼 스타일, 화면 폭 |
-| `src/types.ts` | 백엔드 응답 데이터의 타입 (검색 결과, 추천 결과, 상세 정보, 장르) |
+| `src/types.ts` | 백엔드 응답 데이터의 타입 (검색 결과, 추천 결과, 자연어 검색, 이유 문장, 상세 정보, 장르) |
 | `src/index.css` | Tailwind 불러오기, `@theme`의 색 이름(`page`, `card`, `line`, `primary` 등)과 움직임 |
 
 ### 로딩 상태 (TanStack Query)
@@ -78,4 +87,4 @@ App.tsx
 
 움직이는 효과(뼈대 반짝임, 사진 흐름, 주사위 흔들림, 진행 막대)는 운영체제의 "동작 줄이기" 설정을 켜면 멈춥니다.
 
-사용하는 API는 `GET /games/search`, `GET /games/filter`, `POST /recommend`, `GET /games/{bgg_id}`, `GET /genres`, `GET /genres/{key}/games`입니다. 요청·응답 형식은 [backend_api.md](../docs/backend_api.md)를 참고하세요.
+사용하는 API는 `GET /`(자연어 검색·이유 문장 사용 가능 여부), `GET /games/search`, `GET /games/filter`, `POST /recommend`, `POST /search/natural`, `POST /explain`, `GET /games/{bgg_id}`, `GET /genres`, `GET /genres/{key}/games`입니다. 요청·응답 형식은 [backend_api.md](../docs/backend_api.md)를 참고하세요.

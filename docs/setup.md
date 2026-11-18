@@ -14,7 +14,7 @@
 **보드게임 추천 시스템 팀 프로젝트를 원활하게 진행하기 위한 공통 개발 환경 구축 가이드입니다.**  
 팀원 4명 모두 동일한 환경을 구성하여 버전 차이로 인한 버그를 미연에 방지합니다.
 
-[🏠 메인 README로 이동](../README.md) • [📖 상세 프로젝트 계획서 보기](project_plan.md) • [🚀 배포 가이드](deploy.md)
+[🏠 메인 README로 이동](../README.md) • [📖 상세 프로젝트 계획서 보기](project_plan.md) • [🏗️ 시스템 구조](architecture.md) • [🚀 배포 가이드](deploy.md)
 
 </div>
 
@@ -125,7 +125,7 @@ VS Code 왼쪽 확장 탭(`Ctrl + Shift + X`)에서 아래 익스텐션을 설�
 ## 5. 백엔드 환경 설정 (FastAPI)
 
 추천 엔진을 웹 API로 서빙하기 위한 `FastAPI`, `Uvicorn`은 `pyproject.toml`에 포함되어 있어 `uv sync` 시 함께 설치됩니다.
-추천에 필요한 데이터(`data/clean_games.csv`, `mechanics.csv`, `themes.csv`, `embeddings.npz`, `cf_factors.npz`)도 저장소에 포함되어 있어 별도 준비 없이 바로 실행됩니다.
+추천·자연어 검색에 필요한 데이터(`data/clean_games.csv`, `mechanics.csv`, `themes.csv`, `embeddings.npz`, `cf_factors.npz`, `gemini_embeddings.npz`, `game_profiles.json`, `profile_embeddings.npz`)도 저장소에 포함되어 있어 별도 준비 없이 바로 실행됩니다.
 
 ### 5.1 백엔드 실행
 프로젝트 루트 또는 `backend` 디렉토리에서 Uvicorn 서버를 실행합니다:
@@ -149,54 +149,38 @@ uv run uvicorn main:app --reload --port 8000
 uv run python -m unittest discover -s tests -v
 ```
 
-### 5.3 선택 기능 (자연어 검색, 모델 재생성)
-- 자연어 검색(`/games/semantic-search`)은 `sentence-transformers`(용량 큼)가 필요하므로 선택 설치입니다:
+### 5.3 선택 기능 (Gemini 자연어 검색·추천 이유)
+Gemini 자연어 검색("By description" 탭)과 결과 이유 문장은 **선택**입니다. 저장소 루트의 `.env`(git 제외)에 키를 넣고 `--env-file`로 실행합니다:
+```bash
+# .env
+GEMINI_API_KEY=여기에_키
+```
+```bash
+uv run --env-file .env uvicorn backend.main:app --reload --port 8000
+```
+- 키가 없어도 앱은 정상 동작하며, "By description" 탭이 숨겨지고 결과 이유는 공통 메커니즘 칩으로 대체됩니다. 키는 프론트엔드에 넣지 않습니다.
+- 서버 환경 변수로 동작을 조절할 수 있습니다.
+
+  | 환경 변수 | 기본값 | 설명 |
+  | :--- | :--- | :--- |
+  | `GEMINI_API_KEY` | 없음 | Gemini API 키. 없으면 자연어 검색·이유 문장이 꺼짐 |
+  | `GEMINI_DAILY_CALL_LIMIT` | 2000 | 인스턴스당 하루 Gemini 호출 수 |
+  | `NATURAL_WEB_SEARCH` | 켜짐 | `0`이면 자연어 검색의 웹 검색(Google Search 근거)을 끔 |
+  | `WEB_SEARCH_DAILY_LIMIT` | 100 | 인스턴스당 하루 웹 검색 수 |
+  | `ALLOWED_ORIGINS` | `localhost:5173` 두 주소 | CORS 허용 주소 (쉼표 구분) |
+
+- 데이터 파일(`gemini_embeddings.npz`, `game_profiles.json`, `profile_embeddings.npz`) 재생성과 검색 품질 평가는 [natural_search.md](natural_search.md)를 참고하세요.
+
+### 5.4 선택 기능 (e5 시맨틱 검색, 모델 재생성)
+- 이전 방식의 시맨틱 검색 API(`/games/semantic-search`, 화면에서는 미사용)는 `sentence-transformers`(용량 큼)가 필요하므로 선택 설치입니다:
   ```bash
   uv sync --extra semantic
   uv run --extra semantic uvicorn backend.main:app --reload --port 8000
   ```
-- Gemini 자연어 검색("By description" 탭)과 결과 설명 문장은 **선택**입니다. 저장소 루트의 `.env`(git 제외)에 키를 넣고 `--env-file`로 실행합니다:
-  ```bash
-  # .env
-  GEMINI_API_KEY=여기에_키
-  ```
-  ```bash
-  uv run --env-file .env uvicorn backend.main:app --reload --port 8000
-  ```
-  키가 없어도 앱은 정상 동작하며, "By description" 탭이 숨겨지고 결과 설명은 공통 메커니즘 칩으로 대체됩니다. 키는 프론트엔드에 넣지 않습니다.
-- 자연어 검색의 웹 검색(Google Search 근거)은 `NATURAL_WEB_SEARCH=0` 환경변수로 서버에서 끌 수 있습니다(기본 켜짐). 근거 검색 결과는 약관상 저장·평가에 쓸 수 없어, 평가 스크립트는 환경변수와 무관하게 항상 웹 검색을 끄고 실행합니다. 일일 웹 호출 한도는 `WEB_SEARCH_DAILY_LIMIT`(기본 100, 배포 워크플로에도 100으로 설정됨). 웹 결과가 나온 검색은 화면의 "From the web" 상자에 요약과 Google 검색어 추천이 보입니다.
-- `data/gemini_embeddings.npz`는 git에 포함되어 있습니다. 게임 데이터를 바꿨다면 다시 만들어 커밋합니다 (약 7분, 약 $1.7, 키 필요):
-  ```bash
-  uv run --env-file .env python -m backend.build_gemini_embeddings
-  ```
-- 게임 프로필(Gemini가 쓴 플레이 경험 설명 + franchise·base_game·제작자 정보)은 `data/game_profiles.json`, 프로필 임베딩은 `data/profile_embeddings.npz`이며 둘 다 git에 포함되어 있다. 리뷰 1,000개 이상 게임(약 2,900개)이 대상이고, 제작자·국가는 리뷰 3,000개 이상 게임만 채운다. 프로필 정보는 검색에만 쓰이고 화면에는 보이지 않는다.
-  ```bash
-  # 시범 (약 50개, 결과를 직접 검토): 
-  uv run --env-file .env python -m backend.build_game_profiles --sample
-  # 전체 프로필 생성 (중단 후 다시 실행하면 이어서 진행)
-  uv run --env-file .env python -m backend.build_game_profiles
-  # 프로필 임베딩 (약 1분, 약 400원)
-  uv run --env-file .env python -m backend.build_profile_embeddings
-  ```
-  `natural_search.PROFILE_VECTOR_WEIGHT`(0~1)로 프로필 임베딩 반영 비율을 정한다 (평가: `stage3_blend0/30/50.json`, `stage3_profilevec.json`). franchise·제작자·국가는 키워드 일치와 시리즈 묶기에 쓰인다.
 - 임베딩·협업 필터링 재생성과 성능 평가 방법은 [recommendation_pipeline.md](recommendation_pipeline.md)를 참고하세요.
 - API 명세와 오류 응답은 [backend_api.md](backend_api.md)를 참고하세요.
 
 ---
-
-### 자연어 검색 평가 (Natural search evaluation)
-
-자연어 검색 품질(hit@5, precision@5, recall@25, 시리즈 중복, bad 비율)을 질의 40개로 측정한다.
-
-```bash
-uv run --env-file .env python -m backend.evaluate_natural --label <이름>
-```
-
-- `.env`에 `GEMINI_API_KEY`가 필요하다. 결과는 `data/natural_eval_results/<이름>.json`에 저장되고 표가 출력된다.
-- 질의 세트는 `data/natural_eval_queries.json` (정답 `good` / 오답 `bad` 게임 id 포함).
-- 의도(intent)와 질의 벡터는 `data/natural_eval_cache.json`(git 제외)에 저장되어 재실행 시 Gemini 호출을 줄인다.
-- 의도 추출 프롬프트를 바꿨다면 `--fresh-intents`로 저장된 의도를 무시하고 다시 추출한다.
-- 비용: 캐시 없는 전체 실행 1회에 약 200~300원 (질의당 Gemini 호출 약 2회).
 
 ## 6. 프론트엔드 환경 설정 (React + Vite)
 
@@ -212,20 +196,24 @@ npm -v
 ```bash
 cd frontend
 npm install
-npm run dev     # 개발 서버
-npm run lint    # oxlint 검사
-npm run build   # 배포용 빌드 (frontend/dist)
+npm run dev       # 개발 서버
+npm run lint      # oxlint 검사
+npm run typecheck # TypeScript 타입 검사
+npm run build     # 배포용 빌드 (frontend/dist)
 ```
 - **로컬 웹 접속 주소**: `http://localhost:5173`
 - 백엔드(`http://localhost:8000`)를 먼저 켜 두어야 검색·추천이 동작합니다.
 
 ### 6.3 백엔드 주소 지정 (선택)
-기본값은 `http://localhost:8000`입니다. 다른 백엔드를 쓰려면 `frontend/.env.example`을 참고해 `frontend/.env.local`에 지정합니다:
+기본값은 `http://localhost:8000`입니다. 배포된 백엔드를 쓰려면 `frontend/.env.example`을 참고해 `frontend/.env`에 지정합니다 (끝에 `/` 없이):
 ```bash
-VITE_API_URL=https://<서비스주소>.run.app
+VITE_BASE_URL=https://<서비스주소>.run.app
 ```
+- 예전 이름 `VITE_API_URL`도 인식하며, 둘 다 있으면 `VITE_BASE_URL`을 씁니다.
+- `npm run dev`에서는 요청을 `/api`로 보내고 Vite 개발 서버가 배포된 백엔드로 대신 전달하므로, 배포 백엔드의 CORS 허용 목록에 `localhost`가 없어도 됩니다. 자세한 내용은 [frontend/README.md](../frontend/README.md)를 참고하세요.
+
 > [!NOTE]
-> 프론트 포트가 5173이 아니게 되면(예: 5174) 백엔드 CORS에서 막힙니다. 5173을 쓰거나, 백엔드 실행 시 환경변수 `ALLOWED_ORIGINS`에 실제 주소를 추가하세요.
+> 개발 서버는 5173 포트만 씁니다(`strictPort`). 이미 사용 중이면 다른 포트로 바꾸지 않고 오류를 내므로, 5173을 쓰는 프로그램을 끄고 다시 실행하세요. 로컬 백엔드의 CORS 기본 허용 주소도 5173입니다.
 
 ---
 
