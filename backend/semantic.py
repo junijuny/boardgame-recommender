@@ -12,9 +12,7 @@ import threading
 import numpy as np
 import pandas as pd
 
-# 한국어 등 다국어 질의를 영어 게임 설명과 비교할 수 있는 작은(118M) 임베딩 모델
 MODEL_NAME = "intfloat/multilingual-e5-small"
-# e5 계열 모델은 문서/질의 앞에 아래 접두어를 붙여야 성능이 제대로 나옴
 PASSAGE_PREFIX = "passage: "
 QUERY_PREFIX = "query: "
 MAX_DESCRIPTION_CHARS = 1500
@@ -28,7 +26,6 @@ def is_installed() -> bool:
 
 
 def game_documents(df: pd.DataFrame, mechanics, themes) -> list[tuple[str, str]]:
-    """게임마다 (이름, 본문) 쌍을 만듦. 본문 = 메커니즘 + 테마 + 설명글"""
     mech_names = mechanics.names
     theme_names = themes.names
     docs = []
@@ -46,7 +43,6 @@ def game_documents(df: pd.DataFrame, mechanics, themes) -> list[tuple[str, str]]
 
 
 def build_passages(df: pd.DataFrame, mechanics, themes) -> list[str]:
-    """게임 이름 + 메커니즘 + 테마 + 설명글을 하나의 문서로 만듦"""
     return [
         f"{PASSAGE_PREFIX}{name}. {body}"
         for name, body in game_documents(df, mechanics, themes)
@@ -54,7 +50,6 @@ def build_passages(df: pd.DataFrame, mechanics, themes) -> list[str]:
 
 
 def load_model(device: str | None = None):
-    """모델을 한 번만 불러와 재사용 (첫 호출 시 Hugging Face에서 내려받음)"""
     global _model
     with _model_lock:
         if _model is None:

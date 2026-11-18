@@ -35,7 +35,6 @@ def main() -> None:
     vectors = semantic.encode_passages(passages)
     print(f"완료: {vectors.shape}, {time.time() - start:.1f}초")
 
-    # 임의의 두 게임 사이 평균 유사도 → 추천에서 이 값 이하는 '관련 없음(0)'으로 취급
     rng = np.random.default_rng(0)
     a = rng.integers(0, len(vectors), 50_000)
     b = rng.integers(0, len(vectors), 50_000)
