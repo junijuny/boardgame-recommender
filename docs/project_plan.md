@@ -1,20 +1,23 @@
 # 🎲 보드게임 추천 시스템 프로젝트 계획서
 
+[🏠 메인 README로 이동](../README.md) • [⚙️ 개발 환경 세팅](setup.md) • [🏗️ 시스템 구조](architecture.md)
+
 * **프로젝트 목표**: `games.csv` 데이터를 활용하여 파이썬 기초부터 웹 서비스(FastAPI + React) 구현까지 완성하는 프로젝트
 * **수행 기간**: 총 7주 (주당 6\~8시간 학습 및 실습)
 * **참여 인원**: 4명
 * **개발 환경**:
-  * **언어**: Python 3.12, JavaScript
+  * **언어**: Python 3.12, TypeScript (초기에는 JavaScript)
   * **가상환경 및 패키지 관리**: uv (Python 3.12)
   * **분석/백엔드 도구**: VS Code, Jupyter Notebook, Pandas, Scikit-learn, FastAPI, Uvicorn
-  * **프론트엔드 도구**: Node.js (v20.19+), React 19 (Vite 8), Tailwind CSS 4
+  * **프론트엔드 도구**: Node.js (v20.19+), React 19 (Vite 8), TypeScript, Tailwind CSS 4, TanStack Query 5
+  * **LLM**: Google Gemini API (`google-genai`)
   * **배포**: Google Cloud Run (백엔드, Docker), Vercel (프론트엔드)
 
 ---
 
 ## 📊 프로젝트 진행 현황 (Progress Overview)
 
-* **현재 상태**: **7주차 완료 + 추천 품질 개선 완료, 배포 완료**
+* **현재 상태**: **7주차 완료 + 추천 품질 개선·Gemini 자연어 검색 완료, 배포 완료**
 * **전체 진행률**: **100%** (7주차 / 7주차 완료)
 
 | 주차 | 주요 내용 | 상태 | 주요 산출물 |
@@ -27,6 +30,7 @@
 | **6주차** | React 프론트엔드 UI 화면 개발 | ✅ 완료 | `frontend/src/` |
 | **7주차** | 프론트-백엔드 연동, 예외 처리 및 배포 | ✅ 완료 | `Dockerfile`, `docs/deploy.md` |
 | **추가** | 하이브리드 추천 파이프라인, 오프라인 평가 & 기능·배포 고도화 | ✅ 완료 | `backend/features.py`, `backend/evaluate.py`, `.github/workflows/` 등 |
+| **추가** | 프론트엔드 개편(TypeScript·TanStack Query) & Gemini 자연어 검색 | ✅ 완료 | `backend/natural_search.py`, `backend/gemini.py`, `frontend/src/` 등 |
 
 ---
 
@@ -38,9 +42,10 @@
 | **데이터 처리** | `pandas`, `numpy`, `scipy` |
 | **키워드 분석/유사도** | `scikit-learn` (`TfidfVectorizer`, `TruncatedSVD`), 희소 행렬 코사인 유사도 |
 | **문장 임베딩 (선택)** | `sentence-transformers` (`intfloat/multilingual-e5-small`) |
+| **LLM** | `google-genai` (`gemini-3.5-flash-lite`, `gemini-embedding-2`) |
 | **백엔드 API** | `fastapi`, `uvicorn` |
-| **프론트엔드 UI** | `React` (Vite), `Tailwind CSS`, `axios`, `lucide-react` |
-| **테스트/린트** | `unittest` + `httpx`, `ruff`, `oxlint` |
+| **프론트엔드 UI** | `React` (Vite), `TypeScript`, `Tailwind CSS`, `TanStack Query`, `axios`, `lucide-react` |
+| **테스트/린트** | `unittest` + `httpx`, `ruff`, `oxlint`, `tsc` |
 | **배포** | `Docker`, Google Cloud Run, Vercel |
 
 ---
@@ -163,7 +168,7 @@
     * **추천 화면** (`RecommendScreen`): 게임 이름 자동완성 검색(`GameSearch`), 인원(2\~6명)·플레이 시간(30·60·90·120분 이하) 선택(`OptionGroup`), 결과 카드에 표지·난이도·시간·공통 메커니즘 표시, "다른 게임 5개 추천받기" 지원.
     * **장르 화면** (`GenreScreen`): 8개 장르별 대표 게임 목록 및 인원(1\~10명)·최대 시간(15분\~4시간) 조건별 맞춤 추천.
     * **게임 상세 팝업** (`GameDetailModal`): 어느 화면에서든 게임을 누르면 상세 정보를 보여 주고 그 게임 기준으로 바로 추천.
-  - [x] 3. 백엔드 요청은 `api.js`에 모아 화면 코드에서 axios를 직접 쓰지 않도록 정리.
+  - [x] 3. 백엔드 요청은 `api.js`에 모아 화면 코드에서 axios를 직접 쓰지 않도록 정리. (이후 TypeScript 전환으로 `api.ts`·`queries.ts`가 됨)
 
 ---
 
@@ -196,12 +201,27 @@
 
 ---
 
+### ✅ 추가: 프론트엔드 개편 & Gemini 자연어 검색 [완료]
+
+> **주요 목표**: 좋아하는 게임 이름을 몰라도, 원하는 게임을 문장으로 설명해 찾을 수 있게 하기
+
+* **주요 산출물**: `backend/natural_search.py`, `backend/gemini.py`, `backend/rerank.py`, `backend/web_search.py`, `backend/explain.py`, `backend/evaluate_natural.py`, `docs/natural_search.md`
+* **세부 작업 현황**:
+  - [x] 1. **프론트엔드 개편**: TypeScript 전환, TanStack Query로 서버 데이터 캐시·로딩 상태 관리, 영어 화면, 휴대폰 화면 대응, 장르 화면 "Refresh"(`exclude_ids`).
+  - [x] 2. **Gemini 자연어 검색** (`POST /search/natural`, "By description" 탭): Gemini가 검색어를 조건과 영어 묘사로 바꾸고 `gemini-embedding-2` 임베딩으로 비교.
+  - [x] 3. **추천 이유** (`POST /explain`): 결과마다 영어 한 문장 이유. IP별 요청 제한과 일일 호출 예산으로 비용 보호.
+  - [x] 4. **순위 질의**: "가장 유명한/평점 높은/최신" 질의를 리뷰 수·평점·출시 연도 순으로 정렬.
+  - [x] 5. **정확도 개선**: 평가 질의 40개 도입, 시리즈 묶기, 나이·언어·인원 적합도 신호, 게임 프로필·프로필 임베딩, Gemini 재순위, 약한 일치 안내. Hit@5 0.82 → 0.97.
+  - [x] 6. **웹 검색**: 수상 목록·제작자 국적처럼 바깥 사실이 필요한 질문은 Google Search 근거로 게임을 찾고 "From the web" 상자로 표시 (약관상 결과를 캐시·저장하지 않음).
+  - [x] 7. **게임 이름 감지**: "games like Catan"처럼 쓰면 By game 탭으로 바로 전환, 같은 이름 판본 중복 제외, 플레이 시간 0인 게임 제외.
+
 ## 💡 프로젝트 추진 가이드 & 회고
 
 1. **단순한 방법부터 시작하고, 평가로 개선 여부 확인하기**:
    * 초기에는 딥러닝 환경 설정에 시간을 쓰지 않도록 `TfidfVectorizer`와 `Pandas 조건문`으로 동작하는 추천을 먼저 완성함.
    * 이후 오프라인 평가(`backend/evaluate.py`)를 만든 뒤에 임베딩·협업 필터링을 추가하여, 바뀐 점을 수치로 비교함.
    * 무거운 기능(`sentence-transformers`)은 선택 설치로 분리하여, 기본 설치와 배포 서버는 가볍게 유지함.
+   * 자연어 검색도 평가 질의 세트를 먼저 만든 뒤 단계별로 개선하고, 단계마다 결과를 `data/natural_eval_results/`에 남겨 비교함.
 
 2. **함수 단위로 역할 쪼개기**:
    * 추천 엔진 함수(`recommend_games(...)`)를 FastAPI 내부에서 그대로 호출하는 구조를 취해 협업 시 코드 충돌 최소화.
