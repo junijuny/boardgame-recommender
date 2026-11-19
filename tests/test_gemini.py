@@ -29,6 +29,21 @@ class ExtractPromptTest(unittest.TestCase):
         self.assertIn("two-player game", text)
         self.assertIn("IS a gameplay aspect", text)
         self.assertIn("even when sort is popularity", text)
+        self.assertIn("exact_players", text)
+
+    def test_model_allocation(self):
+        self.assertEqual(gemini.EXTRACT_MODEL, "gemini-3.8-flash")
+        self.assertEqual(gemini.RERANK_MODEL, "gemini-3.8-flash")
+        self.assertEqual(gemini.EXPLAIN_MODEL, "gemini-3.5-flash-lite")
+        self.assertEqual(gemini.WEB_MODEL, "gemini-3.5-flash-lite")
+
+    def test_thinking_level_uses_low_for_non_lite_models(self):
+        from types import SimpleNamespace as NS
+
+        client = gemini.GoogleGeminiClient.__new__(gemini.GoogleGeminiClient)
+        client._types = NS(ThinkingLevel=NS(MINIMAL="minimal", LOW="low"))
+        self.assertEqual(client._thinking_level("gemini-3.8-flash"), "low")
+        self.assertEqual(client._thinking_level("gemini-3.5-flash-lite"), "minimal")
 
 
 class IntentParsingTest(unittest.TestCase):
@@ -64,15 +79,19 @@ class IntentParsingTest(unittest.TestCase):
     def test_intent_from_dict_reads_new_fields(self):
         i = gemini._intent_from_dict({
             "age_max": 8, "categories": ["Family", "Party"], "low_text": True,
-            "keywords": ["Star Wars"], "terms": ["zombies", "trains"],
+            "keywords": ["Star Wars"], "terms": ["zombies", "trains"], "exact_players": True,
         })
         self.assertEqual(i.age_max, 8.0)
         self.assertEqual(i.categories, ("Family", "Party"))
         self.assertIs(i.low_text, True)
         self.assertEqual(i.keywords, ("Star Wars",))
         self.assertEqual(i.terms, ("zombies", "trains"))
+        self.assertIs(i.exact_players, True)
         d = gemini._intent_from_dict({})
-        self.assertEqual((d.age_max, d.categories, d.low_text, d.keywords, d.terms), (None, (), False, (), ()))
+        self.assertEqual(
+            (d.age_max, d.categories, d.low_text, d.keywords, d.terms, d.exact_players),
+            (None, (), False, (), (), False),
+        )
 
     def test_bad_weight_raises_gemini_error(self):
         with self.assertRaises(gemini.GeminiError):
@@ -161,6 +180,22 @@ class RerankParsingTest(unittest.TestCase):
     def test_missing_ids_raises(self):
         with self.assertRaises(gemini.GeminiError):
             self._client({"interpretation": "Read as: x", "weak_match": False}).rerank("q", [])
+
+    def test_rerank_prompt_includes_filters_and_absurd_guard(self):
+        seen = {}
+        client = gemini.GoogleGeminiClient.__new__(gemini.GoogleGeminiClient)
+
+        def fake_generate(model, prompt, schema, max_tokens, timeout_seconds=10):
+            seen["model"] = model
+            seen["prompt"] = prompt
+            return {"interpretation": "Read as: x", "ranked_ids": [], "weak_match": True}
+
+        client._generate = fake_generate
+        client.rerank("q", [], players=2, max_time=45)
+        self.assertEqual(seen["model"], "gemini-3.8-flash")
+        self.assertIn("Selected filters: 2 players, up to 45 min", seen["prompt"])
+        self.assertIn("absurd, impossible", seen["prompt"])
+        self.assertIn("specific subject or domain", seen["prompt"])
 
 
 def _web_client(resp, seen=None):

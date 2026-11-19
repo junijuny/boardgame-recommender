@@ -108,7 +108,7 @@ class NaturalSearchTest(unittest.TestCase):
             ns.MIN_REVIEWS = original
         self.assertEqual(games[0]["BGGId"], int(eng.df.at[idx, "BGGId"]))
         for g in games:
-            self.assertTrue(g["GameWeight"] == 0 or g["GameWeight"] <= 1.5)
+            self.assertTrue(g["GameWeight"] == 0 or g["GameWeight"] <= 1.5 + ns.WEIGHT_MARGIN)
 
     def test_sanitize_drops_unknown_and_fixes_weights(self):
         s = sanitize_intent(
@@ -227,7 +227,7 @@ class AudienceSignalTest(unittest.TestCase):
         self.assertEqual(len(games), 5)
         for g in games:
             age = eng.df.loc[eng.df["BGGId"] == g["BGGId"], "ComAgeRec"].iloc[0]
-            self.assertTrue(age == 0 or age <= 8)
+            self.assertTrue(age == 0 or age <= 8 + ns.AGE_MARGIN)
 
     def test_keyword_ranking_query(self):
         self.fake.intent = QueryIntent("", keywords=("Star Wars",), sort="popularity")
@@ -359,7 +359,21 @@ class SortedSearchTest(unittest.TestCase):
         self.assertIn(int(eng.df.at[idx_of("Pandemic"), "BGGId"]), [g["BGGId"] for g in games])
         reviews = [g["NumUserRatings"] for g in games]
         self.assertEqual(reviews, sorted(reviews, reverse=True))
-        self.assertTrue(any(c[0] == "embed_query" for c in self.fake.calls))
+        self.assertTrue(any(c[0] in ("embed_query", "embed_queries") for c in self.fake.calls))
+
+    def test_exact_players_ranking_filters_dedicated_without_sort_pool_cutoff(self):
+        self.fake.intent = QueryIntent(
+            "a game designed for exactly two players, head-to-head",
+            sort="popularity",
+            exact_players=True,
+        )
+        games = natural_search("Most popular two-player game", 2, 60)
+        self.assertEqual(len(games), 5)
+        for g in games:
+            self.assertEqual((g["MinPlayers"], g["MaxPlayers"]), (2, 2))
+        reviews = [g["NumUserRatings"] for g in games]
+        self.assertEqual(reviews, sorted(reviews, reverse=True))
+        self.assertFalse(any(c[0] in ("embed_query", "embed_queries") for c in self.fake.calls))
 
     def test_relevance_keeps_similarity_ranking(self):
         self.fake.intent = QueryIntent("co-op")
@@ -494,17 +508,36 @@ class ProfileSearchTest(unittest.TestCase):
     def pool_ids(self, n=2):
         mask = eng._condition_mask(4, 120, ns.MIN_RATING).to_numpy() & (
             eng.df["NumUserRatings"].to_numpy() >= ns.MIN_REVIEWS)
-        return [int(i) for i in eng.df["BGGId"].to_numpy()[np.flatnonzero(mask)[:n]]]
+        # 서로 다른 시리즈의 게임 id를 n개 뽑는다
+        out = []
+        seen_keys = set()
+        for idx in np.flatnonzero(mask):
+            key = series.KEYS[idx]
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+            out.append(int(eng.df.at[idx, "BGGId"]))
+            if len(out) == n:
+                break
+        return out
 
-    def test_metadata_keyword_is_hard_filter(self):
-        a, b = self.pool_ids()
-        profiles.PROFILES = {a: {"designer_countries": ["South Korea"]}, b: {"designer_countries": ["South Korea"]}}
+    def test_metadata_keyword_is_hard_filter_when_enough_series(self):
+        ids = self.pool_ids(ns.META_HARD_MIN)
+        profiles.PROFILES = {i: {"designer_countries": ["South Korea"]} for i in ids}
         self.fake.intent = QueryIntent("anything", keywords=("Korea",))
         games = natural_search("q", 4, 120, top_n=10)
         self.assertTrue(games)
         for g in games:
             desc = eng.df.loc[eng.df["BGGId"] == g["BGGId"], "Description"].iloc[0]
-            self.assertTrue(g["BGGId"] in (a, b) or "korea" in f"{g['Name']} {desc}".lower(), g["Name"])
+            self.assertTrue(g["BGGId"] in ids or "korea" in f"{g['Name']} {desc}".lower(), g["Name"])
+
+    def test_metadata_keyword_below_min_is_soft_and_pinned(self):
+        a, b = self.pool_ids(2)
+        profiles.PROFILES = {a: {"designer_countries": ["Zzyzxland"]}, b: {"designer_countries": ["Zzyzxland"]}}
+        self.fake.intent = QueryIntent("anything", keywords=("Zzyzxland",))
+        r = search_full("q", 4, 120, top_n=5)
+        self.assertEqual(len(r.games), 5)
+        self.assertTrue({a, b} <= set(r.shortlist_ids[:2]))
 
     def test_metadata_keyword_without_hits_is_soft(self):
         profiles.PROFILES = {}
@@ -512,21 +545,22 @@ class ProfileSearchTest(unittest.TestCase):
         self.assertEqual(len(natural_search("q", 4, 120)), 5)
 
     def test_two_metadata_keywords_are_anded(self):
-        a, b, c = self.pool_ids(3)
+        pool = self.pool_ids(ns.META_HARD_MIN + 2)
+        a, b, both = pool[0], pool[1], pool[2:]
         profiles.PROFILES = {
             a: {"franchise": ["Xenon"]},
             b: {"designers": ["Yolanda"]},
-            c: {"franchise": ["Xenon"], "designers": ["Yolanda"]},
+            **{i: {"franchise": ["Xenon"], "designers": ["Yolanda"]} for i in both},
         }
         self.fake.intent = QueryIntent("anything", keywords=("Xenon", "Yolanda"))
         games = natural_search("q", 4, 120, top_n=50)
         ids = {g["BGGId"] for g in games}
-        self.assertIn(c, ids)
+        self.assertTrue(set(both) <= ids)
         self.assertFalse({a, b} & ids)
         for g in games:
             desc = eng.df.loc[eng.df["BGGId"] == g["BGGId"], "Description"].iloc[0]
             text = f"{g['Name']} {desc}".lower()
-            self.assertTrue(g["BGGId"] == c or ("xenon" in text and "yolanda" in text), g["Name"])
+            self.assertTrue(g["BGGId"] in both or ("xenon" in text and "yolanda" in text), g["Name"])
 
     def test_keyword_hits_matches_metadata(self):
         a, _ = self.pool_ids()
@@ -666,9 +700,9 @@ class RerankSearchTest(unittest.TestCase):
     def test_rerank_timeout_falls_back(self):
         real = self.fake.rerank
 
-        def slow(query, games):
+        def slow(query, games, *a, **kw):
             time.sleep(0.5)
-            return real(query, games)
+            return real(query, games, *a, **kw)
 
         self.fake.rerank = slow
         ns.RERANK_WALL_SECONDS = 0.05
@@ -677,6 +711,18 @@ class RerankSearchTest(unittest.TestCase):
         self.assertIsNone(r.interpretation)
         self.assertFalse(r.weak_match)
         self.assertIsNone(ns._rerank_cache.get(("co-op", 4, 60)))
+
+    def test_rerank_receives_players_and_max_time(self):
+        search_full("co-op", 3, 45)
+        call = self.rerank_calls()[-1]
+        self.assertEqual((call[3], call[4]), (3, 45))
+
+    def test_dual_query_embedding_uses_single_batch_call(self):
+        self.fake.intent = QueryIntent("cooperative puzzle game")
+        search_full("협력 퍼즐 게임", 4, 60)
+        batch_calls = [c for c in self.fake.calls if c[0] == "embed_queries"]
+        self.assertEqual(len(batch_calls), 1)
+        self.assertEqual(batch_calls[0][1], ("cooperative puzzle game", "협력 퍼즐 게임"))
 
     def test_budget_exhausted_for_rerank_falls_back(self):
         self.fake.rerank_error = gemini.BudgetExceeded("limit")
@@ -799,13 +845,34 @@ class WebSearchNaturalTest(unittest.TestCase):
         self.assertIsNotNone(r.web)
         self.assertEqual(len(r.games), 5)
 
-    def test_metadata_keyword_is_hard_when_web_failed(self):
+    def test_metadata_keyword_is_pinned_when_web_failed_and_few_matches(self):
         self.fake.intent = QueryIntent("co-op", keywords=("Zzz",), needs_web=True)
         self.fake.web_error = gemini.GeminiError("boom")
         with self._meta_only_first():
             r = search_full("co-op", 4, 60)
         self.assertIsNone(r.web)
-        self.assertEqual(len(r.games), 1)
+        self.assertEqual(len(r.games), 5)
+
+    def test_detect_game_korean_patterns_and_aliases(self):
+        like_catan = eng.detect_game("카탄 같은 게임")
+        self.assertIsNotNone(like_catan)
+        self.assertEqual(like_catan[0]["Name"], "Catan")
+        self.assertTrue(like_catan[1])
+
+        similar_splendor = eng.detect_game("스플렌더와 비슷한 보드게임")
+        self.assertIsNotNone(similar_splendor)
+        self.assertEqual(similar_splendor[0]["Name"], "Splendor")
+        self.assertTrue(similar_splendor[1])
+
+        mixed = eng.detect_game("Catan 같은 게임")
+        self.assertIsNotNone(mixed)
+        self.assertEqual(mixed[0]["Name"], "Catan")
+        self.assertTrue(mixed[1])
+
+        exact_ko = eng.detect_game("카탄")
+        self.assertIsNotNone(exact_ko)
+        self.assertEqual(exact_ko[0]["Name"], "Catan")
+        self.assertFalse(exact_ko[1])
 
     def test_many_ids_of_one_series_stay_soft(self):
         self.fake.web_answer = gemini.WebAnswer("Ticket to Ride\n\nSummary.", "<div>s</div>", 1)

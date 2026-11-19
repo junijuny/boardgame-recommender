@@ -21,17 +21,17 @@ try:
 except ImportError:
     import limits
 
-EXTRACT_MODEL = "gemini-3.5-flash-lite"
+EXTRACT_MODEL = "gemini-3.8-flash"
 EXPLAIN_MODEL = "gemini-3.5-flash-lite"
 EMBED_MODEL = "gemini-embedding-2"
 EMBED_DIM = 768
-TIMEOUT_SECONDS = 10
+TIMEOUT_SECONDS = 20
 EXTRACT_MAX_TOKENS = 512
 EXPLAIN_MAX_TOKENS = 1024
 PROFILE_MODEL = "gemini-3.5-flash-lite"
 PROFILE_MAX_TOKENS = 4096  # 게임 10개 x (약 120단어 + 목록)
-RERANK_MODEL = "gemini-3.5-flash-lite"
-RERANK_TIMEOUT_SECONDS = 10  # brief said 5, but the API rejects deadlines under 10s (400)
+RERANK_MODEL = "gemini-3.8-flash"
+RERANK_TIMEOUT_SECONDS = 20
 RERANK_MAX_TOKENS = 1024
 WEB_MODEL = "gemini-3.5-flash-lite"
 WEB_TIMEOUT_SECONDS = 8  # 벽시계 상한 (natural_search 가 건다)
@@ -65,6 +65,7 @@ class QueryIntent:
     terms: tuple[str, ...] = ()
     needs_web: bool = False
     web_query: str = ""
+    exact_players: bool = False
 
 
 @dataclass(frozen=True)
@@ -110,6 +111,8 @@ class GeminiClient(Protocol):
 
     def embed_query(self, search_text: str) -> np.ndarray: ...
 
+    def embed_queries(self, texts: Sequence[str]) -> np.ndarray: ...
+
     def embed_documents(self, docs: Sequence[tuple[str, str]]) -> np.ndarray: ...
 
     def explain(
@@ -123,7 +126,9 @@ class GeminiClient(Protocol):
 
     def write_profiles(self, games: Sequence[dict]) -> list[GameProfile]: ...
 
-    def rerank(self, query: str, games: Sequence[dict]) -> RerankResult: ...
+    def rerank(
+        self, query: str, games: Sequence[dict], players: int | None = None, max_time: int | None = None
+    ) -> RerankResult: ...
 
     def web_search(self, query: str) -> WebAnswer: ...
 
@@ -157,6 +162,9 @@ Rules:
   country or community. False for genre, mood, audience and ranking requests.
 - web_query: when needs_web is true, a short English web search query for the request (e.g.
   "board games designed by South Korean designers"); otherwise an empty string.
+- exact_players: true only when the request specifically asks for a game designed specifically for
+  a single player count (e.g. "two-player game", "head-to-head", "duel", "solo game", 2인용, 1인용,
+  혼자 하는 게임), else false.
 - Ignore plain player counts and play time (e.g. "for 4 players", "30 minutes"); the UI supplies them.
 - Weight is BGG complexity on a 1-5 scale. Map "light/easy" (e.g. 가벼운) to a low range such as 1.0-2.5,
   and "heavy/complex" to a high range such as 3.5-5.0. Leave weight_min/weight_max null if not implied.
@@ -202,10 +210,20 @@ Rules:
 - interpretation: one English sentence starting with "Read as:" saying how you understood the request.
   Do not mention any game names.
 - weak_match: true when fewer than 3 of the games fit the request well, else false.
+  Set weak_match to true if:
+  (a) the request has an absurd, impossible, or non-board-game premise (e.g. a game animals can play),
+      even if some words overlap with a game's title or theme; or
+  (b) the request asks for a specific subject or domain (e.g. a specific modern technology, sport, or
+      profession) that fewer than 3 candidates actually feature, even if a sub-word or metaphor overlaps
+      (e.g. physical ore mining is NOT cryptocurrency mining).
 - Judge only from the facts given for each game; do not rely on outside knowledge of the games.
+- When Selected filters are given, prefer games whose good_players includes the selected player count
+  and whose playtime fits comfortably.
+- When multiple games fit equally well, prefer well-known, well-reviewed representative games.
 - web_mentioned, when present, only means the game was mentioned on the web for this request; it is a
   weak hint, not proof of fit.
 Request: {query}
+Selected filters: {filters}
 Games: {games}
 """
 
@@ -289,6 +307,7 @@ def _intent_from_dict(data: dict) -> QueryIntent:
             terms=_tags(data.get("terms")),
             needs_web=bool(data.get("needs_web")),
             web_query="" if data.get("web_query") is None else str(data.get("web_query")),
+            exact_players=bool(data.get("exact_players")),
         )
     except (TypeError, ValueError, AttributeError) as exc:
         raise GeminiError(f"Unexpected intent response: {exc}") from exc
@@ -305,6 +324,10 @@ class GoogleGeminiClient:
     def _http_options(self, timeout_seconds: int = TIMEOUT_SECONDS):
         # HttpOptions.timeout 단위는 밀리초
         return self._types.HttpOptions(timeout=timeout_seconds * 1000)
+
+    def _thinking_level(self, model: str):
+        t = self._types.ThinkingLevel
+        return t.MINIMAL if "lite" in model else t.LOW
 
     def _generate(
         self,
@@ -323,7 +346,7 @@ class GoogleGeminiClient:
                     response_mime_type="application/json",
                     response_schema=schema,
                     max_output_tokens=max_output_tokens,
-                    thinking_config=t.ThinkingConfig(thinking_level=t.ThinkingLevel.MINIMAL),
+                    thinking_config=t.ThinkingConfig(thinking_level=self._thinking_level(model)),
                     http_options=self._http_options(timeout_seconds),
                 ),
             )
@@ -356,6 +379,7 @@ class GoogleGeminiClient:
                 "terms": _tag_array(),
                 "needs_web": {"type": "BOOLEAN"},
                 "web_query": {"type": "STRING"},
+                "exact_players": {"type": "BOOLEAN"},
             },
             "required": ["search_text"],
         }
@@ -387,6 +411,11 @@ class GoogleGeminiClient:
 
     def embed_query(self, search_text: str) -> np.ndarray:
         return self._embed([query_text(search_text)])[0]
+
+    def embed_queries(self, texts: Sequence[str]) -> np.ndarray:
+        if not texts:
+            return np.zeros((0, EMBED_DIM), dtype=np.float32)
+        return self._embed([query_text(t) for t in texts])
 
     def embed_documents(self, docs) -> np.ndarray:
         if not docs:
@@ -460,7 +489,7 @@ class GoogleGeminiClient:
         except (KeyError, TypeError, ValueError, AttributeError) as exc:
             raise GeminiError(f"Unexpected profile response: {exc}") from exc
 
-    def rerank(self, query, games) -> RerankResult:
+    def rerank(self, query, games, players=None, max_time=None) -> RerankResult:
         # 검색 도구는 쓰지 않는다
         schema = {
             "type": "OBJECT",
@@ -471,8 +500,14 @@ class GoogleGeminiClient:
             },
             "required": ["interpretation", "ranked_ids", "weak_match"],
         }
+        filter_parts = []
+        if players is not None:
+            filter_parts.append(f"{players} players")
+        if max_time is not None:
+            filter_parts.append(f"up to {max_time} min")
+        filters = ", ".join(filter_parts) if filter_parts else "none"
         prompt = RERANK_PROMPT.format(
-            query=query, games=json.dumps(list(games), ensure_ascii=False)
+            query=query, filters=filters, games=json.dumps(list(games), ensure_ascii=False)
         )
         data = self._generate(
             RERANK_MODEL, prompt, schema, RERANK_MAX_TOKENS, RERANK_TIMEOUT_SECONDS

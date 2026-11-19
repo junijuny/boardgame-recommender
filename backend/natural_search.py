@@ -49,13 +49,20 @@ PROFILE_VECTOR_WEIGHT = 0.5
 PROFILE_DOC_VERSION = 1
 # 점수 상위 이 개수(시리즈당 1개)를 재정렬에 보낸다
 SHORTLIST_SIZE = 25
-# Gemini API 는 10초 미만 deadline 을 거부하므로 재정렬의 5초 상한은 벽시계로 직접 건다
-RERANK_WALL_SECONDS = 5
+# Gemini API 는 10초 미만 deadline 을 거부하므로 재정렬의 상한은 벽시계로 직접 건다
+RERANK_WALL_SECONDS = 12
 # 웹 검색 벽시계 상한 (SDK deadline 은 10초 이상이어야 하므로 직접 건다)
 WEB_WALL_SECONDS = gemini.WEB_TIMEOUT_SECONDS
 # 웹 근거 id 가 이 개수 이상 필터를 통과하면 필수 조건, 미만이면 태그 하나로 쓴다
 WEB_HARD_MIN = 5
 WEB_WEAK_MIN = 3  # 웹 검색 성공 시 페이지의 웹 확인 게임이 이보다 적으면 약한 일치
+# 프로필 메타데이터 키워드 하드 필터 최소 시리즈 수 (미만이면 소프트 가점 + 후보 상단 고정)
+META_HARD_MIN = 5
+# 난이도·연령 하드 필터 여유 마진 (경계선 대표 게임 탈락 방지, 범위 밖은 소프트 점수에서 감점)
+WEIGHT_MARGIN = 0.4
+AGE_MARGIN = 2.0
+# 이중 질의 임베딩에서 원문 query 반영 비율 (0 = search_text만 사용)
+RAW_QUERY_VECTOR_WEIGHT = 0.3
 RANKING_COPY = {
     "popularity": "Ranked by number of BGG reviews.",
     "rating": "Ranked by BGG rating.",
@@ -245,6 +252,7 @@ def sanitize_intent(intent: gemini.QueryIntent, raw_query: str) -> gemini.QueryI
         terms=_clean_words(intent.terms),
         needs_web=bool(intent.needs_web),
         web_query=_clean_web_query(intent.web_query),
+        exact_players=bool(intent.exact_players),
     )
 
 
@@ -262,15 +270,32 @@ def _get_intent(client, query: str) -> gemini.QueryIntent:
     return intent
 
 
-def _get_query_vector(client, search_text: str, dim: int) -> np.ndarray:
-    cached = _vector_cache.get(search_text)
+def _get_query_vector(client, search_text: str, dim: int, raw_query: str = "") -> np.ndarray:
+    raw_clean = raw_query.strip()
+    use_dual = (
+        RAW_QUERY_VECTOR_WEIGHT > 0
+        and bool(raw_clean)
+        and raw_clean.lower() != search_text.strip().lower()
+        and hasattr(client, "embed_queries")
+    )
+    cache_key = f"{search_text}\x1f{raw_clean.lower()}" if use_dual else search_text
+    cached = _vector_cache.get(cache_key)
     if cached is not None:
         return cached
     gemini.charge()
-    vec = np.asarray(client.embed_query(search_text), dtype=np.float32)
-    if vec.shape != (dim,):
-        raise gemini.GeminiError(f"Unexpected query vector shape {vec.shape}")
-    _vector_cache.put(search_text, vec)
+    if use_dual:
+        vecs = np.asarray(client.embed_queries([search_text, raw_clean]), dtype=np.float32)
+        if vecs.shape != (2, dim):
+            raise gemini.GeminiError(f"Unexpected query vector shape {vecs.shape}")
+        vec = (1.0 - RAW_QUERY_VECTOR_WEIGHT) * vecs[0] + RAW_QUERY_VECTOR_WEIGHT * vecs[1]
+        norm = float(np.linalg.norm(vec))
+        if norm > 0:
+            vec = (vec / norm).astype(np.float32)
+    else:
+        vec = np.asarray(client.embed_query(search_text), dtype=np.float32)
+        if vec.shape != (dim,):
+            raise gemini.GeminiError(f"Unexpected query vector shape {vec.shape}")
+    _vector_cache.put(cache_key, vec)
     return vec
 
 
@@ -335,15 +360,55 @@ def _word_score(cand_idx: np.ndarray, terms: tuple[str, ...]) -> np.ndarray | No
     return raw / top if top > 0 else np.zeros(len(cand_idx))
 
 
-def _soft_score(cand_idx: np.ndarray, players: int, low_text: bool) -> np.ndarray:
-    """보조 신호 평균: 추천 인원 적합도, (요청 시) 언어 의존도가 낮은 정도"""
+def _soft_score(cand_idx: np.ndarray, players: int, intent: gemini.QueryIntent) -> np.ndarray:
+    """보조 신호 평균: 추천 인원 적합도, 언어 의존도, 난이도·연령 여유 구간 적합도, 전용 인원 적합도"""
     df = eng.df
     good = df["GoodPlayers"].to_numpy()[cand_idx]
     signals = [np.array([players in g for g in good], dtype=float)]
-    if low_text:
+    if intent.low_text:
         pct = pd.Series(df["LanguageEase"].to_numpy(dtype=float)[cand_idx]).rank(pct=True).to_numpy()
         signals.append(np.where(np.isnan(pct), 0.5, 1.0 - pct))
+    if intent.weight_min is not None or intent.weight_max is not None:
+        w = df["GameWeight"].to_numpy(dtype=float)[cand_idx]
+        known = w > 0
+        dist = np.zeros(len(cand_idx), dtype=float)
+        if intent.weight_min is not None:
+            dist = np.maximum(dist, intent.weight_min - w)
+        if intent.weight_max is not None:
+            dist = np.maximum(dist, w - intent.weight_max)
+        fit = np.clip(1.0 - dist / max(WEIGHT_MARGIN, 1e-6), 0.0, 1.0)
+        signals.append(np.where(known, fit, 0.5))
+    if intent.age_max is not None:
+        age = df["ComAgeRec"].to_numpy(dtype=float)[cand_idx]
+        known = age > 0
+        over = np.maximum(0.0, age - intent.age_max)
+        fit = np.clip(1.0 - over / max(AGE_MARGIN, 1e-6), 0.0, 1.0)
+        signals.append(np.where(known, fit, 0.5))
+    if intent.exact_players:
+        min_p = df["MinPlayers"].to_numpy()[cand_idx]
+        max_p = df["MaxPlayers"].to_numpy()[cand_idx]
+        dedicated = (min_p == players) & (max_p == players)
+        best_p = df["BestPlayers"].to_numpy()[cand_idx] == players if "BestPlayers" in df.columns else np.zeros(len(cand_idx), dtype=bool)
+        signals.append(np.where(dedicated, 1.0, np.where(best_p, 0.75, 0.0)))
     return np.mean(signals, axis=0)
+
+
+def _normalize_embedding(raw: np.ndarray) -> np.ndarray:
+    """임베딩 유사도를 0~1로 환산. 단일 최댓값 이상치 왜곡과 소규모 풀 과절단을 막기 위해 백분위(25~99%)를 쓴다."""
+    if len(raw) >= 4:
+        low, high = float(np.percentile(raw, 25)), float(np.percentile(raw, 99))
+    else:
+        low, high = float(raw.min()), float(raw.max())
+    return np.clip((raw - low) / max(high - low, 1e-6), 0.0, 1.0)
+
+
+def _idf_weights(feats, cols: np.ndarray) -> np.ndarray:
+    """특징별 IDF를 평균 1.0 기준으로 정규화한 가중치 (드문 핵심 태그일수록 비중이 크다)."""
+    idf = getattr(feats, "idf", None)
+    if idf is None or len(idf) == 0:
+        return np.ones(len(cols), dtype=float)
+    mean_idf = float(np.mean(idf))
+    return idf[cols] / (mean_idf if mean_idf > 0 else 1.0)
 
 
 def natural_search(
@@ -378,12 +443,12 @@ def natural_search(
     weight = df["GameWeight"].to_numpy(dtype=float)
     known = weight > 0
     if intent.weight_min is not None:
-        mask &= ~known | (weight >= intent.weight_min)
+        mask &= ~known | (weight >= intent.weight_min - WEIGHT_MARGIN)
     if intent.weight_max is not None:
-        mask &= ~known | (weight <= intent.weight_max)
+        mask &= ~known | (weight <= intent.weight_max + WEIGHT_MARGIN)
     if intent.age_max is not None:
         age = df["ComAgeRec"].to_numpy(dtype=float)
-        mask &= ~(age > 0) | (age <= intent.age_max)
+        mask &= ~(age > 0) | (age <= intent.age_max + AGE_MARGIN)
     for feats, names in ((eng.mechanics, intent.exclude_mechanics), (eng.themes, intent.exclude_themes)):
         if names:
             hit = feats.binary[:, _tag_columns(feats, names)].sum(axis=1)
@@ -393,16 +458,21 @@ def natural_search(
     if len(cand_idx) == 0:
         return _empty_result()
 
-    # 키워드가 프로필 메타데이터(시리즈·제작자·국가)에 걸리는 후보가 하나라도 있으면 필수 조건으로 쓴다.
-    # 웹 검색이 성공했으면 웹 근거가 필수 신호이고 프로필 제작자 정보는 부정확할 수 있어 태그로만 쓴다
+    # 키워드가 프로필 메타데이터(시리즈·제작자·국가)에 걸리는 후보가 충분하면(META_HARD_MIN 시리즈 이상 또는 순위 질의)
+    # 필수 조건으로 쓰고, 적으면 소프트 가점 + 후보 상단 고정으로 넘겨 전체 후보가 붕괴하는 것을 막는다.
+    # 웹 검색이 성공했으면 웹 근거가 필수 신호이고 프로필 제작자 정보는 부정확할 수 있어 태그로만 쓴다.
+    meta_pin: np.ndarray | None = None
     if intent.keywords and web_info is None:
         text_hit, meta_hit = keyword_matches(cand_idx, intent.keywords)
         hard = meta_hit.any(axis=0)
         if hard.any():
             keep = (text_hit | meta_hit)[:, hard].all(axis=1)
-            cand_idx = cand_idx[keep]
-            if len(cand_idx) == 0:
-                return _empty_result()
+            if sort_column or len(set(series.KEYS[cand_idx[keep]])) >= META_HARD_MIN:
+                cand_idx = cand_idx[keep]
+                if len(cand_idx) == 0:
+                    return _empty_result()
+            elif keep.any():
+                meta_pin = keep
 
     web_tag = None
     if web_ids:
@@ -413,7 +483,24 @@ def natural_search(
         else:
             web_tag = in_web
 
+    # 순위 질의에서 2인 전용/솔로 등 전용 인원 조건이 명시되면 구조화 컬럼으로 먼저 걸러낸다
+    exact_applied = False
+    if sort_column and intent.exact_players:
+        dedicated = (df["MinPlayers"].to_numpy()[cand_idx] == players) & (
+            df["MaxPlayers"].to_numpy()[cand_idx] == players
+        )
+        if len(set(series.KEYS[cand_idx[dedicated]])) >= top_n:
+            cand_idx = cand_idx[dedicated]
+            exact_applied = True
+        elif "BestPlayers" in df.columns:
+            best_fit = dedicated | (df["BestPlayers"].to_numpy()[cand_idx] == players)
+            if len(set(series.KEYS[cand_idx[best_fit]])) >= top_n:
+                cand_idx = cand_idx[best_fit]
+                exact_applied = True
+
     tag_hits = np.zeros(len(cand_idx))
+    weighted_hits = np.zeros(len(cand_idx))
+    tag_weight_total = 0.0
     include_total = (
         len(intent.include_mechanics) + len(intent.include_themes) + len(intent.categories) + len(intent.keywords)
     ) + (web_tag is not None and bool(web_tag.any()))
@@ -425,29 +512,41 @@ def natural_search(
             ("theme", eng.themes, intent.include_themes),
         ):
             if names:
-                sub = feats.binary[cand_idx][:, _tag_columns(feats, names)].toarray() > 0
+                cols = _tag_columns(feats, names)
+                sub = feats.binary[cand_idx][:, cols].toarray() > 0
+                weights = _idf_weights(feats, cols)
                 matched[key] = sub
                 tag_hits += sub.sum(axis=1)
+                weighted_hits += sub @ weights
+                tag_weight_total += float(weights.sum())
         if intent.categories:
             cat_cols = [f"Cat:{n}" for n in intent.categories]
-            tag_hits += (df[cat_cols].to_numpy()[cand_idx] > 0).sum(axis=1)
+            cat_hit = (df[cat_cols].to_numpy()[cand_idx] > 0).sum(axis=1)
+            tag_hits += cat_hit
+            weighted_hits += cat_hit
+            tag_weight_total += len(intent.categories)
         if intent.keywords:
-            tag_hits += keyword_hits(cand_idx, intent.keywords).sum(axis=1)
+            kw_hit = keyword_hits(cand_idx, intent.keywords).sum(axis=1)
+            tag_hits += kw_hit
+            weighted_hits += kw_hit
+            tag_weight_total += len(intent.keywords)
         if web_tag is not None and web_tag.any():
             tag_hits += web_tag
+            weighted_hits += web_tag
+            tag_weight_total += 1.0
         if sort_column:
             # "가장 유명한 협력 게임": 태그가 하나라도 있는 게임 안에서만 순위를 매긴다
             keep = tag_hits > 0
             if not keep.any():
                 return _empty_result()
-            cand_idx, tag_hits = cand_idx[keep], tag_hits[keep]
+            cand_idx, tag_hits, weighted_hits = cand_idx[keep], tag_hits[keep], weighted_hits[keep]
             matched = {k: v[keep] for k, v in matched.items()}
-        tag_ratio = tag_hits / include_total
+        tag_ratio = weighted_hits / max(tag_weight_total, 1e-6)
 
     # 장르 묘사가 없는 순위 질의("가장 유명한 게임")는 임베딩을 계산하지 않는다 (Gemini 호출도 줄어듦)
     embedding = None
-    if intent.search_text:
-        query_vec = _get_query_vector(client, intent.search_text, index.vectors.shape[1])
+    if intent.search_text and not (sort_column and exact_applied and not include_total and not intent.terms):
+        query_vec = _get_query_vector(client, intent.search_text, index.vectors.shape[1], raw_query=query)
         raw = index.vectors[cand_idx] @ query_vec
         if index.profile_vectors is not None and PROFILE_VECTOR_WEIGHT > 0:
             pos = index.profile_pos[cand_idx]
@@ -455,8 +554,7 @@ def natural_search(
             if has.any():
                 prof_cos = index.profile_vectors[pos[has]] @ query_vec
                 raw[has] = (1 - PROFILE_VECTOR_WEIGHT) * raw[has] + PROFILE_VECTOR_WEIGHT * prof_cos
-        low, high = np.median(raw), raw.max()
-        embedding = np.clip((raw - low) / max(high - low, 1e-6), 0.0, 1.0)
+        embedding = _normalize_embedding(raw)
 
     word = _word_score(cand_idx, intent.terms)
     parts = [(w, v) for w, v in (
@@ -484,13 +582,14 @@ def natural_search(
         score = (
             SIMILARITY_WEIGHT * similarity
             + RATING_WEIGHT * eng.rating_score(cand_idx)
-            + SOFT_WEIGHT * _soft_score(cand_idx, players, intent.low_text)
+            + SOFT_WEIGHT * _soft_score(cand_idx, players, intent)
         )
         # 같은 시리즈(확장·버전·외전)는 한 게임만 남기고 다양화한다
         ordered = group_series(cand_idx, score, tag_hits, "NumUserRatings")
-        if web_tag is not None and web_tag.any():
-            # 웹이 확인한 게임(시리즈당 대표 1개)은 항상 후보 목록 맨 앞에 둔다: 점수가 낮아도 재정렬에 보인다
-            front = web_tag[ordered]
+        pin = web_tag if (web_tag is not None and web_tag.any()) else meta_pin
+        if pin is not None and pin.any():
+            # 웹 또는 소수 메타데이터가 확인한 대표 게임은 점수가 낮아도 재정렬 후보에 보이도록 맨 앞에 둔다
+            front = pin[ordered]
             ordered = np.concatenate([ordered[front], ordered[~front]])
         shortlist = ordered[:SHORTLIST_SIZE]
         result = _get_rerank(
@@ -553,10 +652,10 @@ def _get_rerank(
         cached = _rerank_cache.get(key)
         if cached is not None:
             return cached
+    kwargs: dict = {"players": players, "max_time": max_time}
     if web_ids:
-        future = _rerank_pool.submit(rerank.rerank, query, [int(r) for r in rows], web_ids=web_ids)
-    else:
-        future = _rerank_pool.submit(rerank.rerank, query, [int(r) for r in rows])
+        kwargs["web_ids"] = web_ids
+    future = _rerank_pool.submit(rerank.rerank, query, [int(r) for r in rows], **kwargs)
     try:
         result = future.result(timeout=RERANK_WALL_SECONDS)
     except Exception:  # GeminiError·시간 초과 포함: 재정렬 실패는 기존 순서로 대체

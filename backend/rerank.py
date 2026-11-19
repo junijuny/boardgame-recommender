@@ -57,14 +57,21 @@ def _clean_interpretation(text) -> str:
 
 
 def rerank(
-    query: str, cand_rows: list[int], web_ids: frozenset[int] = frozenset()
+    query: str,
+    cand_rows: list[int],
+    web_ids: frozenset[int] = frozenset(),
+    players: int | None = None,
+    max_time: int | None = None,
 ) -> gemini.RerankResult:
     client = gemini.get_client()
     if client is None:
         raise gemini.GeminiError("Gemini client is not configured")
     gemini.charge()
     games = [rerank_facts(i, web_ids) for i in cand_rows]
-    raw = client.rerank(query, games)
+    if players is not None or max_time is not None:
+        raw = client.rerank(query, games, players=players, max_time=max_time)
+    else:
+        raw = client.rerank(query, games)
     allowed = {g["bgg_id"] for g in games}
     ids = [i for i in dict.fromkeys(raw.ranked_ids) if i in allowed]
     return gemini.RerankResult(
