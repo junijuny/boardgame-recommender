@@ -42,6 +42,13 @@ class WebSearchTest(unittest.TestCase):
         self.assertIn(bgg_id("Catan"), ids)
         self.assertIn(bgg_id("Pandemic Legacy: Season 1"), ids)
 
+    def test_match_names_strips_markdown_year_and_description(self):
+        text = "1. **Catan** (1995)\n- *Pandemic* (2008) - classic cooperative game\n3) `Wingspan` — bird engine builder"
+        ids = web_search.match_names(text)
+        self.assertIn(bgg_id("Catan"), ids)
+        self.assertIn(bgg_id("Pandemic"), ids)
+        self.assertIn(bgg_id("Wingspan"), ids)
+
     def test_lookup_returns_ids_and_unmodified_html(self):
         self.fake.web_answer = WebAnswer("Catan\n\nA short summary.", "<div>x</div>", 1)
         ids, info = web_search.lookup("q")

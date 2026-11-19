@@ -49,6 +49,14 @@ class FakeGeminiClient:
         vec[0] = 1.0
         return vec
 
+    def embed_queries(self, texts):
+        self._record("embed_queries", tuple(texts))
+        if self.query_vector is not None:
+            return np.tile(self.query_vector, (len(texts), 1))
+        out = np.zeros((len(texts), EMBED_DIM), dtype=np.float32)
+        out[:, 0] = 1.0
+        return out
+
     def embed_documents(self, docs):
         self._record("embed_documents", docs)
         out = np.zeros((len(docs), EMBED_DIM), dtype=np.float32)
@@ -74,8 +82,8 @@ class FakeGeminiClient:
         ]
         return out + list(self.extra_profiles)
 
-    def rerank(self, query, games):
-        self._record("rerank", query, games)
+    def rerank(self, query, games, players=None, max_time=None):
+        self._record("rerank", query, games, players, max_time)
         if self.rerank_error is not None:
             raise self.rerank_error
         if self.rerank_result is not None:

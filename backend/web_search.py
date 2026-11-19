@@ -21,6 +21,9 @@ except ImportError:
 MIN_REVIEWS = 1000
 web_budget = limits.DailyBudget(int(os.environ.get("WEB_SEARCH_DAILY_LIMIT", "100")))
 _LIST_MARK = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s*")
+_MARKDOWN_WRAP = re.compile(r"[*_`]+")
+_YEAR_SUFFIX = re.compile(r"\s*\(\d{4}\)\s*$")
+_DASH_SPLIT = re.compile(r"\s+[-–—]\s+")
 _names: dict[str, set[int]] | None = None  # name index built from our own data, not from web results
 
 
@@ -48,11 +51,31 @@ def _lines(text: str) -> list[str]:
     return [_LIST_MARK.sub("", line).strip() for line in text.splitlines() if line.strip()]
 
 
+def _name_candidates(line: str) -> list[str]:
+    """마크다운 강조(**), 연도 표기(1995), 부가 설명(' - ...')을 제거한 매칭 후보 문자열"""
+    cleaned = _MARKDOWN_WRAP.sub("", line).strip()
+    candidates = [cleaned]
+    no_year = _YEAR_SUFFIX.sub("", cleaned).strip()
+    if no_year != cleaned:
+        candidates.append(no_year)
+    head = _DASH_SPLIT.split(cleaned, maxsplit=1)[0].strip()
+    if head != cleaned:
+        candidates.append(head)
+        head_no_year = _YEAR_SUFFIX.sub("", head).strip()
+        if head_no_year != head:
+            candidates.append(head_no_year)
+    return candidates
+
+
 def match_names(text: str) -> frozenset[int]:
     index = _name_index()
     ids: set[int] = set()
     for line in _lines(text):
-        ids |= index.get(_web_norm(line), set())
+        for candidate in _name_candidates(line):
+            hits = index.get(_web_norm(candidate))
+            if hits:
+                ids |= hits
+                break
     return frozenset(ids)
 
 

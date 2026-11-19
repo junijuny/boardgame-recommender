@@ -280,7 +280,75 @@ def search_games(query: str, limit: int = 10) -> list[dict[str, Any]]:
 _SIMILAR_GAME_PATTERNS = (
     re.compile(r"^(?:games?|board\s*games?)\s+(?:like|similar\s+to)\s+(.+?)[.!?]?$", re.IGNORECASE),
     re.compile(r"^(?:something|anything)\s+similar\s+to\s+(.+?)[.!?]?$", re.IGNORECASE),
+    re.compile(r"^(.+?)(?:과|와|이랑|랑)?\s*(?:같은|비슷한|유사한)\s*(?:보드\s*)?게임[.!?]?$"),
+    re.compile(r"^(.+?)(?:과|와|이랑|랑)?\s*(?:같은|비슷한)\s*거[.!?]?$"),
 )
+
+# 한국에서 자주 검색되는 대표 보드게임의 한국어 별칭 -> 데이터셋 영문명(소문자)
+_KOREAN_GAME_ALIASES: dict[str, str] = {
+    "카탄": "catan",
+    "스플렌더": "splendor",
+    "팬데믹": "pandemic",
+    "카르카손": "carcassonne",
+    "티켓 투 라이드": "ticket to ride",
+    "티켓투라이드": "ticket to ride",
+    "코드네임": "codenames",
+    "딕싯": "dixit",
+    "아줄": "azul",
+    "도미니언": "dominion",
+    "글룸헤이븐": "gloomhaven",
+    "테라포밍 마스": "terraforming mars",
+    "테라포밍마스": "terraforming mars",
+    "윙스팬": "wingspan",
+    "세븐 원더스": "7 wonders",
+    "세븐원더스": "7 wonders",
+    "세븐 원더스 듀얼": "7 wonders duel",
+    "세븐원더스 듀얼": "7 wonders duel",
+    "아그리콜라": "agricola",
+    "패치워크": "patchwork",
+    "할리갈리": "halli galli",
+    "루미큐브": "rummikub",
+    "다빈치 코드": "coda",
+    "다빈치코드": "coda",
+    "뱅": "bang!",
+    "뱅!": "bang!",
+    "시크릿 히틀러": "secret hitler",
+    "레지스탕스 아발론": "the resistance: avalon",
+    "아발론": "the resistance: avalon",
+    "쿠": "coup",
+    "러브 레터": "love letter",
+    "러브레터": "love letter",
+    "스시 고": "sushi go!",
+    "스시고": "sushi go!",
+    "킹도미노": "kingdomino",
+    "캐스캐디아": "cascadia",
+    "브라스 버밍엄": "brass: birmingham",
+    "가이아 프로젝트": "gaia project",
+    "스피릿 아일랜드": "spirit island",
+    "루트": "root",
+    "에버델": "everdell",
+    "스컬": "skull",
+    "저스트 원": "just one",
+    "웨이브렝스": "wavelength",
+    "자이푸르": "jaipur",
+    "하나미코지": "hanamikoji",
+    "하이브": "hive",
+    "오니타마": "onitama",
+    "좀비사이드": "zombicide",
+    "데드 오브 윈터": "dead of winter: a crossroads game",
+    "미스테리움": "mysterium",
+    "클루": "clue",
+    "모노폴리": "monopoly",
+    "블로커스": "blokus",
+    "보난자": "bohnanza",
+    "달무티": "the great dalmuti",
+    "티츄": "tichu",
+    "스컬 킹": "skull king",
+    "스컬킹": "skull king",
+    "더 크루": "the crew: the quest for planet nine",
+    "포비든 아일랜드": "forbidden island",
+    "클랭크": "clank!: a deck-building adventure",
+}
 
 
 def _game_summary(row: pd.Series) -> dict[str, Any]:
@@ -296,8 +364,9 @@ def _game_summary(row: pd.Series) -> dict[str, Any]:
 
 
 def _find_summary_by_name(name_lower: str) -> dict[str, Any] | None:
-    """정규화된 게임 이름과 일치하는 대표 게임 요약(리뷰 수 최다 판본) 반환"""
-    matches = df[_names_lower == name_lower]
+    """정규화된 게임 이름(한국어 별칭 포함)과 일치하는 대표 게임 요약(리뷰 수 최다 판본) 반환"""
+    canonical = _KOREAN_GAME_ALIASES.get(name_lower, name_lower)
+    matches = df[_names_lower == canonical]
     if matches.empty:
         return None
     best = matches.sort_values("NumUserRatings", ascending=False).iloc[0]
