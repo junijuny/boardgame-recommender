@@ -10,16 +10,16 @@ import clsx from "clsx";
 import { useState } from "react";
 import { RefreshCw, Search } from "lucide-react";
 import { ResultList, ResultSkeleton } from "./ResultList";
-import { PlayerPicker, TimePicker } from "./ChoicePickers";
+import { PlayerPicker, TimeSlotPicker } from "./ChoicePickers";
 import { ErrorNotice, ServerWakeNotice } from "./LoadingParts";
 import { NoMatchNotice } from "./SearchNotice";
 import WebResultBox from "./WebResultBox";
 import { errorResponse } from "../api";
-import { PLAYER_OPTIONS, TIME_OPTIONS } from "../filters";
-import { formatMinutes } from "../format";
+import { DEFAULT_TIME_SLOT, PLAYER_OPTIONS } from "../filters";
+import { formatHourRange } from "../format";
 import { useExplanations, useIsSlow, useNaturalSearch, useServerInfo } from "../queries";
-import { focusRing, noticeBox, primaryButton } from "../styles";
-import type { GameSummary, GameSwitchOptions, NaturalSearchRequest } from "../types";
+import { focusRing, noticeBox, primaryButton, resultCard, resultEmpty, resultHeader, resultNotices } from "../styles";
+import type { GameSummary, GameSwitchOptions, NaturalSearchRequest, TimeRange } from "../types";
 
 interface DescriptionSearchProps {
   onShowDetail: (bggId: number) => void;
@@ -29,7 +29,8 @@ interface DescriptionSearchProps {
 export default function DescriptionSearch({ onShowDetail, onSwitchToGame }: DescriptionSearchProps) {
   const [query, setQuery] = useState("");
   const [players, setPlayers] = useState(4);
-  const [maxTime, setMaxTime] = useState(60);
+  // 플레이 시간 범위 (분)
+  const [time, setTime] = useState<TimeRange>(DEFAULT_TIME_SLOT);
   // 지금 조건으로 지금까지 보여 준 게임 ID ("Refresh"를 누를 때 이 게임들은 빼고 받는다)
   const [shownIds, setShownIds] = useState<number[]>([]);
 
@@ -55,7 +56,7 @@ export default function DescriptionSearch({ onShowDetail, onSwitchToGame }: Desc
 
   // 검색 요청 보내기. exclude: 결과에서 뺄 게임 ID
   function requestSearch(exclude: number[], request?: NaturalSearchRequest) {
-    const body = request ?? { query: query.trim(), players, max_time: maxTime, exclude_ids: exclude };
+    const body = request ?? { query: query.trim(), players, min_time: time.min, max_time: time.max, exclude_ids: exclude };
     if (!body.query || loading) return;
     search.mutate(body, {
       onSuccess: (data) => {
@@ -64,6 +65,7 @@ export default function DescriptionSearch({ onShowDetail, onSwitchToGame }: Desc
           setShownIds([]);
           onSwitchToGame(data.suggested_game, {
             players: body.players,
+            minTime: body.min_time ?? DEFAULT_TIME_SLOT.min,
             maxTime: body.max_time,
             autoSearch: true,
           });
@@ -91,7 +93,7 @@ export default function DescriptionSearch({ onShowDetail, onSwitchToGame }: Desc
   }
 
   return (
-    <div className="flex flex-wrap items-start gap-6">
+    <div className="flex flex-wrap items-stretch gap-6">
       <form
         aria-label="Description search filters"
         onSubmit={(event) => {
@@ -123,11 +125,10 @@ export default function DescriptionSearch({ onShowDetail, onSwitchToGame }: Desc
           disabled={loading}
           onChange={(value) => { setPlayers(value); clearResults(); }}
         />
-        <TimePicker
-          options={TIME_OPTIONS}
-          value={maxTime}
+        <TimeSlotPicker
+          value={time}
           disabled={loading}
-          onChange={(value) => { setMaxTime(value); clearResults(); }}
+          onChange={(value) => { setTime(value); clearResults(); }}
         />
         <button type="submit" disabled={loading || !query.trim()} className={clsx(primaryButton, "w-full text-lg")}>
           <Search className="h-5 w-5" aria-hidden="true" />
@@ -135,80 +136,88 @@ export default function DescriptionSearch({ onShowDetail, onSwitchToGame }: Desc
         </button>
       </form>
 
+      {/* 결과 카드: 왼쪽 입력 카드와 같은 모양. 제목 줄 -> 구분선 -> 안내 -> 결과 목록 */}
       <section
         aria-labelledby="description-result-title"
         aria-live="polite"
         aria-busy={loading}
-        className="flex min-w-0 flex-[999_1_540px] flex-col gap-4"
+        className={resultCard}
       >
-        <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 px-1 pt-1">
+        <div className={resultHeader}>
           <div className="flex min-w-0 flex-col gap-1.5">
             <h2 id="description-result-title" className="font-display text-[26px] font-extrabold tracking-[-0.01em]">Results</h2>
             {search.variables && <p className="break-words text-[15px] text-ink/70">{summarize(search.variables)}</p>}
             {search.data?.interpretation && <p className="break-words text-[15px] text-ink/70">{search.data.interpretation}</p>}
           </div>
-          {search.isSuccess && (
+          {/* 불러오는 동안에도 (돌아가는 아이콘으로) 자리를 지켜서 제목 줄 높이가 바뀌지 않게 한다 */}
+          {(search.isSuccess || loading) && (
             <button
               type="button"
               onClick={handleRefresh}
+              disabled={loading}
               className={clsx(
-                "inline-flex min-h-11 items-center gap-2 rounded-xl border-[1.5px] border-primary bg-card px-4 text-[15px] font-bold text-primary transition-colors hover:bg-line",
+                "inline-flex min-h-11 items-center gap-2 rounded-xl border-[1.5px] border-primary bg-card px-4 text-[15px] font-bold text-primary transition-colors hover:bg-line disabled:opacity-60",
                 focusRing,
               )}
             >
-              <RefreshCw className="h-[18px] w-[18px]" aria-hidden="true" />
+              <RefreshCw className={clsx("h-[18px] w-[18px]", loading && "motion-safe:animate-spin")} aria-hidden="true" />
               Refresh
             </button>
           )}
         </div>
 
-        {slow && <ServerWakeNotice />}
-        {loading && <ResultSkeleton label="Finding games" />}
-        {search.isError && (
-          <DescriptionError
-            error={search.error}
-            afterRefresh={(search.variables?.exclude_ids?.length ?? 0) > 0}
-            onRetry={handleRetry}
-            onStartOver={handleSearch}
-          />
-        )}
-        {/* "최신 게임" 검색: 데이터셋이 2021년 출시작까지라 그보다 새 게임은 나올 수 없음을 알린다 */}
-        {search.isSuccess && search.data.games[0]?.SortedBy === "newest" && (
-          <p className={noticeBox}>
-            Our game data covers releases up to {DATA_LAST_YEAR}, so these are the newest games in it.
-          </p>
-        )}
-        {search.isSuccess && search.data.weak_match && (
-          <p className={noticeBox}>
-            We couldn't find a close match. These are the nearest games.
-          </p>
-        )}
-        {search.isSuccess && search.data.web && <WebResultBox web={search.data.web} />}
-        {search.isSuccess && !search.data.redirect_to_game && search.data.suggested_game && onSwitchToGame && (
-          <div className={clsx(noticeBox, "flex flex-wrap items-center justify-between gap-3")}>
-            <p>
-              Looking for games similar to <strong>{search.data.suggested_game.Name}</strong>?
+        {/* 안내 줄: 보여 줄 안내가 없으면 비어 있어서 empty:hidden으로 숨는다 */}
+        <div className={resultNotices}>
+          {slow && <ServerWakeNotice />}
+          {search.isError && (
+            <DescriptionError
+              error={search.error}
+              afterRefresh={(search.variables?.exclude_ids?.length ?? 0) > 0}
+              onRetry={handleRetry}
+              onStartOver={handleSearch}
+            />
+          )}
+          {/* "최신 게임" 검색: 데이터셋이 2021년 출시작까지라 그보다 새 게임은 나올 수 없음을 알린다 */}
+          {search.isSuccess && search.data.games[0]?.SortedBy === "newest" && (
+            <p className={noticeBox}>
+              Our game data covers releases up to {DATA_LAST_YEAR}, so these are the newest games in it.
             </p>
-            <button
-              type="button"
-              onClick={() =>
-                onSwitchToGame(search.data.suggested_game!, {
-                  players: search.variables?.players ?? players,
-                  maxTime: search.variables?.max_time ?? maxTime,
-                  autoSearch: true,
-                })
-              }
-              className={clsx(
-                "min-h-10 rounded-lg border-[1.5px] border-primary bg-card px-3.5 text-sm font-bold text-primary transition-colors hover:bg-line",
-                focusRing,
-              )}
-            >
-              Switch to By game
-            </button>
-          </div>
-        )}
+          )}
+          {search.isSuccess && search.data.weak_match && (
+            <p className={noticeBox}>
+              We couldn't find a close match. These are the nearest games.
+            </p>
+          )}
+          {search.isSuccess && search.data.web && <WebResultBox web={search.data.web} />}
+          {search.isSuccess && !search.data.redirect_to_game && search.data.suggested_game && onSwitchToGame && (
+            <div className={clsx(noticeBox, "flex flex-wrap items-center justify-between gap-3")}>
+              <p>
+                Looking for games similar to <strong>{search.data.suggested_game.Name}</strong>?
+              </p>
+              <button
+                type="button"
+                onClick={() =>
+                  onSwitchToGame(search.data.suggested_game!, {
+                    players: search.variables?.players ?? players,
+                    minTime: search.variables?.min_time ?? time.min,
+                    maxTime: search.variables?.max_time ?? time.max,
+                    autoSearch: true,
+                  })
+                }
+                className={clsx(
+                  "min-h-10 rounded-lg border-[1.5px] border-primary bg-card px-3.5 text-sm font-bold text-primary transition-colors hover:bg-line",
+                  focusRing,
+                )}
+              >
+                Switch to By game
+              </button>
+            </div>
+          )}
+        </div>
+        {loading && <ResultSkeleton className="flex-1" label="Finding games" />}
         {search.isSuccess && (
           <ResultList
+            className="flex-1"
             items={search.data.games.map((g) => ({ game: g, chips: [...g.MatchedMechanics, ...g.MatchedThemes].slice(0, 3) }))}
             reasons={explanations.data?.reasons}
             reasonsLoading={explanations.isFetching}
@@ -216,7 +225,7 @@ export default function DescriptionSearch({ onShowDetail, onSwitchToGame }: Desc
           />
         )}
         {search.isIdle && (
-          <p className="rounded-[20px] border border-dashed border-ink/25 px-5 py-8 text-center text-ink/70">
+          <p className={resultEmpty}>
             Describe the kind of game you want to play.
           </p>
         )}
@@ -228,9 +237,9 @@ export default function DescriptionSearch({ onShowDetail, onSwitchToGame }: Desc
 // 게임 데이터(BGG 데이터셋)에 들어 있는 가장 최근 출시 연도. 데이터를 새로 받으면 함께 바꾼다
 const DATA_LAST_YEAR = 2021;
 
-// 결과 위의 조건 요약. 예) 'Matching "co-op, no dice", 4 players, up to 1 hr'
-function summarize({ query, players, max_time }: NaturalSearchRequest) {
-  return `Matching "${query}", ${players} players, up to ${formatMinutes(max_time)}`;
+// 결과 위의 조건 요약. 예) 'Matching "co-op, no dice", 4 players, 0.5 ~ 1 hr'
+function summarize({ query, players, min_time, max_time }: NaturalSearchRequest) {
+  return `Matching "${query}", ${players} players, ${formatHourRange(min_time ?? 0, max_time)}`;
 }
 
 // 검색 실패: 조건에 맞는 게임이 없으면 안내, 그 밖에는 오류 메시지

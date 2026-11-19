@@ -65,6 +65,8 @@ export interface GameDetail extends GameSummary {
 export interface RecommendRequest {
   game_name: string;
   players: number;
+  // 플레이 시간 범위의 시작 (분). 아직 백엔드가 쓰지 않는 값 (모르는 필드는 서버가 무시한다)
+  min_time?: number;
   max_time: number;
   // 결과에서 뺄 게임 ID (이미 보여 준 게임). 추천 결과의 "Refresh"에서 사용
   exclude_ids?: number[];
@@ -80,6 +82,8 @@ export interface ServerInfo {
 export interface NaturalSearchRequest {
   query: string;
   players: number;
+  // RecommendRequest의 min_time과 같음
+  min_time?: number;
   max_time: number;
   exclude_ids?: number[];
 }
@@ -110,9 +114,16 @@ export interface NaturalSearchResponse {
   redirect_to_game?: boolean;
 }
 
+// 플레이 시간 구간 (단위: 분). 예) { min: 30, max: 60 } = 0.5 ~ 1 hr
+export interface TimeRange {
+  min: number;
+  max: number;
+}
+
 // "By description"에서 "By game" 탭으로 전환할 때 넘기는 조건
 export interface GameSwitchOptions {
   players: number;
+  minTime: number;
   maxTime: number;
   autoSearch: boolean;
 }

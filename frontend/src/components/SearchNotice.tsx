@@ -13,7 +13,8 @@ interface NoMatchNoticeProps {
 
 export function NoMatchNotice({ afterRefresh, onStartOver }: NoMatchNoticeProps) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-[20px] border border-line bg-card px-5 py-8 text-center text-ink/70">
+    // 결과 카드 안의 안내 줄에 들어가므로 따로 테두리 없이 가운데 정렬만 한다
+    <div className="flex flex-col items-center gap-2 py-6 text-center text-ink/70">
       <SearchX className="h-8 w-8 text-primary" aria-hidden="true" />
       {afterRefresh ? (
         <>

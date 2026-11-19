@@ -37,5 +37,15 @@ export const pageTitle =
 // 화면 가운데에 내용을 모으는 폭 (헤더와 본문이 같은 폭을 쓴다)
 export const container = "mx-auto w-full max-w-7xl px-4 sm:px-6";
 
+// Find games의 결과 카드 ("By game", "By description" 공통)
+//   resultCard    : 카드 전체. 입력 카드(rounded-[20px] border bg-card)와 같은 모양
+//   resultHeader  : 제목·조건 요약·Refresh 줄. 아래 구분선으로 목록과 나눈다. 여백은 입력 카드(p-5 sm:p-7)와 맞춤
+//   resultNotices : 서버 깨우는 중·오류·검색 안내를 모아 두는 줄. 안내가 없으면 숨는다 (empty:hidden)
+//   resultEmpty   : 아직 검색 전일 때 카드 가운데에 보이는 안내 문장
+export const resultCard = "flex min-w-0 flex-[999_1_540px] flex-col overflow-hidden rounded-[20px] border border-line bg-card";
+export const resultHeader = "flex flex-wrap items-end justify-between gap-x-4 gap-y-2 border-b border-line px-5 pt-5 pb-4 sm:px-7 sm:pt-7 sm:pb-5";
+export const resultNotices = "flex flex-col gap-3 border-b border-line px-5 py-4 empty:hidden sm:px-7";
+export const resultEmpty = "flex flex-1 items-center justify-center px-5 py-10 text-center text-ink/70";
+
 // 결과 위에 띄우는 안내 상자와 웹 검색 상자가 같이 쓰는 카드 모양
 export const noticeBox = "rounded-xl border border-line bg-card px-4 py-3 text-[15px] text-ink/80";

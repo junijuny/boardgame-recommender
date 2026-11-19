@@ -109,6 +109,7 @@ export default function RecommendScreen({ initialGame, onRecommendSimilar }: Rec
           key={similarPreset?.key ?? 0}
           initialGame={similarPreset?.game ?? initialGame}
           initialPlayers={similarPreset?.options.players}
+          initialMinTime={similarPreset?.options.minTime}
           initialMaxTime={similarPreset?.options.maxTime}
           autoRecommend={similarPreset?.options.autoSearch}
           onShowDetail={setSelectedId}

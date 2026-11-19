@@ -41,10 +41,11 @@ export async function filterGames(players: number, maxTime: number, signal?: Abo
 
 // 비슷한 게임 추천 (최대 5개)
 // exclude_ids: 이미 보여 준 게임 ID. 넣으면 그 게임들을 빼고 다음으로 비슷한 게임을 돌려준다.
-export async function recommend({ game_name, players, max_time, exclude_ids }: RecommendRequest) {
+export async function recommend({ game_name, players, min_time, max_time, exclude_ids }: RecommendRequest) {
   const res = await api.post<RecommendedGame[]>("/recommend", {
     game_name,
     players,
+    min_time,
     max_time,
     ...(exclude_ids && exclude_ids.length > 0 ? { exclude_ids } : {}),
   });
@@ -58,10 +59,11 @@ export async function getServerInfo() {
 }
 
 // 자연어 검색 (최대 5개). exclude_ids는 recommend와 같이 비어 있으면 보내지 않는다.
-export async function naturalSearch({ query, players, max_time, exclude_ids }: NaturalSearchRequest) {
+export async function naturalSearch({ query, players, min_time, max_time, exclude_ids }: NaturalSearchRequest) {
   const res = await api.post<NaturalSearchResponse | NaturalGame[]>("/search/natural", {
     query,
     players,
+    min_time,
     max_time,
     ...(exclude_ids && exclude_ids.length > 0 ? { exclude_ids } : {}),
   });
