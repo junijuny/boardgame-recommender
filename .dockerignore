@@ -11,3 +11,4 @@ tests
 data/user_ratings.csv
 # TF-IDF 캐시는 이미지 빌드 중에 새로 만듦
 data/tfidf_cache.joblib
+data/startup_cache.pkl

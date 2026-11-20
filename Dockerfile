@@ -23,6 +23,8 @@ COPY data ./data
 # TF-IDF 캐시를 이미지 빌드 때 항상 미리 생성 (.dockerignore 가 로컬 캐시를 빼므로 여기서 새로 만들어 이미지에 남는다)
 # 자연어 검색의 단어 일치(terms)가 첫 질의에서 TF-IDF 를 새로 학습하지 않게 한다
 RUN cd backend && python -c "import features; features.load_or_compute_tfidf(features.load_games())"
+# 게임 표·메커니즘·테마 시작 캐시도 미리 생성 → 서버가 켜질 때 CSV를 다시 읽지 않아 콜드스타트가 줄어든다
+RUN cd backend && python -c "import features; features.load_startup_data()"
 
 # root 가 아닌 일반 사용자로 실행
 RUN useradd -m -u 1000 user && chown -R user /app
