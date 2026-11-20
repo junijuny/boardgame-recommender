@@ -26,7 +26,8 @@ interface SimilarSearchProps {
   initialGame: GameSummary | null;
   initialPlayers?: number;
   initialMinTime?: number;
-  initialMaxTime?: number;
+  // null = 상한 없음 ("2 hr or more"), undefined = 기본 구간
+  initialMaxTime?: number | null;
   autoRecommend?: boolean;
   onShowDetail: (bggId: number) => void;
 }
@@ -42,10 +43,10 @@ export default function SimilarSearch({
   // 검색 결과에서 선택한 게임 (선택 안 했으면 null)
   const [game, setGame] = useState<GameSummary | null>(initialGame);
   const [players, setPlayers] = useState(initialPlayers ?? 4);
-  // 플레이 시간 범위 (분)
+  // 플레이 시간 범위 (분). max의 null은 "상한 없음"이라 ??로 기본값을 채우면 안 된다
   const [time, setTime] = useState<TimeRange>({
     min: initialMinTime ?? DEFAULT_TIME_SLOT.min,
-    max: initialMaxTime ?? DEFAULT_TIME_SLOT.max,
+    max: initialMaxTime === undefined ? DEFAULT_TIME_SLOT.max : initialMaxTime,
   });
 
   // 추천 요청 (isPending: 요청 중, data: 결과, error: 실패, variables: 보낸 조건)

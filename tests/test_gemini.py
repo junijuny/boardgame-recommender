@@ -210,6 +210,9 @@ class RerankParsingTest(unittest.TestCase):
         self.assertIn("Selected filters: 2 players, 30-60 min", seen["prompt"])
         client.rerank("q", [], players=2, max_time=30, min_time=0)
         self.assertIn("Selected filters: 2 players, up to 30 min", seen["prompt"])
+        # 상한 없는 마지막 칸 (2 hr or more)
+        client.rerank("q", [], players=2, max_time=None, min_time=120)
+        self.assertIn("Selected filters: 2 players, 120+ min", seen["prompt"])
 
 
 def _web_client(resp, seen=None):

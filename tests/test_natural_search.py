@@ -752,6 +752,13 @@ class RerankSearchTest(unittest.TestCase):
         self.assertIsNotNone(ns._rerank_cache.get(("co-op", 4, 0, 60)))
         self.assertIsNotNone(ns._rerank_cache.get(("co-op", 4, 30, 60)))
 
+    def test_rerank_receives_open_ended_time_slot(self):
+        # "2 hr or more" 칸은 max_time 없이 (None) 재정렬에 넘기고, 캐시도 따로 둔다
+        search_full("co-op", 4, None, min_time=120)
+        call = self.rerank_calls()[-1]
+        self.assertEqual((call[4], call[5]), (None, 120))
+        self.assertIsNotNone(ns._rerank_cache.get(("co-op", 4, 120, None)))
+
     def test_dual_query_embedding_uses_single_batch_call(self):
         self.fake.intent = QueryIntent("cooperative puzzle game")
         search_full("협력 퍼즐 게임", 4, 60)

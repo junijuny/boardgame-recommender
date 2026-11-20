@@ -514,6 +514,9 @@ class GoogleGeminiClient:
                 filter_parts.append(f"{min_time}-{max_time} min")
             else:
                 filter_parts.append(f"up to {max_time} min")
+        elif min_time:
+            # 상한 없는 마지막 칸 (예: 2 hr or more)은 하한만 알린다
+            filter_parts.append(f"{min_time}+ min")
         filters = ", ".join(filter_parts) if filter_parts else "none"
         prompt = RERANK_PROMPT.format(
             query=query, filters=filters, games=json.dumps(list(games), ensure_ascii=False)

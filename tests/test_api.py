@@ -141,9 +141,22 @@ class APITests(unittest.TestCase):
         for game in full:
             self.assertLessEqual(game["ComMaxPlaytime"], 30)
 
+    def test_recommendation_open_ended_time_slot(self):
+        # 슬라이더의 마지막 칸 "2 hr or more"은 max_time 없이(null) 보낸다: 120분 이상 전체
+        response = self.recommend(min_time=120, max_time=None)
+        self.assertEqual(response.status_code, 200)
+        games = response.json()
+        self.assertEqual(len(games), 5)
+        for game in games:
+            self.assertGreaterEqual(game["ComMaxPlaytime"], 120)
+        # max_time을 아예 보내지 않아도 같다
+        payload = {"game_name": "Catan", "players": 4, "min_time": 120}
+        self.assertEqual(self.client.post("/recommend", json=payload).json(), games)
+
     def test_recommendation_rejects_invalid_time_slot(self):
         cases = [
             ({"min_time": -1}, "Min time must be 0 or greater"),
+            ({"min_time": -1, "max_time": None}, "Min time must be 0 or greater"),
             ({"min_time": 90, "max_time": 90}, "Min time must be less than max time"),
             ({"min_time": 120, "max_time": 90}, "Min time must be less than max time"),
         ]
@@ -556,6 +569,13 @@ class APITests(unittest.TestCase):
         shared = df.loc[upper & lower, "ComMaxPlaytime"]
         self.assertTrue(len(shared) > 0)
         self.assertTrue((shared == 60).all())
+
+    def test_condition_mask_without_max_time_has_no_upper_limit(self):
+        # max_time=None: min_time 이상이면 모두 (120분 넘는 긴 게임도 들어간다)
+        playtime = df.loc[_condition_mask(4, None, 5.5, min_time=120), "ComMaxPlaytime"]
+        self.assertTrue((playtime >= 120).all())
+        self.assertTrue((playtime == 120).any())
+        self.assertTrue((playtime > 120).any())
 
     def test_detect_game_patterns_and_exact_match(self):
         like_catan = detect_game("Games like Catan!")

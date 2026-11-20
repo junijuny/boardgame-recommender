@@ -69,7 +69,8 @@ export interface RecommendRequest {
   // (경계 값의 게임은 양쪽 구간에 모두 나온다. 예: 60분 게임은 0.5 ~ 1 hr와 1 ~ 1.5 hr)
   // 보내지 않으면 서버가 0으로 본다 (max_time 이하 전체)
   min_time?: number;
-  max_time: number;
+  // null이면 상한 없음 (슬라이더의 "2 hr or more" 칸: min_time 이상 전체)
+  max_time: number | null;
   // 결과에서 뺄 게임 ID (이미 보여 준 게임). 추천 결과의 "Refresh"에서 사용
   exclude_ids?: number[];
 }
@@ -84,9 +85,9 @@ export interface ServerInfo {
 export interface NaturalSearchRequest {
   query: string;
   players: number;
-  // RecommendRequest의 min_time과 같음
+  // RecommendRequest의 min_time, max_time과 같음
   min_time?: number;
-  max_time: number;
+  max_time: number | null;
   exclude_ids?: number[];
 }
 
@@ -117,16 +118,18 @@ export interface NaturalSearchResponse {
 }
 
 // 플레이 시간 구간 (단위: 분). 예) { min: 30, max: 60 } = 0.5 ~ 1 hr
+// max가 null이면 상한 없음. 예) { min: 120, max: null } = 2 hr or more
 export interface TimeRange {
   min: number;
-  max: number;
+  max: number | null;
 }
 
 // "By description"에서 "By game" 탭으로 전환할 때 넘기는 조건
 export interface GameSwitchOptions {
   players: number;
   minTime: number;
-  maxTime: number;
+  // null이면 상한 없음 (TimeRange.max와 같음)
+  maxTime: number | null;
   autoSearch: boolean;
 }
 

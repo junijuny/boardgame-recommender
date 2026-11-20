@@ -94,8 +94,9 @@ class RecommendRequest(BaseModel):
     players: int
     # 플레이 시간 구간 (분): 게임의 최대 플레이 시간이 min_time 이상 ~ max_time 이하
     # (경계 값의 게임은 양쪽 구간에 모두 들어감). min_time을 보내지 않으면 0 (예전처럼 max_time 이하 전체)
+    # max_time이 null이거나 없으면 상한 없음 (슬라이더의 "2 hr or more" 칸 = min_time 120, max_time null)
     min_time: int = 0
-    max_time: int
+    max_time: int | None = None
 
     # 새 기능: 이전에 추천한 게임 ID 목록
     # 전달하지 않으면 기존 추천 방식 그대로 동작
@@ -108,7 +109,7 @@ class NaturalSearchRequest(BaseModel):
     players: int
     # RecommendRequest와 같은 플레이 시간 구간
     min_time: int = 0
-    max_time: int
+    max_time: int | None = None
     exclude_ids: list[int] = Field(default_factory=list)
 
 

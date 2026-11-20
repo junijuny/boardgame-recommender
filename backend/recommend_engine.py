@@ -409,33 +409,37 @@ def exclude_mask(exclude_ids: Sequence[int] | None) -> pd.Series:
     return ~(by_id | _names_lower.isin(excluded_names))
 
 
-def validate_time_range(min_time: int, max_time: int) -> None:
-    """플레이 시간 구간 검사. 잘못되면 ValueError (메시지는 API 응답에 그대로 쓴다)"""
-    if max_time <= 0:
+def validate_time_range(min_time: int, max_time: int | None) -> None:
+    """플레이 시간 구간 검사. 잘못되면 ValueError (메시지는 API 응답에 그대로 쓴다)
+    max_time이 None이면 상한 없는 구간 (예: 슬라이더의 "2 hr or more" 칸)"""
+    if max_time is not None and max_time <= 0:
         raise ValueError("Max time must be greater than 0")
     if min_time < 0:
         raise ValueError("Min time must be 0 or greater")
-    if min_time >= max_time:
+    if max_time is not None and min_time >= max_time:
         raise ValueError("Min time must be less than max time")
 
 
 def _condition_mask(
-    players: int, max_time: int, min_rating: float, min_time: int = 0
+    players: int, max_time: int | None, min_rating: float, min_time: int = 0
 ) -> pd.Series:
     """인원·플레이 시간·평점 조건.
 
     플레이 시간은 게임의 최대 플레이 시간(ComMaxPlaytime)이 구간 [min_time, max_time]에 드는지 본다.
-    양 끝을 모두 포함해서, 프론트엔드 슬라이더의 경계 값(30·60·90분) 게임은 양쪽 칸에 모두 나온다.
+    양 끝을 모두 포함해서, 프론트엔드 슬라이더의 경계 값(30·60·90·120분) 게임은 양쪽 칸에 모두 나온다.
     예) 60분 게임은 30~60분 칸과 60~90분 칸 모두
-    min_time이 0이면 예전처럼 최대 시간만 거른다. 플레이 시간이 0으로 기록된 게임은 항상 뺀다."""
-    return (
+    min_time이 0이면 예전처럼 최대 시간만 거른다. max_time이 None이면 상한 없이 min_time 이상 전체.
+    플레이 시간이 0으로 기록된 게임은 항상 뺀다."""
+    mask = (
         (df["MinPlayers"] <= players)
         & (df["MaxPlayers"] >= players)
         & (df["ComMaxPlaytime"] > 0)
         & (df["ComMaxPlaytime"] >= min_time)
-        & (df["ComMaxPlaytime"] <= max_time)
         & (df["BayesAvgRating"] >= min_rating)
     )
+    if max_time is not None:
+        mask &= df["ComMaxPlaytime"] <= max_time
+    return mask
 
 
 def filter_games(
@@ -451,7 +455,7 @@ def filter_games(
 def recommend_games(
     target_game_name: str,
     players: int,
-    max_time: int,
+    max_time: int | None,
     top_n: int = 5,
     min_rating: float = 5.5,
     exclude_ids: list[int] | None = None,
@@ -460,7 +464,8 @@ def recommend_games(
     """
     조건 필터링 + 하이브리드 유사도 + 평점 보정 + 다양성 재정렬 추천
 
-    플레이 시간은 양 끝을 포함한 구간 [min_time, max_time] (분). min_time을 생략하면 max_time 이하 전체
+    플레이 시간은 양 끝을 포함한 구간 [min_time, max_time] (분). min_time을 생략하면 max_time 이하 전체,
+    max_time이 None이면 min_time 이상 전체
 
     Returns:
         게임 정보와 Similarity(유사도 0~1), Score(최종 점수),

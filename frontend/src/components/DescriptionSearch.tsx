@@ -200,7 +200,8 @@ export default function DescriptionSearch({ onShowDetail, onSwitchToGame }: Desc
                   onSwitchToGame(search.data.suggested_game!, {
                     players: search.variables?.players ?? players,
                     minTime: search.variables?.min_time ?? time.min,
-                    maxTime: search.variables?.max_time ?? time.max,
+                    // max_time의 null은 "상한 없음"이므로 ??로 바꾸지 않는다
+                    maxTime: search.variables ? search.variables.max_time : time.max,
                     autoSearch: true,
                   })
                 }

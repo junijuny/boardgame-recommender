@@ -6,7 +6,9 @@ import type { GameDetail } from "./types";
 
 
 // 시작·끝 시간(분)을 시간 단위 범위 글자로. 예) (0, 30) -> "0 ~ 0.5 hr", (30, 60) -> "0.5 ~ 1 hr"
-export function formatHourRange(startMin: number, endMin: number): string {
+// 끝이 null이면 상한 없음. 예) (120, null) -> "2 hr or more"
+export function formatHourRange(startMin: number, endMin: number | null): string {
+  if (endMin === null) return `${formatHours(startMin)} hr or more`;
   return `${formatHours(startMin)} ~ ${formatHours(endMin)} hr`;
 }
 
