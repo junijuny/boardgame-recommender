@@ -151,15 +151,16 @@ def load_or_compute_tfidf(df: pd.DataFrame):
 
 
 # 시작 캐시를 만들 때 쓰는 원본 파일 (이 중 하나라도 캐시보다 새로우면 캐시를 다시 만든다)
-STARTUP_SOURCES = (CLEAN_GAMES_PATH, RAW_GAMES_PATH, MECHANICS_PATH, THEMES_PATH)
+# 이 파일(features.py)도 포함: load_games() 등 캐시 내용을 만드는 코드만 바뀌어도 (git pull 등) 다시 만들게
+STARTUP_SOURCES = (CLEAN_GAMES_PATH, RAW_GAMES_PATH, MECHANICS_PATH, THEMES_PATH, Path(__file__))
 
 
 def load_startup_data(cache_path: Path = STARTUP_CACHE_PATH):
     """서버 시작 때 쓰는 (게임 표, 메커니즘, 테마)를 돌려준다.
 
     CSV 4개를 읽고 가공하는 데 약 0.9초가 걸려서(로컬 기준), 결과를 pickle 파일로 저장해 두고
-    다음부터는 그 파일만 읽는다(약 0.03초). 캐시가 원본 CSV보다 오래됐거나 깨졌으면 새로 만든다.
-    pickle 은 남이 만든 파일을 열면 위험하므로, 이 함수가 직접 만든 캐시 파일만 읽는다.
+    다음부터는 그 파일만 읽는다(약 0.03초). 캐시가 원본 CSV나 이 코드보다 오래됐거나 깨졌으면 새로 만든다.
+    pickle 은 열기만 해도 안의 코드가 실행될 수 있으므로, 이 함수가 만든 캐시 파일만 이 경로에 두어야 한다.
     """
     if cache_path.exists():
         try:
@@ -174,16 +175,21 @@ def load_startup_data(cache_path: Path = STARTUP_CACHE_PATH):
     df = load_games()
     mechanics = load_binary_features(MECHANICS_PATH, df["BGGId"])
     themes = load_binary_features(THEMES_PATH, df["BGGId"])
+    # 임시 파일에 다 쓴 뒤 바꿔치기 (쓰다가 멈춰도 깨진 캐시가 남지 않게)
+    # 이름에 프로세스 번호를 넣어 여러 워커가 동시에 만들어도 서로의 임시 파일을 덮어쓰지 않게 함
+    tmp_path = cache_path.with_name(f"{cache_path.name}.{os.getpid()}.tmp")
     try:
-        # 임시 파일에 다 쓴 뒤 바꿔치기 (쓰다가 멈춰도 깨진 캐시가 남지 않게)
-        tmp_path = cache_path.with_suffix(".tmp")
         # 클래스 대신 값(dict)만 저장 (features / backend.features 어느 이름으로 불러와도 읽히게)
         data = {"df": df, "mechanics": vars(mechanics), "themes": vars(themes)}
         with open(tmp_path, "wb") as f:
             pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
         os.replace(tmp_path, cache_path)
     except Exception:
-        pass  # 저장에 실패해도 서버는 그대로 동작
+        # 저장에 실패해도 서버는 그대로 동작. 쓰다 만 임시 파일은 지운다
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
     return df, mechanics, themes
 
 

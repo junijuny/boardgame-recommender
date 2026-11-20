@@ -11,6 +11,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -72,6 +73,17 @@ class StartupCacheTests(unittest.TestCase):
         self.cache.write_bytes(b"not a pickle")
         result = features.load_startup_data(self.cache)
         self.assert_same_as_csv(result)
+
+    def test_code_change_rebuilds_cache(self):
+        # load_games() 같은 캐시 내용을 만드는 코드만 바뀌어도 (CSV는 그대로) 캐시를 다시 만들어야 한다
+        sources = [p.resolve() for p in features.STARTUP_SOURCES]
+        self.assertIn(Path(features.__file__).resolve(), sources)
+
+    def test_failed_save_leaves_no_temp_file(self):
+        with mock.patch.object(features.pickle, "dump", side_effect=OSError("disk full")):
+            result = features.load_startup_data(self.cache)
+        self.assert_same_as_csv(result)  # 저장에 실패해도 CSV 결과는 그대로 돌려준다
+        self.assertEqual(list(Path(self.tmp.name).iterdir()), [])  # 캐시도 임시 파일도 남지 않음
 
 
 if __name__ == "__main__":
