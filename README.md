@@ -98,3 +98,11 @@ uv run python -m unittest discover -s tests -v
 ## 📜 데이터 출처
 * [BoardGameGeek (BGG)](https://boardgamegeek.com/)
 * [Kaggle — Board Games Database from BoardGameGeek](https://www.kaggle.com/datasets/threnjen/board-games-database-from-boardgamegeek)
+
+---
+
+## ⚖️ 라이선스 (License)
+* **코드**: [MIT License](LICENSE) © 2026 JIWON LEE (이지원)
+* **데이터**: BGG에서 온 게임 데이터와 이를 가공한 산출물(`data/` 폴더)은 MIT License 대상이 **아니며**, 원본 조건을 따릅니다.
+    * Kaggle 원본(`games.csv`, `mechanics.csv`, `themes.csv`)과 이를 가공해 만든 파일(`clean_games.csv`, 임베딩, `game_profiles.json` 등)은 [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/)을 따릅니다.
+    * 게임 정보와 표지 이미지는 BoardGameGeek의 데이터로, [BGG XML API 이용 약관](https://boardgamegeek.com/wiki/page/XML_API_Terms_of_Use)에 따라 **비상업적 용도로만** 사용할 수 있습니다. 표지 이미지의 저작권은 각 권리자에게 있습니다.

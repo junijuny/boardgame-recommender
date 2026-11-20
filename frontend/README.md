@@ -44,7 +44,8 @@ App.tsx
 │   └── DescriptionSearch  By description: 원하는 게임을 문장으로 설명 → Top 5, 해석 한 줄·약한 일치·웹 결과 표시
 │                          ("games like Catan"이면 By game 탭으로 넘어가 바로 추천)
 ├── GenreScreen       8개 장르별 대표 게임 (Refresh: 본 게임을 exclude_ids로 빼고 같은 장르의 다른 게임)
-└── GameDetailModal   게임 상세 팝업 (어느 화면에서든 열림, "Find similar games"로 이동)
+├── GameDetailModal   게임 상세 팝업 (어느 화면에서든 열림, "Find similar games"로 이동)
+└── Footer            모든 화면 아래의 푸터: BGG로 연결되는 "Powered by BGG" 로고
 ```
 
 화면 폭이 640px 이하(휴대폰)이면 조건 입력과 결과가 위아래로 쌓이고, 상세 팝업은 화면 아래에 붙는 시트 모양이 됩니다.
@@ -60,6 +61,7 @@ App.tsx
 | `src/components/WebResultBox.tsx` | 웹 검색 요약과 Google 검색어 추천 위젯 ("From the web", 샌드박스 iframe, 새 탭으로 열기) |
 | `src/components/ErrorBoundary.tsx` | 화면을 그리다 오류가 나도 빈 화면 대신 안내 문구 표시 |
 | `src/components/Header.tsx` | 헤더. 데이터가 있는 상태에서 다시 불러오는 동안 아래에 진행 막대 표시 |
+| `src/components/Footer.tsx` | 푸터. BGG 이용 약관에 따른 "Powered by BGG" 로고(`public/powered-by-bgg.webp`)와 BGG 링크 |
 | `src/components/GameSearch.tsx` | 게임 이름 자동완성 검색 (입력이 멈추면 검색, 검색어가 바뀌면 이전 요청 취소) |
 | `src/components/SelectedGameCard.tsx` | 선택한 기준 게임 표시 |
 | `src/components/ChoicePickers.tsx` | 인원(숫자 + players)·플레이 시간(막대) 선택 버튼 묶음 |
