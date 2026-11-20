@@ -82,8 +82,8 @@ class FakeGeminiClient:
         ]
         return out + list(self.extra_profiles)
 
-    def rerank(self, query, games, players=None, max_time=None):
-        self._record("rerank", query, games, players, max_time)
+    def rerank(self, query, games, players=None, max_time=None, min_time=None):
+        self._record("rerank", query, games, players, max_time, min_time)
         if self.rerank_error is not None:
             raise self.rerank_error
         if self.rerank_result is not None:

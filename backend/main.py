@@ -17,6 +17,7 @@ try:
         df,
         mechanics,
         semantic_search_available,
+        validate_time_range,
     )
     from backend.recommend_engine import (
         detect_game as engine_detect_game,
@@ -44,6 +45,7 @@ except ImportError:
         df,
         mechanics,
         semantic_search_available,
+        validate_time_range,
     )
     from recommend_engine import (
         detect_game as engine_detect_game,
@@ -90,6 +92,9 @@ app.add_middleware(
 class RecommendRequest(BaseModel):
     game_name: str
     players: int
+    # 플레이 시간 구간 (분): 게임의 최대 플레이 시간이 min_time 이상 ~ max_time 이하
+    # (경계 값의 게임은 양쪽 구간에 모두 들어감). min_time을 보내지 않으면 0 (예전처럼 max_time 이하 전체)
+    min_time: int = 0
     max_time: int
 
     # 새 기능: 이전에 추천한 게임 ID 목록
@@ -101,6 +106,8 @@ class RecommendRequest(BaseModel):
 class NaturalSearchRequest(BaseModel):
     query: str
     players: int
+    # RecommendRequest와 같은 플레이 시간 구간
+    min_time: int = 0
     max_time: int
     exclude_ids: list[int] = Field(default_factory=list)
 
@@ -222,6 +229,7 @@ def recommend_games(request: RecommendRequest):
         results = engine_recommend_games(
             target_game_name=request.game_name,
             players=request.players,
+            min_time=request.min_time,
             max_time=request.max_time,
             top_n=5,
             exclude_ids=request.exclude_ids,
@@ -272,10 +280,12 @@ def search_natural(body: NaturalSearchRequest, request: Request):
             detail="Players must be greater than 0"
         )
 
-    if body.max_time <= 0:
+    try:
+        validate_time_range(body.min_time, body.max_time)
+    except ValueError as e:
         raise HTTPException(
             status_code=400,
-            detail="Max time must be greater than 0"
+            detail=str(e)
         )
 
     if not natural_search_available():
@@ -311,6 +321,7 @@ def search_natural(body: NaturalSearchRequest, request: Request):
         result = natural_search(
             query,
             players=body.players,
+            min_time=body.min_time,
             max_time=body.max_time,
             exclude_ids=body.exclude_ids,
             top_n=5,
