@@ -13,11 +13,13 @@ import type { TimeRange } from "./types";
 
 // 추천 화면의 플레이 시간 구간 (단위: 분). 슬라이더의 칸 하나 = 구간 하나
 // 요청에는 고른 구간의 min, max를 min_time, max_time으로 보낸다
+// 마지막 칸은 상한이 없다 (max: null = 2시간 이상 전체)
 export const TIME_SLOTS: TimeRange[] = [
   { min: 0, max: 30 },
   { min: 30, max: 60 },
   { min: 60, max: 90 },
   { min: 90, max: 120 },
+  { min: 120, max: null },
 ];
 
 // 처음 선택된 구간 (0.5 ~ 1 hr)

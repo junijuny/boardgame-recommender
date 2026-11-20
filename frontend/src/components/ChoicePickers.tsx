@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------
 // ChoicePickers: 추천 조건을 고르는 입력 묶음
 //   PlayerPicker   : 인원 (큰 숫자 + "players" 버튼)
-//   TimeSlotPicker : 플레이 시간 구간 (4칸으로 나뉜 슬라이더, 모래시계 손잡이)
+//   TimeSlotPicker : 플레이 시간 구간 (5칸으로 나뉜 슬라이더, 모래시계 손잡이)
 //
 // fieldset, legend: 관련된 입력들을 하나로 묶고 제목을 붙이는 HTML 태그
 // ---------------------------------------------------------------------
@@ -61,8 +61,10 @@ interface TimeSlotPickerProps {
   disabled?: boolean;
 }
 
-// 칸 경계의 눈금 (0, 0.5, 1, 1.5, 2)
-const BOUNDARIES = [TIME_SLOTS[0].min, ...TIME_SLOTS.map((slot) => slot.max)];
+// 칸 경계의 눈금 (0, 0.5, 1, 1.5, 2). 각 칸의 시작에 하나씩 두고,
+// 마지막 칸에 상한이 있을 때만 오른쪽 끝에도 둔다 (지금은 "2 hr or more" 칸이라 2 hr 눈금 뒤로 열려 있다)
+const LAST_SLOT = TIME_SLOTS[TIME_SLOTS.length - 1];
+const BOUNDARIES = [...TIME_SLOTS.map((slot) => slot.min), ...(LAST_SLOT.max === null ? [] : [LAST_SLOT.max])];
 
 export function TimeSlotPicker({ value, onChange, disabled }: TimeSlotPickerProps) {
   const count = TIME_SLOTS.length;
@@ -124,7 +126,7 @@ export function TimeSlotPicker({ value, onChange, disabled }: TimeSlotPickerProp
           <div className="absolute inset-x-0 top-1/2 grid -translate-y-1/2 gap-1" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }} aria-hidden="true">
             {TIME_SLOTS.map((slot, i) => (
               <span
-                key={slot.max}
+                key={slot.min}
                 className={clsx("h-2.5 rounded-md transition-colors", i === index ? "bg-primary-dark" : "bg-line")}
               />
             ))}
@@ -145,7 +147,7 @@ export function TimeSlotPicker({ value, onChange, disabled }: TimeSlotPickerProp
               key={m}
               className={clsx(
                 "absolute whitespace-nowrap",
-                i === 0 ? "" : i === BOUNDARIES.length - 1 ? "-translate-x-full" : "-translate-x-1/2",
+                i === 0 ? "" : i === count ? "-translate-x-full" : "-translate-x-1/2",
               )}
               style={{ left: `${(i / count) * 100}%` }}
             >

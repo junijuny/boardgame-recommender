@@ -414,13 +414,14 @@ def _idf_weights(feats, cols: np.ndarray) -> np.ndarray:
 def natural_search(
     query: str,
     players: int,
-    max_time: int,
+    max_time: int | None,
     exclude_ids: list[int] | None = None,
     top_n: int = 5,
     allow_web: bool = True,
     min_time: int = 0,
 ) -> NaturalResult:
-    """플레이 시간은 양 끝을 포함한 구간 [min_time, max_time] (분). min_time을 생략하면 max_time 이하 전체"""
+    """플레이 시간은 양 끝을 포함한 구간 [min_time, max_time] (분). min_time을 생략하면 max_time 이하 전체,
+    max_time이 None이면 min_time 이상 전체"""
     client = gemini.get_client()
     index = _index
     if client is None or index is None:
@@ -643,7 +644,7 @@ def _web_lookup(query: str):
 
 
 def _get_rerank(
-    query: str, players: int, max_time: int, rows: np.ndarray, refresh: bool,
+    query: str, players: int, max_time: int | None, rows: np.ndarray, refresh: bool,
     web_ids: frozenset[int] = frozenset(), use_cache: bool = True, min_time: int = 0,
 ):
     """캐시된 재정렬 결과 또는 새 호출. 실패·시간 초과면 None (캐시하지 않는다).

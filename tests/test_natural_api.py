@@ -106,6 +106,7 @@ class NaturalApiTest(unittest.TestCase):
     def test_time_slot_validation(self):
         cases = [
             ({"min_time": -1}, "Min time must be 0 or greater"),
+            ({"min_time": -1, "max_time": None}, "Min time must be 0 or greater"),
             ({"min_time": 60}, "Min time must be less than max time"),
             ({"min_time": 90}, "Min time must be less than max time"),
         ]
@@ -124,6 +125,15 @@ class NaturalApiTest(unittest.TestCase):
         for g in games:
             self.assertGreaterEqual(g["ComMaxPlaytime"], 30)
             self.assertLessEqual(g["ComMaxPlaytime"], 60)
+
+    def test_search_open_ended_time_slot(self):
+        # "2 hr or more" 칸: max_time이 null이면 상한 없이 120분 이상 전체
+        r = client.post("/search/natural", json={**BODY, "min_time": 120, "max_time": None})
+        self.assertEqual(r.status_code, 200)
+        games = r.json()["games"]
+        self.assertEqual(len(games), 5)
+        for g in games:
+            self.assertGreaterEqual(g["ComMaxPlaytime"], 120)
 
     def test_unavailable_is_503(self):
         set_client(None)
