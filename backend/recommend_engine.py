@@ -409,11 +409,30 @@ def exclude_mask(exclude_ids: Sequence[int] | None) -> pd.Series:
     return ~(by_id | _names_lower.isin(excluded_names))
 
 
-def _condition_mask(players: int, max_time: int, min_rating: float) -> pd.Series:
+def validate_time_range(min_time: int, max_time: int) -> None:
+    """플레이 시간 구간 검사. 잘못되면 ValueError (메시지는 API 응답에 그대로 쓴다)"""
+    if max_time <= 0:
+        raise ValueError("Max time must be greater than 0")
+    if min_time < 0:
+        raise ValueError("Min time must be 0 or greater")
+    if min_time >= max_time:
+        raise ValueError("Min time must be less than max time")
+
+
+def _condition_mask(
+    players: int, max_time: int, min_rating: float, min_time: int = 0
+) -> pd.Series:
+    """인원·플레이 시간·평점 조건.
+
+    플레이 시간은 게임의 최대 플레이 시간(ComMaxPlaytime)이 구간 [min_time, max_time]에 드는지 본다.
+    양 끝을 모두 포함해서, 프론트엔드 슬라이더의 경계 값(30·60·90분) 게임은 양쪽 칸에 모두 나온다.
+    예) 60분 게임은 30~60분 칸과 60~90분 칸 모두
+    min_time이 0이면 예전처럼 최대 시간만 거른다. 플레이 시간이 0으로 기록된 게임은 항상 뺀다."""
     return (
         (df["MinPlayers"] <= players)
         & (df["MaxPlayers"] >= players)
         & (df["ComMaxPlaytime"] > 0)
+        & (df["ComMaxPlaytime"] >= min_time)
         & (df["ComMaxPlaytime"] <= max_time)
         & (df["BayesAvgRating"] >= min_rating)
     )
@@ -436,9 +455,12 @@ def recommend_games(
     top_n: int = 5,
     min_rating: float = 5.5,
     exclude_ids: list[int] | None = None,
+    min_time: int = 0,
 ) -> list[dict[str, Any]]:
     """
     조건 필터링 + 하이브리드 유사도 + 평점 보정 + 다양성 재정렬 추천
+
+    플레이 시간은 양 끝을 포함한 구간 [min_time, max_time] (분). min_time을 생략하면 max_time 이하 전체
 
     Returns:
         게임 정보와 Similarity(유사도 0~1), Score(최종 점수),
@@ -449,15 +471,14 @@ def recommend_games(
         raise ValueError("Game name cannot be empty")
     if players <= 0:
         raise ValueError("Players must be greater than 0")
-    if max_time <= 0:
-        raise ValueError("Max time must be greater than 0")
+    validate_time_range(min_time, max_time)
 
     target_game = get_game_by_name(target_game_name)
     if target_game is None:
         raise ValueError(f"Game not found: {target_game_name}")
     target_idx = int(target_game.name)
 
-    mask = _condition_mask(players, max_time, min_rating) & (df.index != target_idx)
+    mask = _condition_mask(players, max_time, min_rating, min_time) & (df.index != target_idx)
 
     # 이전에 추천했던 게임(및 같은 이름의 중복 행)은 다음 추천 후보에서 제외
     if exclude_ids:

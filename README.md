@@ -36,7 +36,7 @@
 | 화면 | 기능 |
 | :--- | :--- |
 | **시작 화면** | "Find similar games" / "Browse by genre" 선택, 무작위 게임 표지 사진이 흐르는 배경 |
-| **Find games — By game** | 게임 이름 자동완성 → 인원(2\~6명)·플레이 시간(30분\~2시간) 선택 → 비슷한 게임 Top 5. "Refresh"로 본 게임을 빼고 다른 5개 |
+| **Find games — By game** | 게임 이름 자동완성 → 인원(2\~6명)·플레이 시간 구간(0\~2시간, 30분 단위 슬라이더) 선택 → 비슷한 게임 Top 5. "Refresh"로 본 게임을 빼고 다른 5개 |
 | **Find games — By description** | 원하는 게임을 한국어·영어 문장으로 설명하면 Gemini가 이해해 Top 5 추천. 검색어 해석 한 줄, 약한 일치 안내, 필요하면 웹 검색 요약("From the web") 표시. "games like Catan"처럼 쓰면 By game 탭으로 바로 전환 |
 | **장르 화면** | 전략·가족·파티·테마·워게임·어린이·카드게임·추리 8개 장르별 대표 게임 6개, "Refresh"로 같은 장르의 다른 게임 |
 | **게임 상세 팝업** | 어느 화면에서든 게임을 누르면 인원·시간·난이도·평점·설명·BGG 링크를 보여 주고, 그 게임 기준으로 바로 추천 |
@@ -98,3 +98,11 @@ uv run python -m unittest discover -s tests -v
 ## 📜 데이터 출처
 * [BoardGameGeek (BGG)](https://boardgamegeek.com/)
 * [Kaggle — Board Games Database from BoardGameGeek](https://www.kaggle.com/datasets/threnjen/board-games-database-from-boardgamegeek)
+
+---
+
+## ⚖️ 라이선스 (License)
+* **코드**: [MIT License](LICENSE) © 2026 JIWON LEE (이지원)
+* **데이터**: BGG에서 온 게임 데이터와 이를 가공한 산출물(`data/` 폴더)은 MIT License 대상이 **아니며**, 원본 조건을 따릅니다.
+    * Kaggle 원본(`games.csv`, `mechanics.csv`, `themes.csv`)과 이를 가공해 만든 파일(`clean_games.csv`, 임베딩, `game_profiles.json` 등)은 [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/)을 따릅니다.
+    * 게임 정보와 표지 이미지는 BoardGameGeek의 데이터로, [BGG XML API 이용 약관](https://boardgamegeek.com/wiki/page/XML_API_Terms_of_Use)에 따라 **비상업적 용도로만** 사용할 수 있습니다. 표지 이미지의 저작권은 각 권리자에게 있습니다.

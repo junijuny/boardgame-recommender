@@ -103,6 +103,28 @@ class NaturalApiTest(unittest.TestCase):
             r = client.post("/search/natural", json={"query": q, "players": p, "max_time": t})
             self.assertEqual(r.status_code, 400, (q[:5], p, t))
 
+    def test_time_slot_validation(self):
+        cases = [
+            ({"min_time": -1}, "Min time must be 0 or greater"),
+            ({"min_time": 60}, "Min time must be less than max time"),
+            ({"min_time": 90}, "Min time must be less than max time"),
+        ]
+        for change, detail in cases:
+            with self.subTest(change=change):
+                r = client.post("/search/natural", json={**BODY, **change})
+                self.assertEqual(r.status_code, 400)
+                self.assertEqual(r.json()["detail"], detail)
+        self.assertEqual(self.fake.calls, [])
+
+    def test_search_respects_time_slot(self):
+        r = client.post("/search/natural", json={**BODY, "min_time": 30})
+        self.assertEqual(r.status_code, 200)
+        games = r.json()["games"]
+        self.assertEqual(len(games), 5)
+        for g in games:
+            self.assertGreaterEqual(g["ComMaxPlaytime"], 30)
+            self.assertLessEqual(g["ComMaxPlaytime"], 60)
+
     def test_unavailable_is_503(self):
         set_client(None)
         r = client.post("/search/natural", json=BODY)

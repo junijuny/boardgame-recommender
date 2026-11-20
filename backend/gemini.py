@@ -127,7 +127,12 @@ class GeminiClient(Protocol):
     def write_profiles(self, games: Sequence[dict]) -> list[GameProfile]: ...
 
     def rerank(
-        self, query: str, games: Sequence[dict], players: int | None = None, max_time: int | None = None
+        self,
+        query: str,
+        games: Sequence[dict],
+        players: int | None = None,
+        max_time: int | None = None,
+        min_time: int | None = None,
     ) -> RerankResult: ...
 
     def web_search(self, query: str) -> WebAnswer: ...
@@ -489,7 +494,7 @@ class GoogleGeminiClient:
         except (KeyError, TypeError, ValueError, AttributeError) as exc:
             raise GeminiError(f"Unexpected profile response: {exc}") from exc
 
-    def rerank(self, query, games, players=None, max_time=None) -> RerankResult:
+    def rerank(self, query, games, players=None, max_time=None, min_time=None) -> RerankResult:
         # 검색 도구는 쓰지 않는다
         schema = {
             "type": "OBJECT",
@@ -504,7 +509,11 @@ class GoogleGeminiClient:
         if players is not None:
             filter_parts.append(f"{players} players")
         if max_time is not None:
-            filter_parts.append(f"up to {max_time} min")
+            # 슬라이더 구간(예: 30~60분)을 골랐으면 구간으로, 0분부터면 상한만 알린다
+            if min_time:
+                filter_parts.append(f"{min_time}-{max_time} min")
+            else:
+                filter_parts.append(f"up to {max_time} min")
         filters = ", ".join(filter_parts) if filter_parts else "none"
         prompt = RERANK_PROMPT.format(
             query=query, filters=filters, games=json.dumps(list(games), ensure_ascii=False)

@@ -197,6 +197,20 @@ class RerankParsingTest(unittest.TestCase):
         self.assertIn("absurd, impossible", seen["prompt"])
         self.assertIn("specific subject or domain", seen["prompt"])
 
+    def test_rerank_prompt_describes_time_slot(self):
+        seen = {}
+        client = gemini.GoogleGeminiClient.__new__(gemini.GoogleGeminiClient)
+
+        def fake_generate(model, prompt, schema, max_tokens, timeout_seconds=10):
+            seen["prompt"] = prompt
+            return {"interpretation": "Read as: x", "ranked_ids": [], "weak_match": False}
+
+        client._generate = fake_generate
+        client.rerank("q", [], players=2, max_time=60, min_time=30)
+        self.assertIn("Selected filters: 2 players, 30-60 min", seen["prompt"])
+        client.rerank("q", [], players=2, max_time=30, min_time=0)
+        self.assertIn("Selected filters: 2 players, up to 30 min", seen["prompt"])
+
 
 def _web_client(resp, seen=None):
     from types import SimpleNamespace as NS

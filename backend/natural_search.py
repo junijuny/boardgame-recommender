@@ -418,7 +418,9 @@ def natural_search(
     exclude_ids: list[int] | None = None,
     top_n: int = 5,
     allow_web: bool = True,
+    min_time: int = 0,
 ) -> NaturalResult:
+    """플레이 시간은 양 끝을 포함한 구간 [min_time, max_time] (분). min_time을 생략하면 max_time 이하 전체"""
     client = gemini.get_client()
     index = _index
     if client is None or index is None:
@@ -436,7 +438,7 @@ def natural_search(
             web_ids, web_info = found
 
     df = eng.df
-    mask = eng._condition_mask(players, max_time, MIN_RATING).to_numpy() & index.present
+    mask = eng._condition_mask(players, max_time, MIN_RATING, min_time).to_numpy() & index.present
     mask &= df["NumUserRatings"].to_numpy() >= MIN_REVIEWS
     if exclude_ids:
         mask &= eng.exclude_mask(exclude_ids).to_numpy()
@@ -594,7 +596,7 @@ def natural_search(
         shortlist = ordered[:SHORTLIST_SIZE]
         result = _get_rerank(
             query, players, max_time, cand_idx[shortlist], bool(exclude_ids),
-            web_ids=web_ids, use_cache=not use_web,
+            web_ids=web_ids, use_cache=not use_web, min_time=min_time,
         )
         if result is None:  # 재정렬 실패 -> 기존 순서
             picked = ordered[eng.diversify(cand_idx[ordered], score[ordered], top_n)]
@@ -642,17 +644,18 @@ def _web_lookup(query: str):
 
 def _get_rerank(
     query: str, players: int, max_time: int, rows: np.ndarray, refresh: bool,
-    web_ids: frozenset[int] = frozenset(), use_cache: bool = True,
+    web_ids: frozenset[int] = frozenset(), use_cache: bool = True, min_time: int = 0,
 ):
     """캐시된 재정렬 결과 또는 새 호출. 실패·시간 초과면 None (캐시하지 않는다).
     첫 페이지(exclude_ids 없음)만 저장하고, 새로고침은 저장된 결과를 재사용한다.
-    웹 검색 질의는 캐시를 읽지도 쓰지도 않는다 (근거 결과 저장 금지)."""
-    key = (query.strip().lower(), players, max_time)
+    웹 검색 질의는 캐시를 읽지도 쓰지도 않는다 (근거 결과 저장 금지).
+    캐시 키에 시간 구간 전체가 들어가야 다른 구간의 후보 순서를 재사용하지 않는다."""
+    key = (query.strip().lower(), players, min_time, max_time)
     if use_cache:
         cached = _rerank_cache.get(key)
         if cached is not None:
             return cached
-    kwargs: dict = {"players": players, "max_time": max_time}
+    kwargs: dict = {"players": players, "max_time": max_time, "min_time": min_time}
     if web_ids:
         kwargs["web_ids"] = web_ids
     future = _rerank_pool.submit(rerank.rerank, query, [int(r) for r in rows], **kwargs)

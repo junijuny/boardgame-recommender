@@ -124,6 +124,35 @@ class APITests(unittest.TestCase):
         scores = [game["Score"] for game in games]
         self.assertEqual(scores[0], max(scores))
 
+    def test_recommendation_respects_time_slot(self):
+        # 프론트엔드 슬라이더의 구간(예: 1 ~ 1.5 hr)을 고르면 그 구간에 끝나는 게임만 추천한다
+        response = self.recommend(min_time=60, max_time=90)
+        self.assertEqual(response.status_code, 200)
+        games = response.json()
+        self.assertEqual(len(games), 5)
+        for game in games:
+            self.assertGreaterEqual(game["ComMaxPlaytime"], 60)
+            self.assertLessEqual(game["ComMaxPlaytime"], 90)
+
+    def test_recommendation_without_min_time_keeps_short_games(self):
+        # min_time을 보내지 않는 예전 요청은 0분부터 (최대 시간만 거름)
+        full = self.recommend(min_time=0, max_time=30).json()
+        self.assertEqual(self.recommend(max_time=30).json(), full)
+        for game in full:
+            self.assertLessEqual(game["ComMaxPlaytime"], 30)
+
+    def test_recommendation_rejects_invalid_time_slot(self):
+        cases = [
+            ({"min_time": -1}, "Min time must be 0 or greater"),
+            ({"min_time": 90, "max_time": 90}, "Min time must be less than max time"),
+            ({"min_time": 120, "max_time": 90}, "Min time must be less than max time"),
+        ]
+        for change, detail in cases:
+            with self.subTest(change=change):
+                response = self.recommend(**change)
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.json()["detail"], detail)
+
     def test_recommendation_explains_shared_mechanics(self):
         games = self.recommend().json()
         self.assertTrue(any(game["SharedMechanics"] for game in games))
@@ -512,6 +541,21 @@ class APITests(unittest.TestCase):
         missing = df["ComMaxPlaytime"] <= 0
         self.assertTrue(missing.any())
         self.assertFalse((_condition_mask(4, 90, 5.5) & missing).any())
+
+    def test_condition_mask_time_slot_includes_both_boundaries(self):
+        # 구간 [min_time, max_time]: 경계 값의 게임은 양쪽 칸에 모두 들어간다
+        # (60분 게임은 0.5 ~ 1 hr 칸과 1 ~ 1.5 hr 칸 모두)
+        upper = _condition_mask(4, 90, 5.5, min_time=60)
+        lower = _condition_mask(4, 60, 5.5, min_time=30)
+        for mask, lo, hi in [(upper, 60, 90), (lower, 30, 60)]:
+            with self.subTest(slot=(lo, hi)):
+                playtime = df.loc[mask, "ComMaxPlaytime"]
+                self.assertTrue(((playtime >= lo) & (playtime <= hi)).all())
+                self.assertTrue((playtime == lo).any())
+                self.assertTrue((playtime == hi).any())
+        shared = df.loc[upper & lower, "ComMaxPlaytime"]
+        self.assertTrue(len(shared) > 0)
+        self.assertTrue((shared == 60).all())
 
     def test_detect_game_patterns_and_exact_match(self):
         like_catan = detect_game("Games like Catan!")

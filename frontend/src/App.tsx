@@ -6,7 +6,7 @@
 // 3) 장르 화면: 장르별 대표 게임을 둘러본다.
 // 어느 화면이든 게임을 누르면 상세 팝업이 열리고,
 // 팝업의 "Find similar games"를 누르면 그 게임이 선택된 추천 화면으로 이동한다.
-// 헤더는 모든 화면에 같이 붙는다.
+// 헤더와 푸터("Powered by BGG" 로고)는 모든 화면에 같이 붙는다.
 // 화면마다 주소가 따로 있어서 (/ , /recommend, /genres) 브라우저 뒤로가기·새로고침이 된다.
 //
 // 파일 구성
@@ -26,6 +26,7 @@
 // =====================================================================
 
 import { useEffect, useState } from "react";
+import Footer from "./components/Footer";
 import Header from "./components/Header";
 import GenreScreen from "./screens/GenreScreen";
 import RecommendScreen from "./screens/RecommendScreen";
@@ -109,6 +110,7 @@ export default function App() {
       )}
       {screen === "genres" && <GenreScreen onRecommendSimilar={openRecommend} />}
       {screen === "start" && <StartScreen onNavigate={navigate} />}
+      <Footer />
     </div>
   );
 }

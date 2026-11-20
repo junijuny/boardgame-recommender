@@ -26,9 +26,9 @@ uv run --locked uvicorn backend.main:app --reload --port 8000
 | `GET /` | 없음 | 서버 이름, `total_games`, 사용 중인 추천 신호 `signals`, `GET /games/semantic-search` 사용 가능 여부 `semantic_search`, Gemini 자연어 검색 가능 여부 `natural_search`, 설명 문장 가능 여부 `explanations` (모두 bool) |
 | `GET /games/search` | 쿼리 `query` | 최대 10개 게임 목록. 이름이 정확히 같은 게임 → 검색어로 시작하는 게임 → 포함하는 게임 순, 같은 순위는 리뷰 수 순 |
 | `GET /games/filter` | 쿼리 `players`, `max_time` | 조건을 만족하는 최대 10개 게임, 평점 내림차순 (플레이 시간이 0으로 기록된 게임 제외) |
-| `POST /recommend` | JSON `game_name`, `players`, `max_time`, 선택 `exclude_ids` | 조건을 만족하는 최대 5개 추천 게임 |
+| `POST /recommend` | JSON `game_name`, `players`, `max_time`, 선택 `min_time`(기본 `0`), 선택 `exclude_ids` | 조건을 만족하는 최대 5개 추천 게임 |
 | `GET /games/semantic-search` | 쿼리 `query`, 선택 `players`, `max_time` | 자연어(한국어 가능) 설명에 맞는 최대 10개 게임. 임베딩 미준비 시 `503` |
-| `POST /search/natural` | JSON `query`, `players`, `max_time`, 선택 `exclude_ids` | 검색어(한국어·영어)의 장르적 특성에 맞는 최대 5개 게임(리뷰 1,000개 이상, 평점 5.5 이상 중에서). 항목은 게임 필드와 `Similarity`, `Score`, `MatchedMechanics`, `MatchedThemes`, `SortedBy`. "가장 유명한/평점 높은/최신" 같은 순위 질의는 리뷰 수·평점·출시 연도 순. "games like Catan"처럼 쓰면 검색 없이 By game 전환 안내(`redirect_to_game`). 키·임베딩이 없으면 `503` |
+| `POST /search/natural` | JSON `query`, `players`, `max_time`, 선택 `min_time`(기본 `0`), 선택 `exclude_ids` | 검색어(한국어·영어)의 장르적 특성에 맞는 최대 5개 게임(리뷰 1,000개 이상, 평점 5.5 이상 중에서). 항목은 게임 필드와 `Similarity`, `Score`, `MatchedMechanics`, `MatchedThemes`, `SortedBy`. "가장 유명한/평점 높은/최신" 같은 순위 질의는 리뷰 수·평점·출시 연도 순. "games like Catan"처럼 쓰면 검색 없이 By game 전환 안내(`redirect_to_game`). 키·임베딩이 없으면 `503` |
 | `POST /explain` | JSON `mode`(`similar` 또는 `query`), `basis`, `game_ids`, 선택 `weak_match`(기본 `false`), 선택 `from_web`(기본 `false`; 검색 응답의 `web`이 null이 아니면 `true`로 보낸다. 웹 근거 검색으로 고른 게임이므로 설명 캐시를 읽지도 쓰지도 않는다) | `{"reasons": {"<BGGId>": "영어 한 문장"}}`. 키가 없으면 `503` |
 | `GET /games/{bgg_id}` | 경로의 게임 ID(`BGGId`) | 게임 한 개의 상세 정보(설명, 난이도, 인원, 시간, 평점) |
 | `GET /genres` | 없음 | 장르 8개와 장르별 대표 게임 최대 6개 |
@@ -58,10 +58,11 @@ curl 'http://localhost:8000/games/filter?players=4&max_time=90'
 ```bash
 curl -X POST 'http://localhost:8000/recommend' \
   -H 'Content-Type: application/json' \
-  -d '{"game_name":"Catan","players":4,"max_time":90}'
+  -d '{"game_name":"Catan","players":4,"min_time":60,"max_time":90}'
 ```
 
 `players`와 `max_time`은 1 이상의 정수이고, 시간 단위는 분.
+`min_time`과 `max_time`은 플레이 시간 구간으로, 게임의 최대 플레이 시간(`ComMaxPlaytime`)이 `min_time` 이상 `max_time` 이하인 게임만 남김. 프론트엔드 슬라이더의 칸(0\~30, 30\~60, 60\~90, 90\~120분)을 그대로 보내며, 경계 값의 게임은 양쪽 칸에 모두 들어감(예: 60분 게임은 30\~60분 칸과 60\~90분 칸 모두). 플레이 시간이 0으로 기록된 게임은 항상 제외. `min_time`은 0 이상이고 `max_time`보다 작아야 하며(아니면 `400`), 보내지 않으면 `0`이라 예전처럼 `max_time` 이하 전체를 대상으로 함. `POST /search/natural`도 같은 규칙.
 `exclude_ids`(게임 ID 목록)를 보내면 그 게임들과, 이름이 같은 다른 판본까지 빼고 추천함. "Refresh"(다른 게임 5개)에서 지금까지 보여준 게임 ID를 쌓아서 보내는 용도이며, 남은 후보가 없으면 `404`.
 조건 필터를 통과한 게임을 하이브리드 유사도(메커니즘·테마·카테고리·텍스트·협업 필터링)와 평점을 합친 `Score`로 정렬한 뒤, 서로 너무 비슷한 게임이 몰리지 않게 다양성 재정렬하여 반환함. 기준 게임 자체는 제외하고, 같은 시리즈 변형판은 감점함. 자세한 내용은 [recommendation_pipeline.md](recommendation_pipeline.md).
 
@@ -84,7 +85,7 @@ curl -X POST 'http://localhost:8000/recommend' \
 ```bash
 curl -X POST 'http://localhost:8000/search/natural' \
   -H 'Content-Type: application/json' \
-  -d '{"query":"친구들과 가볍게 하는 협력 게임","players":4,"max_time":60}'
+  -d '{"query":"친구들과 가볍게 하는 협력 게임","players":4,"min_time":30,"max_time":60}'
 ```
 
 - Gemini(`gemini-3.5-flash-lite`)가 검색어를 조건(포함·제외 메커니즘/테마, 난이도 범위, 영어 검색 문장)으로 바꾸고, `gemini-embedding-2`(768차원)로 만든 `data/gemini_embeddings.npz`와 비교함. 인원·시간은 요청 값만 사용함
