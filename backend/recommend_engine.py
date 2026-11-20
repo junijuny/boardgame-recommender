@@ -30,9 +30,8 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # 데이터와 특징 행렬 로드 (서버 시작 시 1회)
 # ---------------------------------------------------------------------------
-df = features.load_games()
-mechanics = features.load_binary_features(features.MECHANICS_PATH, df["BGGId"])
-themes = features.load_binary_features(features.THEMES_PATH, df["BGGId"])
+# 게임 표·메커니즘·테마는 미리 만들어 둔 시작 캐시에서 읽는다 (없으면 CSV에서 만들고 저장)
+df, mechanics, themes = features.load_startup_data()
 category_matrix = features.build_category_matrix(df)
 embeddings = features.load_embeddings(df["BGGId"])  # 없으면 None
 cf = features.load_cf(df["BGGId"])                  # 없으면 None
