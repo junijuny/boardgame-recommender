@@ -72,9 +72,9 @@ class RerankTest(unittest.TestCase):
         self.set_result(weak=True)
         self.assertTrue(rerank.rerank("q", [0]).weak_match)
 
-    def test_forwards_players_and_max_time(self):
-        rerank.rerank("q", [0], players=2, max_time=45)
-        self.assertEqual(self.fake.calls[-1][3:], (2, 45))
+    def test_forwards_players_and_time_range(self):
+        rerank.rerank("q", [0], players=2, max_time=45, min_time=30)
+        self.assertEqual(self.fake.calls[-1][3:], (2, 45, 30))
 
     def test_charges_budget_and_propagates_errors(self):
         rerank.rerank("q", [0])

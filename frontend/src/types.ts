@@ -65,7 +65,9 @@ export interface GameDetail extends GameSummary {
 export interface RecommendRequest {
   game_name: string;
   players: number;
-  // 플레이 시간 범위의 시작 (분). 아직 백엔드가 쓰지 않는 값 (모르는 필드는 서버가 무시한다)
+  // 플레이 시간 구간의 시작 (분). 백엔드는 최대 플레이 시간이 min_time 이상 ~ max_time 이하인 게임만 고른다
+  // (경계 값의 게임은 양쪽 구간에 모두 나온다. 예: 60분 게임은 0.5 ~ 1 hr와 1 ~ 1.5 hr)
+  // 보내지 않으면 서버가 0으로 본다 (max_time 이하 전체)
   min_time?: number;
   max_time: number;
   // 결과에서 뺄 게임 ID (이미 보여 준 게임). 추천 결과의 "Refresh"에서 사용

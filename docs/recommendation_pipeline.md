@@ -18,7 +18,7 @@ flowchart LR
 
 ### 하드 필터
 
-- `MinPlayers ≤ 인원 ≤ MaxPlayers`, `0 < ComMaxPlaytime ≤ 최대 시간`, `BayesAvgRating ≥ 5.5`인 게임만 후보로 남김 (플레이 시간이 0으로 기록된 게임은 제외)
+- `MinPlayers ≤ 인원 ≤ MaxPlayers`, `최소 시간 ≤ ComMaxPlaytime ≤ 최대 시간`, `BayesAvgRating ≥ 5.5`인 게임만 후보로 남김 (플레이 시간이 0으로 기록된 게임은 제외). 최소·최대 시간은 프론트엔드 슬라이더에서 고른 구간(`min_time`, `max_time`)이고, 최소 시간을 보내지 않으면 0. 양 끝을 포함하므로 경계 값(30·60·90분)의 게임은 인접한 두 칸에 모두 나옴
 - 기준 게임 자체는 제외
 - `exclude_ids`("Refresh"에서 이미 본 게임)와, 그 게임과 **이름이 같은 다른 판본**도 제외 (`exclude_mask`). 데이터에 같은 이름의 행이 여러 개 있어 Refresh 후 같은 게임이 다시 나오던 문제를 막음
 

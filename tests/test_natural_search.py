@@ -76,6 +76,29 @@ class NaturalSearchTest(unittest.TestCase):
         self.assertEqual(games[0]["Name"], "Pandemic")
         self.assertEqual(games[0]["MatchedMechanics"], ["Cooperative Game"])
 
+    def test_time_slot_filters_by_max_playtime(self):
+        games = natural_search("co-op", players=4, max_time=60, min_time=30)
+        self.assertEqual(len(games), 5)
+        for g in games:
+            self.assertGreaterEqual(g["ComMaxPlaytime"], 30)
+            self.assertLessEqual(g["ComMaxPlaytime"], 60)
+
+    def test_boundary_game_appears_in_both_adjacent_slots(self):
+        # 최대 플레이 시간이 정확히 30분인 게임은 0 ~ 0.5 hr 칸과 0.5 ~ 1 hr 칸 모두에 나온다
+        mask = (
+            eng._condition_mask(4, 30, 5.5)
+            & (eng.df["ComMaxPlaytime"] == 30)
+            & (eng.df["NumUserRatings"] >= ns.MIN_REVIEWS)
+        )
+        idx = int(eng.df.index[mask][0])
+        ns.set_index(make_index(idx))
+        self.fake.intent = QueryIntent("something fun")
+        bgg_id = int(eng.df.at[idx, "BGGId"])
+        for min_time, max_time in [(0, 30), (30, 60)]:
+            with self.subTest(slot=(min_time, max_time)):
+                games = natural_search("fun", 4, max_time, min_time=min_time)
+                self.assertIn(bgg_id, [g["BGGId"] for g in games])
+
     def test_exclude_mechanics_removes_games(self):
         self.fake.intent = QueryIntent("co-op", exclude_mechanics=("Dice Rolling",))
         games = natural_search("q", 4, 120)
@@ -671,13 +694,13 @@ class RerankSearchTest(unittest.TestCase):
         self.fake.calls.clear()
         search_full("co-op", 4, 60, exclude_ids=shown)
         self.assertEqual(len(self.rerank_calls()), 1)
-        self.assertIsNone(ns._rerank_cache.get(("co-op", 4, 60)))
+        self.assertIsNone(ns._rerank_cache.get(("co-op", 4, 0, 60)))
         search_full("co-op", 4, 60, exclude_ids=shown)
         self.assertEqual(len(self.rerank_calls()), 2)
 
     def test_first_page_is_cached_by_normalized_query(self):
         search_full(" Co-Op ", 4, 60)
-        self.assertIsNotNone(ns._rerank_cache.get(("co-op", 4, 60)))
+        self.assertIsNotNone(ns._rerank_cache.get(("co-op", 4, 0, 60)))
 
     def test_rerank_failure_falls_back(self):
         short = self.shortlist()
@@ -695,7 +718,7 @@ class RerankSearchTest(unittest.TestCase):
         self.assertTrue(set(got) <= set(short))
         self.assertIsNone(r.interpretation)
         self.assertIs(r.weak_match, False)
-        self.assertIsNone(ns._rerank_cache.get(("co-op", 4, 60)))
+        self.assertIsNone(ns._rerank_cache.get(("co-op", 4, 0, 60)))
 
     def test_rerank_timeout_falls_back(self):
         real = self.fake.rerank
@@ -710,12 +733,24 @@ class RerankSearchTest(unittest.TestCase):
         self.assertEqual(len(r.games), 5)
         self.assertIsNone(r.interpretation)
         self.assertFalse(r.weak_match)
-        self.assertIsNone(ns._rerank_cache.get(("co-op", 4, 60)))
+        self.assertIsNone(ns._rerank_cache.get(("co-op", 4, 0, 60)))
 
     def test_rerank_receives_players_and_max_time(self):
         search_full("co-op", 3, 45)
         call = self.rerank_calls()[-1]
         self.assertEqual((call[3], call[4]), (3, 45))
+
+    def test_rerank_receives_min_time(self):
+        search_full("co-op", 3, 60, min_time=30)
+        self.assertEqual(self.rerank_calls()[-1][5], 30)
+
+    def test_rerank_cache_is_per_time_slot(self):
+        # 다른 구간의 재정렬 결과를 재사용하면 후보 밖 게임 순서가 섞인다
+        search_full("co-op", 4, 60)
+        search_full("co-op", 4, 60, min_time=30)
+        self.assertEqual(len(self.rerank_calls()), 2)
+        self.assertIsNotNone(ns._rerank_cache.get(("co-op", 4, 0, 60)))
+        self.assertIsNotNone(ns._rerank_cache.get(("co-op", 4, 30, 60)))
 
     def test_dual_query_embedding_uses_single_batch_call(self):
         self.fake.intent = QueryIntent("cooperative puzzle game")
@@ -902,7 +937,7 @@ class WebSearchNaturalTest(unittest.TestCase):
         search_full("co-op", 4, 60)
         self.assertEqual(len(self.calls("web_search")), 2)
         self.assertEqual(len(self.calls("rerank")), 2)
-        self.assertIsNone(ns._rerank_cache.get(("co-op", 4, 60)))
+        self.assertIsNone(ns._rerank_cache.get(("co-op", 4, 0, 60)))
 
     def test_web_failure_falls_back(self):
         self.fake.web_error = gemini.GeminiError("boom")

@@ -62,14 +62,15 @@ def rerank(
     web_ids: frozenset[int] = frozenset(),
     players: int | None = None,
     max_time: int | None = None,
+    min_time: int | None = None,
 ) -> gemini.RerankResult:
     client = gemini.get_client()
     if client is None:
         raise gemini.GeminiError("Gemini client is not configured")
     gemini.charge()
     games = [rerank_facts(i, web_ids) for i in cand_rows]
-    if players is not None or max_time is not None:
-        raw = client.rerank(query, games, players=players, max_time=max_time)
+    if players is not None or max_time is not None or min_time is not None:
+        raw = client.rerank(query, games, players=players, max_time=max_time, min_time=min_time)
     else:
         raw = client.rerank(query, games)
     allowed = {g["bgg_id"] for g in games}
