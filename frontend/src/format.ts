@@ -4,12 +4,15 @@
 
 import type { GameDetail } from "./types";
 
-// 분 단위 숫자를 읽기 쉬운 글자로 바꿔주는 함수
-// 예) 30 -> "30 min", 60 -> "1 hr", 90 -> "1.5 hr"
-export function formatMinutes(min: number): string {
-  if (min < 60) return `${min} min`;
-  const hours = min / 60;
-  return `${Number.isInteger(hours) ? hours : hours.toFixed(1)} hr`;
+
+// 시작·끝 시간(분)을 시간 단위 범위 글자로. 예) (0, 30) -> "0 ~ 0.5 hr", (30, 60) -> "0.5 ~ 1 hr"
+export function formatHourRange(startMin: number, endMin: number): string {
+  return `${formatHours(startMin)} ~ ${formatHours(endMin)} hr`;
+}
+
+// 분을 시간 숫자로 (소수점 아래 끝의 0은 지움). 예) 30 -> "0.5", 60 -> "1", 105 -> "1.75"
+export function formatHours(min: number): string {
+  return `${Number((min / 60).toFixed(2))}`;
 }
 
 // 게임의 플레이 시간 글자 만들기

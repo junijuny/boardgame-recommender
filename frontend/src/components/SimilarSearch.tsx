@@ -12,19 +12,20 @@ import { useEffect, useRef, useState } from "react";
 import { RefreshCw, Search } from "lucide-react";
 import GameSearch from "./GameSearch";
 import { ResultList, ResultSkeleton } from "./ResultList";
-import { PlayerPicker, TimePicker } from "./ChoicePickers";
+import { PlayerPicker, TimeSlotPicker } from "./ChoicePickers";
 import { ErrorNotice, ServerWakeNotice } from "./LoadingParts";
 import { NoMatchNotice } from "./SearchNotice";
 import { errorResponse } from "../api";
-import { PLAYER_OPTIONS, TIME_OPTIONS } from "../filters";
-import { formatMinutes } from "../format";
+import { DEFAULT_TIME_SLOT, PLAYER_OPTIONS } from "../filters";
+import { formatHourRange } from "../format";
 import { useExplanations, useIsSlow, useRecommend, useServerInfo } from "../queries";
-import { focusRing, primaryButton } from "../styles";
-import type { GameSummary, RecommendRequest } from "../types";
+import { focusRing, primaryButton, resultCard, resultEmpty, resultHeader, resultNotices } from "../styles";
+import type { GameSummary, RecommendRequest, TimeRange } from "../types";
 
 interface SimilarSearchProps {
   initialGame: GameSummary | null;
   initialPlayers?: number;
+  initialMinTime?: number;
   initialMaxTime?: number;
   autoRecommend?: boolean;
   onShowDetail: (bggId: number) => void;
@@ -33,6 +34,7 @@ interface SimilarSearchProps {
 export default function SimilarSearch({
   initialGame,
   initialPlayers,
+  initialMinTime,
   initialMaxTime,
   autoRecommend = false,
   onShowDetail,
@@ -40,7 +42,11 @@ export default function SimilarSearch({
   // 검색 결과에서 선택한 게임 (선택 안 했으면 null)
   const [game, setGame] = useState<GameSummary | null>(initialGame);
   const [players, setPlayers] = useState(initialPlayers ?? 4);
-  const [maxTime, setMaxTime] = useState(initialMaxTime ?? 60);
+  // 플레이 시간 범위 (분)
+  const [time, setTime] = useState<TimeRange>({
+    min: initialMinTime ?? DEFAULT_TIME_SLOT.min,
+    max: initialMaxTime ?? DEFAULT_TIME_SLOT.max,
+  });
 
   // 추천 요청 (isPending: 요청 중, data: 결과, error: 실패, variables: 보낸 조건)
   const recommendation = useRecommend();
@@ -68,7 +74,7 @@ export default function SimilarSearch({
   function requestRecommendations(exclude: number[]) {
     if (!game || loading) return;
     recommendation.mutate(
-      { game_name: game.Name, players, max_time: maxTime, exclude_ids: exclude },
+      { game_name: game.Name, players, min_time: time.min, max_time: time.max, exclude_ids: exclude },
       { onSuccess: (games) => setShownIds([...exclude, ...games.map((g) => g.BGGId)]) },
     );
   }
@@ -79,10 +85,10 @@ export default function SimilarSearch({
     if (!autoRecommend || !initialGame || autoRan.current) return;
     autoRan.current = true;
     recommendation.mutate(
-      { game_name: initialGame.Name, players, max_time: maxTime, exclude_ids: [] },
+      { game_name: initialGame.Name, players, min_time: time.min, max_time: time.max, exclude_ids: [] },
       { onSuccess: (games) => setShownIds(games.map((g) => g.BGGId)) },
     );
-  }, [autoRecommend, initialGame, players, maxTime, recommendation]);
+  }, [autoRecommend, initialGame, players, time, recommendation]);
 
   // "Get recommendations": 처음부터 다시
   function handleRecommend() {
@@ -100,7 +106,7 @@ export default function SimilarSearch({
   }
 
   return (
-    <div className="flex flex-wrap items-start gap-6">
+    <div className="flex flex-wrap items-stretch gap-6">
       <form
         aria-label="Recommendation filters"
         onSubmit={(event) => {
@@ -124,11 +130,10 @@ export default function SimilarSearch({
           disabled={loading}
           onChange={(value) => { setPlayers(value); clearRecommendation(); }}
         />
-        <TimePicker
-          options={TIME_OPTIONS}
-          value={maxTime}
+        <TimeSlotPicker
+          value={time}
           disabled={loading}
-          onChange={(value) => { setMaxTime(value); clearRecommendation(); }}
+          onChange={(value) => { setTime(value); clearRecommendation(); }}
         />
         <button type="submit" disabled={loading || !game} className={clsx(primaryButton, "w-full text-lg")}>
           <Search className="h-5 w-5" aria-hidden="true" />
@@ -136,45 +141,52 @@ export default function SimilarSearch({
         </button>
       </form>
 
+      {/* 결과 카드: 왼쪽 입력 카드와 같은 모양. 제목 줄 -> 구분선 -> 안내 -> 결과 목록 */}
       <section
         aria-labelledby="result-title"
         aria-live="polite"
         aria-busy={loading}
-        className="flex min-w-0 flex-[999_1_540px] flex-col gap-4"
+        className={resultCard}
       >
-        <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 px-1 pt-1">
+        <div className={resultHeader}>
           <div className="flex min-w-0 flex-col gap-1.5">
             <h2 id="result-title" className="font-display text-[26px] font-extrabold tracking-[-0.01em]">Results</h2>
             {recommendation.variables && <p className="text-[15px] text-ink/70">{summarize(recommendation.variables)}</p>}
           </div>
-          {/* 새로고침: 지금까지 본 게임은 빼고 다른 게임 5개를 받는다 */}
-          {recommendation.isSuccess && (
+          {/* 새로고침: 지금까지 본 게임은 빼고 다른 게임 5개를 받는다
+              불러오는 동안에도 (돌아가는 아이콘으로) 자리를 지켜서 제목 줄 높이가 바뀌지 않게 한다 */}
+          {(recommendation.isSuccess || loading) && (
             <button
               type="button"
               onClick={handleRefresh}
+              disabled={loading}
               className={clsx(
-                "inline-flex min-h-11 items-center gap-2 rounded-xl border-[1.5px] border-primary bg-card px-4 text-[15px] font-bold text-primary transition-colors hover:bg-line",
+                "inline-flex min-h-11 items-center gap-2 rounded-xl border-[1.5px] border-primary bg-card px-4 text-[15px] font-bold text-primary transition-colors hover:bg-line disabled:opacity-60",
                 focusRing,
               )}
             >
-              <RefreshCw className="h-[18px] w-[18px]" aria-hidden="true" />
+              <RefreshCw className={clsx("h-[18px] w-[18px]", loading && "motion-safe:animate-spin")} aria-hidden="true" />
               Refresh
             </button>
           )}
         </div>
 
-        {slow && <ServerWakeNotice />}
-        {loading && <ResultSkeleton label="Finding similar games" />}
-        {recommendation.isError && (
-          <RecommendError
-            error={recommendation.error}
-            afterRefresh={(recommendation.variables?.exclude_ids?.length ?? 0) > 0}
-            onRetry={handleRetry}
-            onStartOver={handleRecommend}
-          />
-        )}
+        {/* 안내 줄: 보여 줄 안내가 없으면 비어 있어서 empty:hidden으로 숨는다 */}
+        <div className={resultNotices}>
+          {slow && <ServerWakeNotice />}
+          {recommendation.isError && (
+            <RecommendError
+              error={recommendation.error}
+              afterRefresh={(recommendation.variables?.exclude_ids?.length ?? 0) > 0}
+              onRetry={handleRetry}
+              onStartOver={handleRecommend}
+            />
+          )}
+        </div>
+        {loading && <ResultSkeleton className="flex-1" label="Finding similar games" />}
         {recommendation.isSuccess && (
           <ResultList
+            className="flex-1"
             items={recommendation.data.map((g) => ({ game: g, chips: g.SharedMechanics }))}
             reasons={explanations.data?.reasons}
             reasonsLoading={explanations.isFetching}
@@ -182,7 +194,7 @@ export default function SimilarSearch({
           />
         )}
         {recommendation.isIdle && (
-          <p className="rounded-[20px] border border-dashed border-ink/25 px-5 py-8 text-center text-ink/70">
+          <p className={resultEmpty}>
             Pick a game to get recommendations.
           </p>
         )}
@@ -191,9 +203,9 @@ export default function SimilarSearch({
   );
 }
 
-// 결과 위의 조건 요약. 예) "Based on Catan, 4 players, up to 1 hr"
-function summarize({ game_name, players, max_time }: RecommendRequest) {
-  return `Based on ${game_name}, ${players} players, up to ${formatMinutes(max_time)}`;
+// 결과 위의 조건 요약. 예) "Based on Catan, 4 players, 0.5 ~ 1 hr"
+function summarize({ game_name, players, min_time, max_time }: RecommendRequest) {
+  return `Based on ${game_name}, ${players} players, ${formatHourRange(min_time ?? 0, max_time)}`;
 }
 
 // 추천 실패: 조건에 맞는 게임이 없으면 안내, 그 밖에는 오류 메시지

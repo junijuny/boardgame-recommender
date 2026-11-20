@@ -36,7 +36,7 @@ export default function StartScreen({ onNavigate }: StartScreenProps) {
   return (
     <main className={clsx(container, "flex flex-1 flex-wrap items-center gap-x-14 gap-y-8 py-7 sm:gap-y-12 sm:py-10")}>
       <div className="flex min-w-0 flex-[1_1_440px] flex-col gap-9">
-        <h1 className="font-display text-[clamp(44px,7.4vw,96px)] leading-[0.96] font-extrabold tracking-[-0.03em]">
+        <h1 className="font-display text-[clamp(40px,6.2vw,84px)] leading-[0.96] font-extrabold tracking-[-0.03em]">
           Boardgame Recommender
         </h1>
         {/* 휴대폰(640px 미만)에서는 두 버튼이 반씩 나눠 한 줄에 나란히 서도록

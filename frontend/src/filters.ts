@@ -6,5 +6,19 @@
 // 인원 (2명 ~ 6명)
 export const PLAYER_OPTIONS = [2, 3, 4, 5, 6];
 
-// 최대 플레이 시간 (단위: 분)
+// 최대 플레이 시간 (단위: 분). 시작 화면의 무작위 사진 조합에서 쓴다
 export const TIME_OPTIONS = [30, 60, 90, 120];
+
+import type { TimeRange } from "./types";
+
+// 추천 화면의 플레이 시간 구간 (단위: 분). 슬라이더의 칸 하나 = 구간 하나
+// 요청에는 고른 구간의 min, max를 min_time, max_time으로 보낸다
+export const TIME_SLOTS: TimeRange[] = [
+  { min: 0, max: 30 },
+  { min: 30, max: 60 },
+  { min: 60, max: 90 },
+  { min: 90, max: 120 },
+];
+
+// 처음 선택된 구간 (0.5 ~ 1 hr)
+export const DEFAULT_TIME_SLOT = TIME_SLOTS[1];

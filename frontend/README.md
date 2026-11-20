@@ -3,7 +3,7 @@
 보드게임 추천 서비스의 React 웹 화면입니다. 전체 프로젝트 설명은 [루트 README](../README.md)를 참고하세요.
 
 - **스택**: React 19, TypeScript, Vite 8, Tailwind CSS 4, TanStack Query 5, Axios, lucide-react, oxlint
-- **폰트**: Bricolage Grotesque(제목), IBM Plex Sans(본문) — `index.html`에서 Google Fonts로 불러옴
+- **폰트**: Plus Jakarta Sans(제목, Google Fonts), Pretendard(본문, 영어·한글, jsDelivr) — `index.html`에서 불러옴
 - **화면 글자**: 영어
 - **필요 버전**: Node.js v20.19 이상
 
