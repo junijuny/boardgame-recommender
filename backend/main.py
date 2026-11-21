@@ -1,5 +1,6 @@
 
 import os
+from functools import cache
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -8,6 +9,7 @@ from pydantic import BaseModel, Field
 
 try:
     from backend import gemini
+    from backend.charts import build_charts, load_chart_stats
     from backend.explain import explain_games
     from backend.genres import build_genres, genre_games
     from backend.limits import RateLimiter, client_ip
@@ -36,6 +38,7 @@ try:
     )
 except ImportError:
     import gemini
+    from charts import build_charts, load_chart_stats
     from explain import explain_games
     from genres import build_genres, genre_games
     from limits import RateLimiter, client_ip
@@ -67,6 +70,14 @@ app = FastAPI(title="BoardGame Recommender API")
 
 # 장르별 대표 게임은 서버 시작 시 한 번만 계산
 GENRE_LIST = build_genres(df, mechanics)
+
+
+# 인기 차트는 처음 요청할 때 한 번만 계산하고 기억 (서버 시작 시간을 늘리지 않으려고)
+# 데이터가 바뀌지 않으므로 결과는 서버가 꺼질 때까지 같다
+@cache
+def chart_list():
+    return build_charts(df, load_chart_stats(df))
+
 
 # 프론트엔드 접근 허용 주소
 DEFAULT_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
@@ -222,6 +233,22 @@ def list_genre_games(
             status_code=404,
             detail="Genre not found"
         )
+
+
+@app.get("/charts")
+def list_charts():
+    return chart_list()
+
+
+@app.get("/charts/{key}")
+def get_chart(key: str):
+    for chart in chart_list():
+        if chart["key"] == key:
+            return chart
+    raise HTTPException(
+        status_code=404,
+        detail="Chart not found"
+    )
 
 
 @app.post("/recommend")

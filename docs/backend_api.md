@@ -33,6 +33,8 @@ uv run --locked uvicorn backend.main:app --reload --port 8000
 | `GET /games/{bgg_id}` | 경로의 게임 ID(`BGGId`) | 게임 한 개의 상세 정보(설명, 난이도, 인원, 시간, 평점) |
 | `GET /genres` | 없음 | 장르 8개와 장르별 대표 게임 최대 6개 |
 | `GET /genres/{key}/games` | 경로의 장르 `key`, 선택 쿼리 `players`, `max_time`, `exclude_ids` | 조건(최소 평점 5.5, 인원·시간)에 맞는 장르 게임 최대 6개. 리뷰 1,000개 이상 게임 우선, 그 안에서 평점순. `exclude_ids`의 게임은 제외(`?exclude_ids=13&exclude_ids=822`처럼 여러 번 붙임). 없으면 빈 목록 |
+| `GET /charts` | 없음 | 인기 차트 4개(`top`, `most_owned`, `most_wanted`, `new`)와 차트별 게임 10개 |
+| `GET /charts/{key}` | 경로의 차트 `key` | 차트 하나와 게임 10개. 없는 `key`면 `404` |
 
 게임 이름은 데이터에 저장된 영어 이름을 사용함. 검색 결과의 `Name`을 추천 요청의 `game_name`으로 전달하면 되며, 대소문자와 앞뒤 공백은 무시함.
 
@@ -135,6 +137,37 @@ curl 'http://localhost:8000/genres'
 전략은 BGG 카테고리 `Cat:Strategy` 또는 `Cat:Abstract`, 추리는 메커니즘 `Deduction`, 나머지는 같은 이름의 `Cat:*` 카테고리로 판정함.
 리뷰 1,000개 이상인 게임 중 `BayesAvgRating` 내림차순으로 최대 6개를 담음. 한 게임이 여러 장르에 나올 수 있음. 목록은 서버 시작 시 한 번 계산함.
 
+### 인기 차트
+
+```bash
+curl 'http://localhost:8000/charts'
+```
+
+```json
+[
+  {
+    "key": "top",
+    "label": "Top Ranked",
+    "description": "Highest overall BoardGameGeek rank",
+    "games": [{"BGGId": 174430, "Name": "Gloomhaven", "YearPublished": 2017, "ImagePath": "...",
+               "GameWeight": 3.87, "ComMinPlaytime": 60, "ComMaxPlaytime": 120, "BayesAvgRating": 8.51,
+               "BggRank": 1, "NumOwned": 76471, "NumWish": 17499, "NumUserRatings": 42055}]
+  }
+]
+```
+
+고를 게임도 장르도 없는 사용자에게 처음 보여 줄 목록. 차트 순서와 기준은 다음과 같고, `games`는 이미 순위대로 정렬되어 있어 배열 순서(1위부터)를 그대로 쓰면 됨.
+
+| `key` | `label` | 기준 |
+| --- | --- | --- |
+| `top` | Top Ranked | BGG 전체 순위(`BggRank`) 오름차순 |
+| `most_owned` | Most Owned | 게임을 가진 사람 수(`NumOwned`) 내림차순 |
+| `most_wanted` | Most Wanted | 위시리스트에 넣은 사람 수(`NumWish`) 내림차순 |
+| `new` | New & Popular | 데이터의 최근 3년(2019\~2021년) 출시작 중 리뷰 1,000개 이상, `BayesAvgRating` 내림차순 |
+
+게임 필드는 장르 게임 필드에 `BggRank`, `NumOwned`, `NumWish`, `NumUserRatings`를 더한 것. 데이터가 2021년 BGG 스냅샷이라 "요즘 뜨는 게임"이 아니라 데이터셋 기준 순위임.
+순위·보유 수·위시 수는 `games.csv`에만 있어서 서버 시작을 늦추지 않도록 첫 요청 때 한 번 계산하고(약 0.2초) 이후엔 기억한 결과를 돌려줌. `GET /charts/most_owned`처럼 차트 하나만 받을 수도 있음.
+
 ## 3. 오류 처리
 
 | 상황 | 상태 코드 | 응답의 `detail` |
@@ -159,6 +192,7 @@ curl 'http://localhost:8000/genres'
 | 설명 요청의 `mode`가 `similar`인데 `basis`가 알려진 게임이 아님 | 404 | `Game not found` (`game_ids`에 없는 ID는 오류 없이 무시되어 `200`) |
 | 임베딩 파일이 없거나 `semantic` 패키지 미설치 상태에서 자연어 검색 | 503 | `Semantic search is not available` |
 | 존재하지 않는 장르 키로 장르 게임 조회 | 404 | `Genre not found` |
+| 존재하지 않는 차트 키로 차트 조회 | 404 | `Chart not found` |
 
 검색·필터의 결과 없음은 `200 + []`, 추천의 결과 없음은 `404`인 기존 API 동작을 유지함. `detail`은 400·404에서는 문자열, 422에서는 배열이므로 프론트에서 구분함.
 
