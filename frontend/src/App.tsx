@@ -1,16 +1,18 @@
 // =====================================================================
 // 보드게임 추천 화면 (Boardgame Recommender)
 // 1) 시작 화면에서 "Find similar games" 또는 "Browse by genre"를 고른다.
+//    보드게임을 잘 모르면 그 아래 "See what's popular" 링크로 인기 차트 화면에 간다.
 // 2) 추천 화면: 좋아하는 게임, 인원, 플레이 시간을 고르고 "Get recommendations"를 누르면
 //    비슷한 보드게임 목록을 보여준다.
 // 3) 장르 화면: 장르별 대표 게임을 둘러본다.
+// 4) 인기 차트 화면: 순위·보유 수·위시 수·최근 출시작 기준 인기 게임 1~10위를 본다.
 // 어느 화면이든 게임을 누르면 상세 팝업이 열리고,
 // 팝업의 "Find similar games"를 누르면 그 게임이 선택된 추천 화면으로 이동한다.
 // 헤더와 푸터("Powered by BGG" 로고)는 모든 화면에 같이 붙는다.
-// 화면마다 주소가 따로 있어서 (/ , /recommend, /genres) 브라우저 뒤로가기·새로고침이 된다.
+// 화면마다 주소가 따로 있어서 (/ , /recommend, /genres, /charts) 브라우저 뒤로가기·새로고침이 된다.
 //
 // 파일 구성
-//   screens/    : 화면 하나씩 (StartScreen, RecommendScreen, GenreScreen)
+//   screens/    : 화면 하나씩 (StartScreen, RecommendScreen, GenreScreen, ChartScreen)
 //   components/ : 여러 화면에서 같이 쓰는 조각 (헤더, 검색창, 상세 팝업, 로딩 표시 등)
 //   api.ts      : 백엔드 요청 함수 / queries.ts : 서버 데이터 훅 (TanStack Query)
 //   format.ts   : 글자 변환 / styles.ts : 공통 버튼 모양 / types.ts : 데이터 모양 (타입)
@@ -28,6 +30,7 @@
 import { useEffect, useState } from "react";
 import Footer from "./components/Footer";
 import Header from "./components/Header";
+import ChartScreen from "./screens/ChartScreen";
 import GenreScreen from "./screens/GenreScreen";
 import RecommendScreen from "./screens/RecommendScreen";
 import StartScreen from "./screens/StartScreen";
@@ -38,6 +41,7 @@ const SCREEN_PATHS: Record<Screen, string> = {
   start: "/",
   recommend: "/recommend",
   genres: "/genres",
+  charts: "/charts",
 };
 
 // 주소 → 화면 (모르는 주소면 시작 화면)
@@ -109,6 +113,7 @@ export default function App() {
         <RecommendScreen key={recommendKey} initialGame={initialGame} onRecommendSimilar={openRecommend} />
       )}
       {screen === "genres" && <GenreScreen onRecommendSimilar={openRecommend} />}
+      {screen === "charts" && <ChartScreen onRecommendSimilar={openRecommend} />}
       {screen === "start" && <StartScreen onNavigate={navigate} />}
       <Footer />
     </div>

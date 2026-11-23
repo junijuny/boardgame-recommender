@@ -11,7 +11,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
-  errorResponse, explain, getGameDetail, getGenres, getOtherGenreGames, getRandomPhotos, getServerInfo, naturalSearch,
+  errorResponse, explain, getCharts, getGameDetail, getGenres, getOtherGenreGames, getRandomPhotos, getServerInfo, naturalSearch,
   recommend, searchGames,
 } from "./api";
 import type { ExplainRequest } from "./types";
@@ -21,6 +21,15 @@ export function useGenres() {
   return useQuery({
     queryKey: ["genres"],
     queryFn: getGenres,
+    staleTime: Infinity,
+  });
+}
+
+// 인기 차트 4개 (데이터가 바뀌지 않아 서버가 한 번 계산한 결과를 계속 돌려주므로 다시 불러올 필요 없음)
+export function useCharts() {
+  return useQuery({
+    queryKey: ["charts"],
+    queryFn: getCharts,
     staleTime: Infinity,
   });
 }
