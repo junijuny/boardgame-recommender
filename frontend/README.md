@@ -37,13 +37,14 @@ npm run preview   # 빌드 결과 미리보기
 
 ```text
 App.tsx
-├── Header            모든 화면 위의 헤더: 로고(시작 화면으로) + 메뉴 2개
-├── StartScreen       시작 화면: 제목, 버튼 2개, 위에서 아래로 흐르는 무작위 게임 사진 두 줄
+├── Header            모든 화면 위의 헤더: 로고(시작 화면으로) + 메뉴 3개
+├── StartScreen       시작 화면: 제목, 버튼 2개, 인기 차트 링크, 위에서 아래로 흐르는 무작위 게임 사진 두 줄
 ├── RecommendScreen   "Find games" 화면. 탭 두 개 (서버가 자연어 검색을 꺼 두면 By game만)
 │   ├── SimilarSearch      By game: 게임 검색 → 인원·시간 선택 → 추천 Top 5 (Refresh: 본 게임을 exclude_ids로 빼고 다른 5개)
 │   └── DescriptionSearch  By description: 원하는 게임을 문장으로 설명 → Top 5, 해석 한 줄·약한 일치·웹 결과 표시
 │                          ("games like Catan"이면 By game 탭으로 넘어가 바로 추천)
 ├── GenreScreen       8개 장르별 대표 게임 (Refresh: 본 게임을 exclude_ids로 빼고 같은 장르의 다른 게임)
+├── ChartScreen       인기 차트 4개(Top ranked, Most owned, Most wanted, Recent hits)의 1~10위 순위 리스트
 ├── GameDetailModal   게임 상세 팝업 (어느 화면에서든 열림, "Find similar games"로 이동)
 └── Footer            모든 화면 아래의 푸터: BGG로 연결되는 "Powered by BGG" 로고
 ```
@@ -89,4 +90,4 @@ App.tsx
 
 움직이는 효과(뼈대 반짝임, 사진 흐름, 주사위 흔들림, 진행 막대)는 운영체제의 "동작 줄이기" 설정을 켜면 멈춥니다.
 
-사용하는 API는 `GET /`(자연어 검색·이유 문장 사용 가능 여부), `GET /games/search`, `GET /games/filter`, `POST /recommend`, `POST /search/natural`, `POST /explain`, `GET /games/{bgg_id}`, `GET /genres`, `GET /genres/{key}/games`입니다. 요청·응답 형식은 [backend_api.md](../docs/backend_api.md)를 참고하세요.
+사용하는 API는 `GET /`(자연어 검색·이유 문장 사용 가능 여부), `GET /games/search`, `GET /games/filter`, `POST /recommend`, `POST /search/natural`, `POST /explain`, `GET /games/{bgg_id}`, `GET /genres`, `GET /genres/{key}/games`, `GET /charts`입니다. 요청·응답 형식은 [backend_api.md](../docs/backend_api.md)를 참고하세요.

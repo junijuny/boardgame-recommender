@@ -9,7 +9,7 @@
 import axios from "axios";
 import { PLAYER_OPTIONS, TIME_OPTIONS } from "./filters";
 import type {
-  ApiErrorBody, ExplainRequest, ExplainResponse, FilteredGame, GameDetail, GameSummary, Genre, GenreGame,
+  ApiErrorBody, Chart, ExplainRequest, ExplainResponse, FilteredGame, GameDetail, GameSummary, Genre, GenreGame,
   NaturalGame, NaturalSearchRequest, NaturalSearchResponse, RecommendRequest, RecommendedGame, ServerInfo,
 } from "./types";
 
@@ -96,6 +96,12 @@ export async function getGameDetail(bggId: number, signal?: AbortSignal) {
 // 장르 8개와 장르별 대표 게임
 export async function getGenres() {
   const res = await api.get<Genre[]>("/genres");
+  return res.data;
+}
+
+// 인기 차트 4개와 차트별 게임 10개 (1위부터 순서대로)
+export async function getCharts() {
+  const res = await api.get<Chart[]>("/charts");
   return res.data;
 }
 

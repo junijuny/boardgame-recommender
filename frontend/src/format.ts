@@ -17,6 +17,14 @@ export function formatHours(min: number): string {
   return `${Number((min / 60).toFixed(2))}`;
 }
 
+// 큰 숫자를 짧게. 1,000 이상은 k 단위로 소수점 한 자리 (끝의 .0은 지움)
+// 예) 850 -> "850", 52346 -> "52.3k", 166000 -> "166k"
+// 인기 차트에서 비슷한 숫자(166.2k, 165.9k)가 같아 보이지 않도록 소수점 한 자리를 남긴다
+export function formatCount(n: number): string {
+  if (n < 1000) return `${n}`;
+  return `${Number((n / 1000).toFixed(1))}k`;
+}
+
 // 게임의 플레이 시간 글자 만들기
 // 실제 데이터의 누락·잘못된 시간 범위는 숫자 대신 안내
 // 최소·최대가 같으면 "30 min", 다르면 "30–45 min"

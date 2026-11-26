@@ -28,6 +28,22 @@ export interface Genre {
   games: GenreGame[];
 }
 
+// 인기 차트의 게임 한 개 (GET /charts 안의 games): 장르 게임 + 차트 숫자
+export interface ChartGame extends GenreGame {
+  BggRank: number;        // BGG 전체 순위 (1이 가장 높음)
+  NumOwned: number;       // 게임을 가진 사람 수
+  NumWish: number;        // 위시리스트에 넣은 사람 수
+  NumUserRatings: number; // 평점을 남긴 사람 수
+}
+
+// 인기 차트 하나 (GET /charts). games는 이미 1위부터 순서대로 정렬되어 온다
+export interface Chart {
+  key: "top" | "most_owned" | "most_wanted" | "new";
+  label: string;
+  description: string;
+  games: ChartGame[];
+}
+
 // 조건 필터 결과 한 개 (GET /games/filter)
 export interface FilteredGame extends GameSummary {
   GameWeight: number | null;
@@ -156,5 +172,5 @@ export interface ApiErrorBody {
   detail?: string;
 }
 
-// 앱 안의 화면 이름: "start" = 시작, "recommend" = 비슷한 게임 찾기, "genres" = 장르
-export type Screen = "start" | "recommend" | "genres";
+// 앱 안의 화면 이름: "start" = 시작, "recommend" = 비슷한 게임 찾기, "genres" = 장르, "charts" = 인기 차트
+export type Screen = "start" | "recommend" | "genres" | "charts";
