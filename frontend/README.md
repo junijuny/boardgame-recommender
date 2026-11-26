@@ -38,7 +38,7 @@ npm run preview   # 빌드 결과 미리보기
 ```text
 App.tsx
 ├── Header            모든 화면 위의 헤더: 로고(시작 화면으로) + 메뉴 3개
-├── StartScreen       시작 화면: 제목, 버튼 2개, 인기 차트 링크, 위에서 아래로 흐르는 무작위 게임 사진 두 줄
+├── StartScreen       시작 화면: 제목, 버튼 3개, 위에서 아래로 흐르는 무작위 게임 사진 두 줄
 ├── RecommendScreen   "Find games" 화면. 탭 두 개 (서버가 자연어 검색을 꺼 두면 By game만)
 │   ├── SimilarSearch      By game: 게임 검색 → 인원·시간 선택 → 추천 Top 5 (Refresh: 본 게임을 exclude_ids로 빼고 다른 5개)
 │   └── DescriptionSearch  By description: 원하는 게임을 문장으로 설명 → Top 5, 해석 한 줄·약한 일치·웹 결과 표시

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 // Header: 모든 화면 맨 위에 붙는 헤더
-// 왼쪽은 로고(누르면 시작 화면), 오른쪽은 화면 이동 메뉴 (Find games, Browse by genre, Popular).
+// 왼쪽은 로고(누르면 시작 화면), 오른쪽은 화면 이동 메뉴 (Find games, Browse by genre, Popular games).
 // 데이터가 이미 있는 상태에서 서버에 다시 요청하는 동안에는
 // 헤더 아래 테두리 위로 얇은 막대가 지나간다.
 //
@@ -22,7 +22,7 @@ interface HeaderProps {
 const MENU: { screen: Screen; label: string }[] = [
   { screen: "recommend", label: "Find games" },
   { screen: "genres", label: "Browse by genre" },
-  { screen: "charts", label: "Popular" },
+  { screen: "charts", label: "Popular games" },
 ];
 
 export default function Header({ current, onNavigate }: HeaderProps) {
@@ -43,7 +43,7 @@ export default function Header({ current, onNavigate }: HeaderProps) {
         </button>
 
         <nav aria-label="Main">
-          <ul className="flex flex-wrap gap-1">
+          <ul className="flex flex-wrap gap-0.5 sm:gap-1">
             {MENU.map(({ screen, label }) => {
               const active = screen === current;
               return (
@@ -52,8 +52,8 @@ export default function Header({ current, onNavigate }: HeaderProps) {
                     type="button"
                     onClick={() => onNavigate(screen)}
                     aria-current={active ? "page" : undefined}
-                    // 휴대폰(640px 미만)에서는 좌우 여백을 줄여 메뉴 3개가 375px 폭에서도 한 줄에 들어가게 한다
-                    className={clsx("inline-flex min-h-11 items-center rounded-[10px] px-2.5 text-[15px] transition-colors sm:px-3.5", focusRing, active ? "bg-line font-bold" : "font-medium hover:bg-page")}
+                    // 휴대폰(640px 미만)에서는 여백과 글자를 조금 줄여 메뉴 3개가 375px 폭에서도 한 줄에 들어가게 한다
+                    className={clsx("inline-flex min-h-11 items-center whitespace-nowrap rounded-[10px] px-2 text-[14px] transition-colors sm:px-3.5 sm:text-[15px]", focusRing, active ? "bg-line font-bold" : "font-medium hover:bg-page")}
                   >
                     {label}
                   </button>

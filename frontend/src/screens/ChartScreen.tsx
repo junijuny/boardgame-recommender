@@ -65,12 +65,9 @@ export default function ChartScreen({ onRecommendSimilar }: ChartScreenProps) {
 
   return (
     <main className={clsx(container, "flex flex-col gap-7 pt-7 pb-12 sm:pt-10 sm:pb-16")}>
-      <div className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2">
-          <h1 className={pageTitle}>Popular games</h1>
-          {updating && <p role="status" className="text-sm font-medium text-ink/70">Updating…</p>}
-        </div>
-        <p className="text-[17px] text-ink/70">Not sure where to start? These are the games board gamers love most.</p>
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2">
+        <h1 className={pageTitle}>Popular games</h1>
+        {updating && <p role="status" className="text-sm font-medium text-ink/70">Updating…</p>}
       </div>
 
       {slow && <ServerWakeNotice />}

@@ -1,7 +1,6 @@
 // =====================================================================
 // 보드게임 추천 화면 (Boardgame Recommender)
-// 1) 시작 화면에서 "Find similar games" 또는 "Browse by genre"를 고른다.
-//    보드게임을 잘 모르면 그 아래 "See what's popular" 링크로 인기 차트 화면에 간다.
+// 1) 시작 화면에서 "Find similar games", "Browse by genre", "Popular games" 중 하나를 고른다.
 // 2) 추천 화면: 좋아하는 게임, 인원, 플레이 시간을 고르고 "Get recommendations"를 누르면
 //    비슷한 보드게임 목록을 보여준다.
 // 3) 장르 화면: 장르별 대표 게임을 둘러본다.

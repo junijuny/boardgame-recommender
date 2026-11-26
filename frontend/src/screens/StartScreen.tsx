@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 // StartScreen: 맨 처음에 보이는 시작 화면
-// 왼쪽은 제목과 버튼 두 개 (그 아래 인기 차트로 가는 링크), 오른쪽은 사진 두 줄이 위에서 아래로 천천히 흐른다.
+// 왼쪽은 제목과 버튼 세 개, 오른쪽은 사진 두 줄이 위에서 아래로 천천히 흐른다.
 // 사진은 인원·시간 필터를 무작위로 골라 받은 게임들의 표지 사진이다 (api.ts의 getRandomPhotos).
 //
 // 받는 정보(props)
@@ -8,7 +8,7 @@
 // ---------------------------------------------------------------------
 import clsx from "clsx";
 import { useState } from "react";
-import { ArrowRight, Pause, Play } from "lucide-react";
+import { Pause, Play } from "lucide-react";
 import { useRandomPhotos } from "../queries";
 import { container, focusRing, primaryButton, secondaryButton } from "../styles";
 import type { Screen } from "../types";
@@ -39,30 +39,18 @@ export default function StartScreen({ onNavigate }: StartScreenProps) {
         <h1 className="font-display text-[clamp(40px,6.2vw,84px)] leading-[0.96] font-extrabold tracking-[-0.03em]">
           Boardgame Recommender
         </h1>
-        {/* 휴대폰(640px 미만)에서는 두 버튼이 반씩 나눠 한 줄에 나란히 서도록
-            좌우 여백과 글자를 줄인다 (iPhone SE·13 mini의 375px 폭까지 한 줄) */}
-        <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
-            <button type="button" onClick={() => onNavigate("recommend")} className={clsx(primaryButton, HOME_BUTTON)}>
-              Find similar games
-            </button>
-            <button type="button" onClick={() => onNavigate("genres")} className={clsx(secondaryButton, HOME_BUTTON)}>
-              Browse by genre
-            </button>
-          </div>
-          {/* 고를 게임도 장르도 없는 사람을 위한 세 번째 입구 (인기 차트).
-              휴대폰에서 버튼 두 개가 한 줄을 다 쓰므로 버튼이 아니라 그 아래 링크로 둔다 */}
-          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[16px] text-ink/70">
-            New to board games?
-            <button
-              type="button"
-              onClick={() => onNavigate("charts")}
-              className={clsx("inline-flex min-h-11 items-center gap-1 rounded-lg font-bold text-primary underline underline-offset-4 hover:no-underline", focusRing)}
-            >
-              See what's popular
-              <ArrowRight className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </p>
+        {/* 휴대폰(640px 미만)에서는 메인 버튼을 첫 줄에 넓게, 보조 버튼 둘을 둘째 줄에 나란히 둔다
+            (iPhone SE·13 mini의 375px 폭에서도 깔끔하게 정렬) */}
+        <div className="grid grid-cols-2 gap-2.5 sm:flex sm:flex-wrap sm:gap-3">
+          <button type="button" onClick={() => onNavigate("recommend")} className={clsx(primaryButton, HOME_BUTTON, "col-span-2")}>
+            Find similar games
+          </button>
+          <button type="button" onClick={() => onNavigate("genres")} className={clsx(secondaryButton, HOME_BUTTON)}>
+            Browse by genre
+          </button>
+          <button type="button" onClick={() => onNavigate("charts")} className={clsx(secondaryButton, HOME_BUTTON)}>
+            Popular games
+          </button>
         </div>
       </div>
 
