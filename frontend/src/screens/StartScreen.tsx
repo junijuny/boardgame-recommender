@@ -35,13 +35,13 @@ export default function StartScreen({ onNavigate }: StartScreenProps) {
 
   return (
     <main className={clsx(container, "flex flex-1 flex-wrap items-center gap-x-14 gap-y-8 py-7 sm:gap-y-12 sm:py-10")}>
-      <div className="flex min-w-0 flex-[1_1_440px] flex-col gap-9">
+      <div className="flex min-w-0 flex-[1_1_480px] flex-col gap-9">
         <h1 className="font-display text-[clamp(40px,6.2vw,84px)] leading-[0.96] font-extrabold tracking-[-0.03em]">
           Boardgame Recommender
         </h1>
-        {/* 휴대폰(640px 미만)에서는 메인 버튼을 첫 줄에 넓게, 보조 버튼 둘을 둘째 줄에 나란히 둔다
-            (iPhone SE·13 mini의 375px 폭에서도 깔끔하게 정렬) */}
-        <div className="grid grid-cols-2 gap-2.5 sm:flex sm:flex-wrap sm:gap-3">
+        {/* 데스크톱(640px 이상)에서는 버튼 3개가 한 줄에 나란히 들어가도록 여백·글자를 맞추고,
+            휴대폰(640px 미만)에서는 메인 버튼을 첫 줄에 넓게, 보조 버튼 둘을 둘째 줄에 나란히 둔다 */}
+        <div className="grid grid-cols-2 gap-2.5 sm:flex sm:flex-wrap sm:gap-2.5 xl:gap-3">
           <button type="button" onClick={() => onNavigate("recommend")} className={clsx(primaryButton, HOME_BUTTON, "col-span-2")}>
             Find similar games
           </button>
@@ -55,7 +55,7 @@ export default function StartScreen({ onNavigate }: StartScreenProps) {
       </div>
 
       <div
-        className="relative h-110 min-w-0 flex-[1_1_420px] overflow-hidden rounded-3xl sm:h-175"
+        className="relative h-110 min-w-0 flex-[1_1_400px] overflow-hidden rounded-3xl sm:h-175"
         style={{ maskImage: FADE_EDGES, WebkitMaskImage: FADE_EDGES }}
       >
         <div className="grid h-full grid-cols-2 gap-3.5" aria-hidden="true">
@@ -95,9 +95,9 @@ export default function StartScreen({ onNavigate }: StartScreenProps) {
   );
 }
 
-// 시작 화면 버튼: 휴대폰에서만 여백·글자를 줄인다
-// (max-sm: 는 기본 버튼 스타일보다 나중에 적용되므로 px-8, text-[17px]을 덮어쓴다)
-const HOME_BUTTON = "whitespace-nowrap max-sm:px-3 max-sm:text-[15px]";
+// 시작 화면 버튼: 버튼 3개가 데스크톱에서 한 줄에 나란히 들어가도록 화면 폭별로 여백·글자를 줄인다
+// (반응형 접두사 max-sm:/sm:/lg:/xl: 는 기본 버튼 스타일의 px-8, px-7, text-[17px]보다 나중에 적용되어 덮어쓴다)
+const HOME_BUTTON = "whitespace-nowrap max-sm:px-3 max-sm:text-[15px] sm:px-3.5 sm:text-[15px] lg:px-4 xl:px-5 xl:text-[16px]";
 
 // 사진 영역 위아래 끝을 부드럽게 흐리게
 const FADE_EDGES = "linear-gradient(to bottom, transparent 0, #000 72px, #000 calc(100% - 72px), transparent 100%)";
